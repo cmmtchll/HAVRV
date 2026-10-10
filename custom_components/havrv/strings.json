@@ -24,7 +24,13 @@
           "rear_axle_count": "Number of rear axles",
           "main_rear_wheel_configuration": "Main rear axle wheels",
           "tag_axle_present": "Has a tag axle",
-          "tag_axle_wheel_configuration": "Tag axle wheels"
+          "tag_axle_wheel_configuration": "Tag axle wheels",
+          "power_entities": "Power system entities",
+          "water_entities": "Water system entities",
+          "chassis_entities": "Chassis system entities",
+          "climate_entities": "Climate system entities",
+          "location_entities": "Location system entities",
+          "other_entities": "Other RV entities"
         },
         "data_description": {
           "name": "A unique name for this RV profile.",
@@ -46,7 +52,13 @@
           "rear_axle_count": "Select one or two rear axles when known.",
           "main_rear_wheel_configuration": "Whether the main rear axle has single or dual wheels.",
           "tag_axle_present": "Turn on when the coach has an additional tag axle.",
-          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when a tag axle is present."
+          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when a tag axle is present.",
+          "power_entities": "Select existing sensors, controls, or climate entities for the RV power system.",
+          "water_entities": "Select existing sensors, controls, or climate entities for the RV water system.",
+          "chassis_entities": "Select existing sensors, controls, or climate entities for the RV chassis.",
+          "climate_entities": "Select existing sensors, controls, or climate entities for RV climate systems.",
+          "location_entities": "Select existing sensors, controls, or climate entities for RV location.",
+          "other_entities": "Select other existing entities to include with this RV."
         }
       }
     },
@@ -59,6 +71,26 @@
     },
     "abort": {
       "already_configured": "An RV with this name is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Map RV system entities",
+        "description": "Choose existing Home Assistant entities to expose on system devices for this RV. Control entities operate the selected source entity.",
+        "data": {
+          "power_entities": "Power system entities",
+          "water_entities": "Water system entities",
+          "chassis_entities": "Chassis system entities",
+          "climate_entities": "Climate system entities",
+          "location_entities": "Location system entities",
+          "other_entities": "Other RV entities"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity_mapping": "Choose valid source entities.",
+      "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system."
     }
   },
   "selector": {

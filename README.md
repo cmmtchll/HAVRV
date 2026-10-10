@@ -12,7 +12,10 @@ a driver for a particular RV manufacturer or device.
 
 > **Project status:** Early foundation. The integration can store an RV profile
 > with optional coach, location, dimensions, tank capacity, and axle/wheel
-> details. Entity mapping, virtual entities, alerts, and triggers are not
+> details. You can assign existing Home Assistant sensors, binary sensors,
+> switches, lights, and climate entities to RV system devices. HAVRV exposes
+> live read-only sensor values and forwards control actions for mapped
+> switches, lights, and climate entities. Alerts and triggers are not
 > implemented yet.
 
 ## Installation
@@ -41,6 +44,14 @@ description and relevant topics.
 Add one entry for each RV and give each profile a unique name. The name is
 required; vehicle details are optional and are stored in Home Assistant's
 config-entry storage.
+
+During setup, optionally assign existing Home Assistant entities to the power,
+water, chassis, climate, location, or other group. HAVRV creates an RV device
+and a child device for each group with mapped entities. Sensors and binary
+sensors are mirrored as read-only entities; switches, lights, and climate
+controls operate their selected source entities. Configure the integration
+later to change the mapping. Remove the HAVRV config entry to remove its
+devices and exposed entities; the source entities are not removed.
 
 The profile can include the coach year, chassis manufacturer and make, coach
 builder/converter and model, coach identifier, and a Home Assistant zone for

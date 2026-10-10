@@ -21,9 +21,27 @@ CONF_REAR_AXLE_COUNT = "rear_axle_count"
 CONF_MAIN_REAR_WHEEL_CONFIGURATION = "main_rear_wheel_configuration"
 CONF_TAG_AXLE_PRESENT = "tag_axle_present"
 CONF_TAG_AXLE_WHEEL_CONFIGURATION = "tag_axle_wheel_configuration"
+CONF_ENTITY_MAPPINGS = "entity_mappings"
 
 UNIT_SYSTEM_METRIC = "metric"
 UNIT_SYSTEM_US_CUSTOMARY = "us_customary"
+
+SYSTEM_POWER = "power"
+SYSTEM_WATER = "water"
+SYSTEM_CHASSIS = "chassis"
+SYSTEM_CLIMATE = "climate"
+SYSTEM_LOCATION = "location"
+SYSTEM_OTHER = "other"
+SYSTEM_CATEGORIES = (
+    SYSTEM_POWER,
+    SYSTEM_WATER,
+    SYSTEM_CHASSIS,
+    SYSTEM_CLIMATE,
+    SYSTEM_LOCATION,
+    SYSTEM_OTHER,
+)
+
+SUPPORTED_ENTITY_DOMAINS = ("sensor", "binary_sensor", "switch", "light", "climate")
 
 AXLE_COUNT_ONE = "one"
 AXLE_COUNT_TWO = "two"
