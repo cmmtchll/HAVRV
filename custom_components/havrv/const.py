@@ -22,6 +22,10 @@ CONF_MAIN_REAR_WHEEL_CONFIGURATION = "main_rear_wheel_configuration"
 CONF_TAG_AXLE_PRESENT = "tag_axle_present"
 CONF_TAG_AXLE_WHEEL_CONFIGURATION = "tag_axle_wheel_configuration"
 CONF_ENTITY_MAPPINGS = "entity_mappings"
+CONF_TIRE_ENTITY_MAPPINGS = "tire_entity_mappings"
+CONF_TIRE_PRESSURE_THRESHOLDS = "tire_pressure_thresholds"
+CONF_TIRE_TEMPERATURE_HIGH = "tire_temperature_high"
+CONF_TIRE_BATTERY_LOW = "tire_battery_low"
 
 UNIT_SYSTEM_METRIC = "metric"
 UNIT_SYSTEM_US_CUSTOMARY = "us_customary"
@@ -45,6 +49,19 @@ SUPPORTED_ENTITY_DOMAINS = ("sensor", "binary_sensor", "switch", "light", "clima
 
 AXLE_COUNT_ONE = "one"
 AXLE_COUNT_TWO = "two"
+AXLE_COUNT_THREE = "three"
 
 WHEEL_CONFIGURATION_SINGLE = "single"
 WHEEL_CONFIGURATION_DUAL = "dual"
+
+TIRE_FRONT = "front"
+TIRE_AXLE = "axle"
+TIRE_TAG = "tag"
+TIRE_PRESSURE = "pressure"
+TIRE_TEMPERATURE = "temperature"
+TIRE_BATTERY = "battery"
+TIRE_METRICS = (TIRE_PRESSURE, TIRE_TEMPERATURE, TIRE_BATTERY)
+TIRE_PRESSURE_LOW = "low"
+TIRE_PRESSURE_HIGH = "high"
+CONF_TIRE_PRESSURE_LOW = TIRE_PRESSURE_LOW
+CONF_TIRE_PRESSURE_HIGH = TIRE_PRESSURE_HIGH

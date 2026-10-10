@@ -35,6 +35,7 @@ from .const import (
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
 )
+from .tire import tire_positions
 
 
 @dataclass
@@ -127,6 +128,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
     platforms.add(Platform.SENSOR)
+    if tire_positions(data):
+        platforms.add(Platform.BINARY_SENSOR)
     entry.runtime_data.platforms = list(platforms)
     await hass.config_entries.async_forward_entry_setups(entry, list(platforms))
     return True
@@ -138,6 +141,21 @@ async def async_unload_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> bo
     if not platforms:
         return True
     return await hass.config_entries.async_unload_platforms(entry, list(platforms))
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate the rear-axle count to include a configured tag axle."""
+    if entry.version == 2:
+        return True
+    if entry.version != 1:
+        return False
+
+    data = dict(entry.data)
+    rear_axle_count = data.get(CONF_REAR_AXLE_COUNT)
+    if data.get(CONF_TAG_AXLE_PRESENT, False) and rear_axle_count is not None:
+        data[CONF_REAR_AXLE_COUNT] = rear_axle_count + 1
+    hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: HavrvConfigEntry) -> None:

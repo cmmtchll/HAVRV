@@ -15,8 +15,9 @@ a driver for a particular RV manufacturer or device.
 > details. You can assign existing Home Assistant sensors, binary sensors,
 > switches, lights, and climate entities to RV system devices. HAVRV exposes
 > live read-only sensor values and forwards control actions for mapped
-> switches, lights, and climate entities. Alerts and triggers are not
-> implemented yet.
+> switches, lights, and climate entities. Configured tire positions expose
+> readings and problem-state binary sensors; notifications and triggers are
+> not implemented yet.
 
 ## Installation
 
@@ -57,9 +58,12 @@ The profile can include the coach year, chassis manufacturer and make, coach
 builder/converter and model, coach identifier, and a Home Assistant zone for
 the RV's usual storage location. It can also hold overall height, length, and
 width; fuel, fresh-water, gray-water, and black-water tank capacities; the
-number of rear axles; and single/dual wheel arrangements for the main rear axle
-and optional tag axle. For example, a coach could be represented as a 2003
-Prevost H3-45 built or converted by Liberty as an Elegant Lady.
+number of rear axle assemblies (including a tag axle); and single/dual wheel
+arrangements for the main rear axle and optional tag axle. For example, a coach
+could be represented as a 2003 Prevost H3-45 built or converted by Liberty as
+an Elegant Lady. Existing profiles are migrated so their saved rear-axle
+counts continue to represent the same layout when tag axles were previously
+counted separately.
 
 Configured profile values are exposed as sensors on the RV device, including
 axle count, wheel configuration, tag-axle presence, and tank capacities.
@@ -69,6 +73,28 @@ They appear under **Sensors** alongside mapped operational readings. Home
 Assistant does not allow read-only sensors in its **Configuration** category;
 that category is intended for configuration controls. These specifications
 are not diagnostics, so marking them as **Diagnostic** would also be misleading.
+
+When the rear axle count is configured, HAVRV generates tire devices for the
+front axle and configured rear axle assemblies. Single wheels are named by
+side; dual wheels have separate inner and outer tire devices. The tag axle is
+counted as one of the configured rear axle assemblies, and the remaining rear
+assemblies use the main rear wheel configuration. Open the integration's
+options to select the existing pressure, temperature, and battery sensor for
+each tire. These are read-only mirrors; HAVRV does not discover or control
+TPMS hardware.
+
+The same options screen lets you set low/high pressure limits separately for
+front, rear axle, and tag tires, a shared high-temperature limit, and a
+low-battery limit. Limits are optional until known for the vehicle. Pressure
+and temperature limits use the RV profile's unit system (kPa and °C for
+metric; psi and °F for US customary); known source units are converted before
+comparison. Each tire exposes pressure, temperature, battery level, pressure
+problem, temperature problem, battery problem, data-present, and overall tire
+problem entities. Overall tire problem turns on when readings are missing or
+any configured limit is exceeded or a configured limit cannot be evaluated.
+These sensors do not send notifications and do not replace
+manufacturer-recommended cold inflation pressures or professional tire
+inspection.
 
 Choose metric or US customary units. Dimensions are interpreted as meters or
 feet, and capacities as liters or US gallons. Values are stored with that unit
