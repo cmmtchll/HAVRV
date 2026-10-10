@@ -65,6 +65,10 @@ Configured profile values are exposed as sensors on the RV device, including
 axle count, wheel configuration, tag-axle presence, and tank capacities.
 Dimensions and capacities use the measurement system selected for the profile;
 they are specification values and are not converted or treated as live readings.
+They appear under **Sensors** alongside mapped operational readings. Home
+Assistant does not allow read-only sensors in its **Configuration** category;
+that category is intended for configuration controls. These specifications
+are not diagnostics, so marking them as **Diagnostic** would also be misleading.
 
 Choose metric or US customary units. Dimensions are interpreted as meters or
 feet, and capacities as liters or US gallons. Values are stored with that unit

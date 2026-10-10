@@ -38,53 +38,98 @@ from .const import (
 from .entity import HavrvSourceEntity, async_add_source_entities
 
 _PROFILE_SENSOR_DESCRIPTIONS = (
-    SensorEntityDescription(key=CONF_COACH_YEAR, translation_key=CONF_COACH_YEAR),
-    SensorEntityDescription(key=CONF_MANUFACTURER, translation_key=CONF_MANUFACTURER),
-    SensorEntityDescription(key=CONF_COACH_BUILDER, translation_key=CONF_COACH_BUILDER),
-    SensorEntityDescription(key=CONF_MAKE, translation_key=CONF_MAKE),
-    SensorEntityDescription(key=CONF_MODEL, translation_key=CONF_MODEL),
     SensorEntityDescription(
-        key=CONF_COACH_IDENTIFIER, translation_key=CONF_COACH_IDENTIFIER
+        key=CONF_COACH_YEAR,
+        name="Coach year",
+        translation_key=CONF_COACH_YEAR,
     ),
     SensorEntityDescription(
-        key=CONF_STORAGE_ZONE_ID, translation_key=CONF_STORAGE_ZONE_ID
+        key=CONF_MANUFACTURER,
+        name="Chassis manufacturer",
+        translation_key=CONF_MANUFACTURER,
     ),
     SensorEntityDescription(
-        key=CONF_MEASUREMENT_SYSTEM, translation_key=CONF_MEASUREMENT_SYSTEM
+        key=CONF_COACH_BUILDER,
+        name="Coach builder",
+        translation_key=CONF_COACH_BUILDER,
     ),
     SensorEntityDescription(
-        key=CONF_OVERALL_HEIGHT, translation_key=CONF_OVERALL_HEIGHT
+        key=CONF_MAKE,
+        name="Chassis make",
+        translation_key=CONF_MAKE,
     ),
     SensorEntityDescription(
-        key=CONF_OVERALL_LENGTH, translation_key=CONF_OVERALL_LENGTH
-    ),
-    SensorEntityDescription(key=CONF_OVERALL_WIDTH, translation_key=CONF_OVERALL_WIDTH),
-    SensorEntityDescription(
-        key=CONF_FUEL_TANK_CAPACITY, translation_key=CONF_FUEL_TANK_CAPACITY
+        key=CONF_MODEL,
+        name="Coach model",
+        translation_key=CONF_MODEL,
     ),
     SensorEntityDescription(
+        key=CONF_COACH_IDENTIFIER,
+        name="Coach identifier",
+        translation_key=CONF_COACH_IDENTIFIER,
+    ),
+    SensorEntityDescription(
+        key=CONF_STORAGE_ZONE_ID,
+        name="Storage zone",
+        translation_key=CONF_STORAGE_ZONE_ID,
+    ),
+    SensorEntityDescription(
+        key=CONF_MEASUREMENT_SYSTEM,
+        name="Measurement system",
+        translation_key=CONF_MEASUREMENT_SYSTEM,
+    ),
+    SensorEntityDescription(
+        key=CONF_OVERALL_HEIGHT,
+        name="Overall height",
+        translation_key=CONF_OVERALL_HEIGHT,
+    ),
+    SensorEntityDescription(
+        key=CONF_OVERALL_LENGTH,
+        name="Overall length",
+        translation_key=CONF_OVERALL_LENGTH,
+    ),
+    SensorEntityDescription(
+        key=CONF_OVERALL_WIDTH,
+        name="Overall width",
+        translation_key=CONF_OVERALL_WIDTH,
+    ),
+    SensorEntityDescription(
+        key=CONF_FUEL_TANK_CAPACITY,
+        name="Fuel tank capacity",
+        translation_key=CONF_FUEL_TANK_CAPACITY,
+    ),
+    SensorEntityDescription(
+        name="Fresh-water tank capacity",
         key=CONF_FRESH_WATER_TANK_CAPACITY,
         translation_key=CONF_FRESH_WATER_TANK_CAPACITY,
     ),
     SensorEntityDescription(
+        name="Gray-water tank capacity",
         key=CONF_GRAY_WATER_TANK_CAPACITY,
         translation_key=CONF_GRAY_WATER_TANK_CAPACITY,
     ),
     SensorEntityDescription(
+        name="Black-water tank capacity",
         key=CONF_BLACK_WATER_TANK_CAPACITY,
         translation_key=CONF_BLACK_WATER_TANK_CAPACITY,
     ),
     SensorEntityDescription(
-        key=CONF_REAR_AXLE_COUNT, translation_key=CONF_REAR_AXLE_COUNT
+        key=CONF_REAR_AXLE_COUNT,
+        name="Number of rear axles",
+        translation_key=CONF_REAR_AXLE_COUNT,
     ),
     SensorEntityDescription(
+        name="Main rear axle wheel configuration",
         key=CONF_MAIN_REAR_WHEEL_CONFIGURATION,
         translation_key=CONF_MAIN_REAR_WHEEL_CONFIGURATION,
     ),
     SensorEntityDescription(
-        key=CONF_TAG_AXLE_PRESENT, translation_key=CONF_TAG_AXLE_PRESENT
+        key=CONF_TAG_AXLE_PRESENT,
+        name="Tag axle present",
+        translation_key=CONF_TAG_AXLE_PRESENT,
     ),
     SensorEntityDescription(
+        name="Tag axle wheel configuration",
         key=CONF_TAG_AXLE_WHEEL_CONFIGURATION,
         translation_key=CONF_TAG_AXLE_WHEEL_CONFIGURATION,
     ),
