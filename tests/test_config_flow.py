@@ -1,6 +1,7 @@
 """Tests for the HAVRV config flow."""
 
 from datetime import date
+from types import SimpleNamespace
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
@@ -9,6 +10,12 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.havrv.config_flow import (
+    _default_measurement_system as get_default_measurement_system,
+)
+from custom_components.havrv.config_flow import (
+    _normalize_entity_mappings,
+)
 from custom_components.havrv.const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
     CONF_COACH_BUILDER,
@@ -49,6 +56,23 @@ def _default_measurement_system(hass: HomeAssistant) -> str:
     if hass.config.units == US_CUSTOMARY_SYSTEM:
         return UNIT_SYSTEM_US_CUSTOMARY
     return UNIT_SYSTEM_METRIC
+
+
+def test_default_measurement_system_falls_back_to_metric() -> None:
+    """Use metric units when Home Assistant has an unsupported unit system."""
+    hass = SimpleNamespace(config=SimpleNamespace(units=None))
+
+    assert get_default_measurement_system(hass) == UNIT_SYSTEM_METRIC
+
+
+def test_entity_mapping_normalization_rejects_invalid_input() -> None:
+    """Reject a mapping field that is not a list of entity IDs."""
+    mappings, error = _normalize_entity_mappings(
+        {"power_entities": "sensor.house_battery_voltage"}
+    )
+
+    assert mappings == {}
+    assert error == "invalid_entity_mapping"
 
 
 async def test_user_flow_creates_profile_with_optional_fields_blank(
@@ -193,7 +217,10 @@ async def test_options_flow_updates_source_entity_mappings(
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Adventure RV",
-        data={CONF_NAME: "Adventure RV"},
+        data={
+            CONF_NAME: "Adventure RV",
+            CONF_ENTITY_MAPPINGS: {"water": ["sensor.fresh_water_level"]},
+        },
         unique_id="adventure rv",
     )
     entry.add_to_hass(hass)
@@ -209,6 +236,31 @@ async def test_options_flow_updates_source_entity_mappings(
     assert entry.options[CONF_ENTITY_MAPPINGS] == {
         "power": ["sensor.house_battery_voltage"]
     }
+
+
+async def test_options_flow_rejects_duplicate_source_entities(
+    hass: HomeAssistant,
+) -> None:
+    """Reject source entities assigned to multiple RV systems in options."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        data={CONF_NAME: "Adventure RV"},
+        unique_id="adventure rv",
+    )
+    entry.add_to_hass(hass)
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={
+            "power_entities": ["sensor.house_battery_voltage"],
+            "water_entities": ["sensor.house_battery_voltage"],
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "duplicate_entity_mapping"}
 
 
 async def test_user_flow_rejects_duplicate_name(hass: HomeAssistant) -> None:

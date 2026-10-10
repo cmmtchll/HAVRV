@@ -30,9 +30,11 @@ Run these before opening a pull request:
 ruff check .
 ruff format --check .
 pytest
+python -m coverage report --include=custom_components/havrv/config_flow.py --fail-under=100
 ```
 
-The pytest configuration enforces a 95% coverage threshold for the integration.
+The pytest configuration enforces at least 96% coverage for the integration.
+The additional coverage report enforces full config-flow module coverage.
 When adding code, add tests for normal behavior, failure cases, and config-entry
 lifecycle behavior as applicable.
 
