@@ -10,9 +10,10 @@ Every RV installation is different: systems, devices, and entity IDs vary. The
 integration is designed as an abstraction layer over those differences, not as
 a driver for a particular RV manufacturer or device.
 
-> **Project status:** Early foundation. The current integration lets you add a
-> named RV profile. Entity mapping, virtual entities, alerts, and triggers are
-> not implemented yet.
+> **Project status:** Early foundation. The integration can store an RV profile
+> with optional coach, location, dimensions, tank capacity, and axle/wheel
+> details. Entity mapping, virtual entities, alerts, and triggers are not
+> implemented yet.
 
 ## Installation
 
@@ -37,8 +38,30 @@ description and relevant topics.
 
 ## Configuration
 
-Add one entry for each RV and give each profile a unique name. The profile is
-stored in Home Assistant's config-entry storage.
+Add one entry for each RV and give each profile a unique name. The name is
+required; vehicle details are optional and are stored in Home Assistant's
+config-entry storage.
+
+The profile can include the coach year, chassis manufacturer and make, coach
+builder/converter and model, coach identifier, and a Home Assistant zone for
+the RV's usual storage location. It can also hold overall height, length, and
+width; fuel, fresh-water, gray-water, and black-water tank capacities; the
+number of rear axles; and single/dual wheel arrangements for the main rear axle
+and optional tag axle. For example, a coach could be represented as a 2003
+Prevost H3-45 built or converted by Liberty as an Elegant Lady.
+
+Choose metric or US customary units. Dimensions are interpreted as meters or
+feet, and capacities as liters or US gallons. Values are stored with that unit
+system; the integration does not convert or verify the coach's specifications.
+Only record values from a reliable source such as the coach documentation or
+vehicle labels. The selected zone is stored by its Home Assistant zone entity
+ID.
+
+Potential follow-on profile fields include GVWR and per-axle GAWR for weight
+planning, tire size/load range/recommended cold inflation pressure for tire
+care, wheelbase and tow rating, and powertrain, generator, electrical-service,
+and propane details. These are candidates for future work, not current setup
+fields or safety calculations.
 
 ## Development
 

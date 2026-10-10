@@ -7,14 +7,22 @@ implemented integration behavior, not just repository configuration.
 ## Current foundation
 
 - HACS-compatible single-integration repository layout and metadata.
-- UI config flow for adding uniquely named RV profiles.
+- UI config flow for adding uniquely named RV profiles with optional coach
+  identity, storage zone, dimensions, tank capacities, and axle/wheel details.
 - Config-entry setup and unload lifecycle.
+- Typed runtime data for new profiles, with support for existing name-only
+  entries.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
 - Ruff, pytest, integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.
 
 These foundations do not mean all Bronze rules are complete. The integration
 does not yet map source entities or create RV devices and virtual entities.
+
+Profile setup currently excludes vehicle weight ratings, tire size/load-range
+and inflation details, wheelbase/tow rating, and powertrain, generator,
+electrical-service, and propane data. These remain potential future profile
+fields and are not used in calculations or alerts.
 
 ## Implementation gates
 
