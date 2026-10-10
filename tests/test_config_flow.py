@@ -164,6 +164,27 @@ def test_options_normalization_stores_tire_sources_and_thresholds() -> None:
 
 
 @pytest.mark.parametrize(
+    "entity_id",
+    [
+        "sensor.template_pressure",
+        "number.tire_pressure",
+        "input_number.tire_pressure",
+    ],
+)
+def test_tire_options_accept_numeric_entity_domains(entity_id: str) -> None:
+    """Allow sensor, template sensor, number, and input-number sources."""
+    options, error = _normalize_options(
+        {"tire_front_left_pressure": entity_id},
+        _tire_profile_entry(),
+    )
+
+    assert error is None
+    assert options[CONF_TIRE_ENTITY_MAPPINGS] == {
+        "front_left_pressure": entity_id,
+    }
+
+
+@pytest.mark.parametrize(
     ("user_input", "expected_error"),
     [
         (
@@ -175,6 +196,14 @@ def test_options_normalization_stores_tire_sources_and_thresholds() -> None:
         ),
         (
             {"tire_front_left_pressure": "climate.front_tire"},
+            "invalid_tire_entity_mapping",
+        ),
+        (
+            {"tire_front_left_pressure": "sensor"},
+            "invalid_tire_entity_mapping",
+        ),
+        (
+            {"tire_front_left_pressure": 123},
             "invalid_tire_entity_mapping",
         ),
         (

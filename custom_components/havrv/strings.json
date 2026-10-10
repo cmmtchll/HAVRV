@@ -78,7 +78,7 @@
     "step": {
       "init": {
         "title": "Map RV system entities",
-        "description": "Choose existing entities for RV systems and each generated tire. Set limits in the measurement units selected for the RV profile. Tire readings are mirrored from the selected source sensors.",
+        "description": "Choose existing entities for RV systems and each generated tire. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
         "data": {
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
@@ -160,8 +160,8 @@
     "error": {
       "invalid_entity_mapping": "Choose valid source entities.",
       "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system.",
-      "invalid_tire_entity_mapping": "Choose a valid sensor for each tire reading.",
-      "duplicate_tire_entity_mapping": "A tire source sensor can only be assigned once.",
+      "invalid_tire_entity_mapping": "Choose a sensor, number entity, or input number helper for each tire reading.",
+      "duplicate_tire_entity_mapping": "A tire source entity can only be assigned once.",
       "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
       "invalid_tire_pressure_threshold": "Pressure limits must be non-negative, and the high limit must be greater than the low limit.",
       "invalid_tire_temperature_threshold": "The high temperature limit must be a valid non-negative number.",

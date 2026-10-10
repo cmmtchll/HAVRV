@@ -80,8 +80,9 @@ side; dual wheels have separate inner and outer tire devices. The tag axle is
 counted as one of the configured rear axle assemblies, and the remaining rear
 assemblies use the main rear wheel configuration. Open the integration's
 options to select the existing pressure, temperature, and battery sensor for
-each tire. These are read-only mirrors; HAVRV does not discover or control
-TPMS hardware.
+each tire. Sources can be sensor entities (including template sensors), `number`
+entities, or `input_number` helpers. These are read-only mirrors; HAVRV does not
+discover or control TPMS hardware.
 
 The same options screen lets you set low/high pressure limits separately for
 front, rear axle, and tag tires, a shared high-temperature limit, and a
@@ -94,7 +95,8 @@ problem entities. Overall tire problem turns on when readings are missing or
 any configured limit is exceeded or a configured limit cannot be evaluated.
 These sensors do not send notifications and do not replace
 manufacturer-recommended cold inflation pressures or professional tire
-inspection.
+inspection. Changing a source entity or any tire threshold through the options
+flow reloads the tire entities and starts listening to the new sources.
 
 Choose metric or US customary units. Dimensions are interpreted as meters or
 feet, and capacities as liters or US gallons. Values are stored with that unit
