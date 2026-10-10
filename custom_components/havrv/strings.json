@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add an RV",
+        "description": "Create a profile for an RV.",
+        "data": {
+          "name": "RV name"
+        },
+        "data_description": {
+          "name": "A unique name for this RV profile."
+        }
+      }
+    },
+    "error": {
+      "name_required": "Enter a name for this RV."
+    },
+    "abort": {
+      "already_configured": "An RV with this name is already configured."
+    }
+  }
+}
