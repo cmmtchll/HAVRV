@@ -126,9 +126,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         for entity_id in entities
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
+    platforms.add(Platform.SENSOR)
     entry.runtime_data.platforms = list(platforms)
-    if platforms:
-        await hass.config_entries.async_forward_entry_setups(entry, list(platforms))
+    await hass.config_entries.async_forward_entry_setups(entry, list(platforms))
     return True
 
 

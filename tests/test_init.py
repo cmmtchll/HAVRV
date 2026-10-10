@@ -73,6 +73,51 @@ async def test_setup_uses_home_assistant_units_for_legacy_entry(
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     assert entry.runtime_data.measurement_system == UNIT_SYSTEM_US_CUSTOMARY
+    assert len(entry.runtime_data.platforms) == 1
+    assert entry.runtime_data.platforms[0].value == "sensor"
+    profile_entities = {
+        entity.unique_id.removeprefix(f"{entry.entry_id}_profile_"): entity
+        for entity in er.async_entries_for_config_entry(
+            er.async_get(hass), entry.entry_id
+        )
+        if entity.unique_id.startswith(f"{entry.entry_id}_profile_")
+    }
+    assert set(profile_entities) == {
+        CONF_MEASUREMENT_SYSTEM,
+        CONF_TAG_AXLE_PRESENT,
+    }
+
+
+async def test_profile_sensors_use_metric_units(hass: HomeAssistant) -> None:
+    """Expose metric dimensions and capacities in their configured units."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Metric RV",
+        unique_id="metric rv",
+        data={
+            CONF_NAME: "Metric RV",
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_METRIC,
+            CONF_OVERALL_HEIGHT: 3.8,
+            CONF_FRESH_WATER_TANK_CAPACITY: 500.0,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    entities = {
+        entity.unique_id.removeprefix(f"{entry.entry_id}_profile_"): entity
+        for entity in er.async_entries_for_config_entry(
+            er.async_get(hass), entry.entry_id
+        )
+        if entity.unique_id.startswith(f"{entry.entry_id}_profile_")
+    }
+    height = hass.states.get(entities[CONF_OVERALL_HEIGHT].entity_id)
+    capacity = hass.states.get(entities[CONF_FRESH_WATER_TANK_CAPACITY].entity_id)
+    assert height.state == "3.8"
+    assert height.attributes["unit_of_measurement"] == "m"
+    assert capacity.state == "500.0"
+    assert capacity.attributes["unit_of_measurement"] == "L"
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> None:
@@ -129,6 +174,48 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
         tag_axle_present=True,
         tag_axle_wheel_configuration="single",
     )
+    profile_entities = {
+        entity.unique_id.removeprefix(f"{entry.entry_id}_profile_"): entity
+        for entity in er.async_entries_for_config_entry(
+            er.async_get(hass), entry.entry_id
+        )
+        if entity.unique_id.startswith(f"{entry.entry_id}_profile_")
+    }
+    assert (
+        hass.states.get(profile_entities[CONF_REAR_AXLE_COUNT].entity_id).state == "2"
+    )
+    assert (
+        hass.states.get(
+            profile_entities[CONF_MAIN_REAR_WHEEL_CONFIGURATION].entity_id
+        ).state
+        == "dual"
+    )
+    assert (
+        hass.states.get(profile_entities[CONF_TAG_AXLE_PRESENT].entity_id).state
+        == "Yes"
+    )
+    assert (
+        hass.states.get(
+            profile_entities[CONF_TAG_AXLE_WHEEL_CONFIGURATION].entity_id
+        ).state
+        == "single"
+    )
+    assert (
+        hass.states.get(profile_entities[CONF_FUEL_TANK_CAPACITY].entity_id).attributes[
+            "unit_of_measurement"
+        ]
+        == "gal"
+    )
+    assert (
+        hass.states.get(profile_entities[CONF_OVERALL_LENGTH].entity_id).attributes[
+            "unit_of_measurement"
+        ]
+        == "ft"
+    )
+    assert (
+        hass.states.get(profile_entities[CONF_MANUFACTURER].entity_id).state
+        == "Prevost"
+    )
 
 
 async def test_setup_creates_system_device_and_mirrors_source_sensor(
@@ -176,7 +263,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
 
     entity_registry = er.async_get(hass)
     mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    assert len(mapped_entities) == 5
+    assert len(mapped_entities) == 7
     mapped_entity = next(
         entity
         for entity in mapped_entities
@@ -221,7 +308,8 @@ async def test_options_reload_adds_platform_to_existing_entry(
     entry.add_to_hass(hass)
 
     assert await hass.config_entries.async_setup(entry.entry_id)
-    assert entry.runtime_data.platforms == []
+    assert len(entry.runtime_data.platforms) == 1
+    assert entry.runtime_data.platforms[0].value == "sensor"
 
     form = await hass.config_entries.options.async_init(entry.entry_id)
     await hass.config_entries.options.async_configure(
@@ -234,6 +322,10 @@ async def test_options_reload_adds_platform_to_existing_entry(
     mapped_entities = er.async_entries_for_config_entry(
         er.async_get(hass), entry.entry_id
     )
-    assert len(mapped_entities) == 1
-    assert hass.states.get(mapped_entities[0].entity_id).state == "12.8"
+    mapped_source_sensor = next(
+        entity
+        for entity in mapped_entities
+        if entity.unique_id.endswith("sensor.rv_battery")
+    )
+    assert hass.states.get(mapped_source_sensor.entity_id).state == "12.8"
     assert await hass.config_entries.async_unload(entry.entry_id)
