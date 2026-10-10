@@ -112,5 +112,66 @@
         "dual": "Dual wheels"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "coach_year": {
+        "name": "Coach year"
+      },
+      "manufacturer": {
+        "name": "Chassis manufacturer"
+      },
+      "coach_builder": {
+        "name": "Coach builder"
+      },
+      "make": {
+        "name": "Chassis make"
+      },
+      "model": {
+        "name": "Coach model"
+      },
+      "coach_identifier": {
+        "name": "Coach identifier"
+      },
+      "storage_zone_id": {
+        "name": "Storage zone"
+      },
+      "measurement_system": {
+        "name": "Measurement system"
+      },
+      "overall_height": {
+        "name": "Overall height"
+      },
+      "overall_length": {
+        "name": "Overall length"
+      },
+      "overall_width": {
+        "name": "Overall width"
+      },
+      "fuel_tank_capacity": {
+        "name": "Fuel tank capacity"
+      },
+      "fresh_water_tank_capacity": {
+        "name": "Fresh-water tank capacity"
+      },
+      "gray_water_tank_capacity": {
+        "name": "Gray-water tank capacity"
+      },
+      "black_water_tank_capacity": {
+        "name": "Black-water tank capacity"
+      },
+      "rear_axle_count": {
+        "name": "Number of rear axles"
+      },
+      "main_rear_wheel_configuration": {
+        "name": "Main rear axle wheel configuration"
+      },
+      "tag_axle_present": {
+        "name": "Tag axle present"
+      },
+      "tag_axle_wheel_configuration": {
+        "name": "Tag axle wheel configuration"
+      }
+    }
   }
 }

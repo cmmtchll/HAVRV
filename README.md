@@ -61,6 +61,11 @@ number of rear axles; and single/dual wheel arrangements for the main rear axle
 and optional tag axle. For example, a coach could be represented as a 2003
 Prevost H3-45 built or converted by Liberty as an Elegant Lady.
 
+Configured profile values are exposed as sensors on the RV device, including
+axle count, wheel configuration, tag-axle presence, and tank capacities.
+Dimensions and capacities use the measurement system selected for the profile;
+they are specification values and are not converted or treated as live readings.
+
 Choose metric or US customary units. Dimensions are interpreted as meters or
 feet, and capacities as liters or US gallons. Values are stored with that unit
 system; the integration does not convert or verify the coach's specifications.
