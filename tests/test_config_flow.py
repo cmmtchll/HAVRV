@@ -203,6 +203,10 @@ def test_tire_options_accept_numeric_entity_domains(entity_id: str) -> None:
             "invalid_tire_entity_mapping",
         ),
         (
+            {"tire_front_left_pressure": 123},
+            "invalid_tire_entity_mapping",
+        ),
+        (
             {"tire_front_pressure_low": 400},
             "incomplete_tire_pressure_threshold",
         ),
