@@ -234,7 +234,8 @@ async def test_options_flow_updates_source_entity_mappings(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_ENTITY_MAPPINGS] == {
-        "power": ["sensor.house_battery_voltage"]
+        "power": ["sensor.house_battery_voltage"],
+        "water": ["sensor.fresh_water_level"],
     }
 
 
