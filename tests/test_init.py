@@ -2,6 +2,8 @@
 
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -11,6 +13,7 @@ from custom_components.havrv.const import (
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
+    CONF_ENTITY_MAPPINGS,
     CONF_FRESH_WATER_TANK_CAPACITY,
     CONF_FUEL_TANK_CAPACITY,
     CONF_GRAY_WATER_TANK_CAPACITY,
@@ -126,3 +129,111 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
         tag_axle_present=True,
         tag_axle_wheel_configuration="single",
     )
+
+
+async def test_setup_creates_system_device_and_mirrors_source_sensor(
+    hass: HomeAssistant,
+) -> None:
+    """Create a grouped system device and mirror source sensor state."""
+    hass.states.async_set(
+        "sensor.house_battery_voltage",
+        "13.4",
+        {"friendly_name": "House Battery Voltage", "unit_of_measurement": "V"},
+    )
+    hass.states.async_set("binary_sensor.fresh_water_low", "off")
+    hass.states.async_set("switch.water_pump", "off")
+    hass.states.async_set(
+        "light.patio",
+        "off",
+        {"supported_color_modes": ["onoff"]},
+    )
+    hass.states.async_set(
+        "climate.cabin",
+        "off",
+        {"hvac_modes": ["off", "heat"], "supported_features": 0},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        unique_id="adventure rv",
+        data={
+            CONF_NAME: "Adventure RV",
+            CONF_ENTITY_MAPPINGS: {
+                "power": ["sensor.house_battery_voltage"],
+                "water": [
+                    "binary_sensor.fresh_water_low",
+                    "switch.water_pump",
+                ],
+                "chassis": ["light.patio"],
+                "climate": ["climate.cabin"],
+            },
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    entity_registry = er.async_get(hass)
+    mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+    assert len(mapped_entities) == 5
+    mapped_entity = next(
+        entity
+        for entity in mapped_entities
+        if entity.unique_id.endswith("sensor.house_battery_voltage")
+    )
+    assert hass.states.get(mapped_entity.entity_id).state == "13.4"
+
+    device_registry = dr.async_get(hass)
+    devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+    assert {device.name for device in devices} == {
+        "Adventure RV",
+        "Power",
+        "Water",
+        "Chassis",
+        "Climate",
+    }
+    system_device = next(device for device in devices if device.name == "Power")
+    parent_device = next(device for device in devices if device.name == "Adventure RV")
+    assert system_device.via_device_id == parent_device.id
+
+    hass.states.async_set(
+        "sensor.house_battery_voltage",
+        "13.6",
+        {"friendly_name": "House Battery Voltage", "unit_of_measurement": "V"},
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(mapped_entity.entity_id).state == "13.6"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_options_reload_adds_platform_to_existing_entry(
+    hass: HomeAssistant,
+) -> None:
+    """Reload a configured profile when a platform is mapped later."""
+    hass.states.async_set("sensor.rv_battery", "12.8")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        unique_id="adventure rv",
+        data={CONF_NAME: "Adventure RV"},
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.runtime_data.platforms == []
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={"power_entities": ["sensor.rv_battery"]},
+    )
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.platforms
+    mapped_entities = er.async_entries_for_config_entry(
+        er.async_get(hass), entry.entry_id
+    )
+    assert len(mapped_entities) == 1
+    assert hass.states.get(mapped_entities[0].entity_id).state == "12.8"
+    assert await hass.config_entries.async_unload(entry.entry_id)

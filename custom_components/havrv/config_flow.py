@@ -1,5 +1,7 @@
 """Config flow for HAVRV."""
 
+from __future__ import annotations
+
 import math
 from datetime import date
 from typing import Any
@@ -19,6 +21,7 @@ from .const import (
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
+    CONF_ENTITY_MAPPINGS,
     CONF_FRESH_WATER_TANK_CAPACITY,
     CONF_FUEL_TANK_CAPACITY,
     CONF_GRAY_WATER_TANK_CAPACITY,
@@ -35,6 +38,8 @@ from .const import (
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
     DOMAIN,
+    SUPPORTED_ENTITY_DOMAINS,
+    SYSTEM_CATEGORIES,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
     WHEEL_CONFIGURATION_DUAL,
@@ -69,6 +74,13 @@ class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> HavrvOptionsFlow:
+        """Get the options flow for this config entry."""
+        return HavrvOptionsFlow()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -96,6 +108,33 @@ class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_profile_schema(
                 default_measurement_system=_default_measurement_system(self.hass)
             ),
+            errors=errors,
+        )
+
+
+class HavrvOptionsFlow(config_entries.OptionsFlow):
+    """Manage mapped source entities for an RV profile."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Edit source-entity mappings."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            mappings, error = _normalize_entity_mappings(user_input)
+            if error:
+                errors["base"] = error
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data={CONF_ENTITY_MAPPINGS: mappings},
+                )
+
+        mappings = _entry_entity_mappings(self.config_entry)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_entity_mapping_schema(mappings),
             errors=errors,
         )
 
@@ -135,6 +174,7 @@ def _profile_schema(*, default_measurement_system: str) -> vol.Schema:
             )
         ),
     }
+    schema.update(_entity_mapping_fields())
     schema.update(
         {vol.Optional(field): selector.TextSelector() for field in _PROFILE_TEXT_FIELDS}
     )
@@ -182,6 +222,11 @@ def _normalize_profile(
     """Validate and normalize submitted RV profile values."""
     name = user_input[CONF_NAME].strip()
     data: dict[str, Any] = {CONF_NAME: name}
+
+    mappings, mapping_error = _normalize_entity_mappings(user_input)
+    if mapping_error:
+        return data, mapping_error
+    data[CONF_ENTITY_MAPPINGS] = mappings
 
     measurement_system = user_input.get(
         CONF_MEASUREMENT_SYSTEM, default_measurement_system
@@ -236,3 +281,66 @@ def _normalize_profile(
         data[CONF_MAIN_REAR_WHEEL_CONFIGURATION] = main_wheel_configuration
 
     return data, None
+
+
+def _entity_mapping_fields(
+    mappings: dict[str, list[str]] | None = None,
+) -> dict[vol.Marker, Any]:
+    """Create selectors for source entities grouped by RV system."""
+    mappings = mappings or {}
+    return {
+        vol.Optional(
+            _mapping_field(category), default=mappings.get(category, [])
+        ): selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=list(SUPPORTED_ENTITY_DOMAINS),
+                multiple=True,
+            )
+        )
+        for category in SYSTEM_CATEGORIES
+    }
+
+
+def _mapping_field(category: str) -> str:
+    """Return the form field for a system category."""
+    return f"{category}_entities"
+
+
+def _entity_mapping_schema(mappings: dict[str, list[str]]) -> vol.Schema:
+    """Build the entity-mapping options form."""
+    return vol.Schema(_entity_mapping_fields(mappings))
+
+
+def _normalize_entity_mappings(
+    user_input: dict[str, Any],
+) -> tuple[dict[str, list[str]], str | None]:
+    """Validate and normalize entity selections grouped by system."""
+    mappings: dict[str, list[str]] = {}
+    assigned_entities: set[str] = set()
+    for category in SYSTEM_CATEGORIES:
+        entities = user_input.get(_mapping_field(category), [])
+        if not isinstance(entities, list) or any(
+            not isinstance(entity_id, str) for entity_id in entities
+        ):
+            return {}, "invalid_entity_mapping"
+        unique_entities = list(dict.fromkeys(entities))
+        if assigned_entities.intersection(unique_entities):
+            return {}, "duplicate_entity_mapping"
+        assigned_entities.update(unique_entities)
+        if unique_entities:
+            mappings[category] = unique_entities
+    return mappings, None
+
+
+def _entry_entity_mappings(
+    entry: config_entries.ConfigEntry,
+) -> dict[str, list[str]]:
+    """Read mappings, retaining compatibility with profile entries."""
+    mappings = entry.options.get(CONF_ENTITY_MAPPINGS)
+    if mappings is None:
+        mappings = entry.data.get(CONF_ENTITY_MAPPINGS, {})
+    return {
+        category: list(entities)
+        for category, entities in mappings.items()
+        if category in SYSTEM_CATEGORIES
+    }

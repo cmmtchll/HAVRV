@@ -14,6 +14,7 @@ from custom_components.havrv.const import (
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
+    CONF_ENTITY_MAPPINGS,
     CONF_FRESH_WATER_TANK_CAPACITY,
     CONF_FUEL_TANK_CAPACITY,
     CONF_GRAY_WATER_TANK_CAPACITY,
@@ -65,6 +66,7 @@ async def test_user_flow_creates_profile_with_optional_fields_blank(
     assert result["title"] == "Adventure RV"
     assert result["data"] == {
         CONF_NAME: "Adventure RV",
+        CONF_ENTITY_MAPPINGS: {},
         CONF_MEASUREMENT_SYSTEM: _default_measurement_system(hass),
         CONF_TAG_AXLE_PRESENT: False,
     }
@@ -122,6 +124,7 @@ async def test_user_flow_stores_coach_profile_and_specifications(
     assert result["title"] == "Liberty"
     assert result["data"] == {
         CONF_NAME: "Liberty",
+        CONF_ENTITY_MAPPINGS: {},
         CONF_COACH_YEAR: 2003,
         CONF_MANUFACTURER: "Prevost",
         CONF_COACH_BUILDER: "Liberty",
@@ -141,6 +144,70 @@ async def test_user_flow_stores_coach_profile_and_specifications(
         CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
         CONF_TAG_AXLE_PRESENT: True,
         CONF_TAG_AXLE_WHEEL_CONFIGURATION: "single",
+    }
+
+
+async def test_user_flow_stores_grouped_source_entity_mappings(
+    hass: HomeAssistant,
+) -> None:
+    """Store mapped source entities by RV system."""
+    form = await _init_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_NAME: "Adventure RV",
+            "power_entities": ["sensor.house_battery_voltage"],
+            "water_entities": ["binary_sensor.fresh_water_low"],
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_ENTITY_MAPPINGS] == {
+        "power": ["sensor.house_battery_voltage"],
+        "water": ["binary_sensor.fresh_water_low"],
+    }
+
+
+async def test_user_flow_rejects_source_entity_in_multiple_groups(
+    hass: HomeAssistant,
+) -> None:
+    """Require each source entity to be assigned to one system."""
+    form = await _init_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_NAME: "Adventure RV",
+            "power_entities": ["sensor.house_battery_voltage"],
+            "water_entities": ["sensor.house_battery_voltage"],
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "duplicate_entity_mapping"}
+
+
+async def test_options_flow_updates_source_entity_mappings(
+    hass: HomeAssistant,
+) -> None:
+    """Add source mappings to an existing profile."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        data={CONF_NAME: "Adventure RV"},
+        unique_id="adventure rv",
+    )
+    entry.add_to_hass(hass)
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    assert form["type"] is FlowResultType.FORM
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={"power_entities": ["sensor.house_battery_voltage"]},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_ENTITY_MAPPINGS] == {
+        "power": ["sensor.house_battery_voltage"]
     }
 
 

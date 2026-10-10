@@ -1,10 +1,11 @@
 """Set up the HAVRV integration."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
+from homeassistant.const import CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 from .const import (
@@ -12,6 +13,7 @@ from .const import (
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
+    CONF_ENTITY_MAPPINGS,
     CONF_FRESH_WATER_TANK_CAPACITY,
     CONF_FUEL_TANK_CAPACITY,
     CONF_GRAY_WATER_TANK_CAPACITY,
@@ -27,6 +29,9 @@ from .const import (
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    DOMAIN,
+    SUPPORTED_ENTITY_DOMAINS,
+    SYSTEM_CATEGORIES,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
 )
@@ -56,9 +61,19 @@ class HavrvRuntimeData:
     main_rear_wheel_configuration: str | None = None
     tag_axle_present: bool = False
     tag_axle_wheel_configuration: str | None = None
+    platforms: list[Platform] = field(default_factory=list, compare=False)
+    device_id: str | None = field(default=None, compare=False)
 
 
 type HavrvConfigEntry = ConfigEntry[HavrvRuntimeData]
+
+_DOMAIN_PLATFORMS = {
+    "sensor": Platform.SENSOR,
+    "binary_sensor": Platform.BINARY_SENSOR,
+    "switch": Platform.SWITCH,
+    "light": Platform.LIGHT,
+    "climate": Platform.CLIMATE,
+}
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> bool:
@@ -93,9 +108,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         tag_axle_present=data.get(CONF_TAG_AXLE_PRESENT, False),
         tag_axle_wheel_configuration=data.get(CONF_TAG_AXLE_WHEEL_CONFIGURATION),
     )
+    device_registry = dr.async_get(hass)
+    rv_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=entry.runtime_data.name,
+        manufacturer=entry.runtime_data.manufacturer or "HAVRV",
+        model=entry.runtime_data.model or "RV",
+    )
+    entry.runtime_data.device_id = rv_device.id
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
+    mappings = _entry_entity_mappings(entry)
+    platforms = {
+        _DOMAIN_PLATFORMS[entity_id.split(".", maxsplit=1)[0]]
+        for entities in mappings.values()
+        for entity_id in entities
+        if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
+    }
+    entry.runtime_data.platforms = list(platforms)
+    if platforms:
+        await hass.config_entries.async_forward_entry_setups(entry, list(platforms))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> bool:
     """Unload an RV profile."""
-    return True
+    platforms = entry.runtime_data.platforms
+    if not platforms:
+        return True
+    return await hass.config_entries.async_unload_platforms(entry, list(platforms))
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: HavrvConfigEntry) -> None:
+    """Reload an RV profile when its mappings change."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _entry_entity_mappings(entry: HavrvConfigEntry) -> dict[str, list[str]]:
+    """Get configured mappings, preferring options for edited profiles."""
+    mappings = entry.options.get(CONF_ENTITY_MAPPINGS)
+    if mappings is None:
+        mappings = entry.data.get(CONF_ENTITY_MAPPINGS, {})
+    return {
+        category: list(entities)
+        for category, entities in mappings.items()
+        if category in SYSTEM_CATEGORIES
+    }
