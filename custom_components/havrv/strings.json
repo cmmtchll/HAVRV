@@ -62,26 +62,6 @@
         }
       }
     },
-    "options": {
-      "step": {
-        "init": {
-          "title": "Map RV system entities",
-          "description": "Choose existing Home Assistant entities to expose on system devices for this RV. Control entities operate the selected source entity.",
-          "data": {
-            "power_entities": "Power system entities",
-            "water_entities": "Water system entities",
-            "chassis_entities": "Chassis system entities",
-            "climate_entities": "Climate system entities",
-            "location_entities": "Location system entities",
-            "other_entities": "Other RV entities"
-          }
-        }
-      },
-      "error": {
-        "invalid_entity_mapping": "Choose valid source entities.",
-        "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system."
-      }
-    },
     "error": {
       "name_required": "Enter a name for this RV.",
       "invalid_coach_year": "Enter a whole model year from 1900 through next year.",
@@ -91,6 +71,26 @@
     },
     "abort": {
       "already_configured": "An RV with this name is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Map RV system entities",
+        "description": "Choose existing Home Assistant entities to expose on system devices for this RV. Control entities operate the selected source entity.",
+        "data": {
+          "power_entities": "Power system entities",
+          "water_entities": "Water system entities",
+          "chassis_entities": "Chassis system entities",
+          "climate_entities": "Climate system entities",
+          "location_entities": "Location system entities",
+          "other_entities": "Other RV entities"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity_mapping": "Choose valid source entities.",
+      "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system."
     }
   },
   "selector": {
