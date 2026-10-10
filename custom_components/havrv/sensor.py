@@ -37,6 +37,8 @@ from .const import (
 )
 from .entity import HavrvSourceEntity, async_add_source_entities
 
+PARALLEL_UPDATES = 0
+
 _PROFILE_SENSOR_DESCRIPTIONS = (
     SensorEntityDescription(
         key=CONF_COACH_YEAR,

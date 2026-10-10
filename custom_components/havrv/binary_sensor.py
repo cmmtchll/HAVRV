@@ -12,6 +12,8 @@ from homeassistant.helpers.entity import Entity
 
 from .entity import HavrvSourceEntity, async_add_source_entities
 
+PARALLEL_UPDATES = 0
+
 
 class HavrvBinarySensor(HavrvSourceEntity, BinarySensorEntity):
     """Expose a mapped source binary sensor."""

@@ -10,6 +10,8 @@ from homeassistant.helpers.entity import Entity
 
 from .entity import HavrvSourceEntity, async_add_source_entities
 
+PARALLEL_UPDATES = 0
+
 
 class HavrvLight(HavrvSourceEntity, LightEntity):
     """Expose and control a mapped source light."""
