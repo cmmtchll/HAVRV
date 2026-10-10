@@ -190,6 +190,15 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
         for entity in profile_entities.values()
     ]
     assert len(profile_names) == len(set(profile_names))
+    profile_icons = {
+        key: hass.states.get(entity.entity_id).attributes["icon"]
+        for key, entity in profile_entities.items()
+    }
+    assert profile_icons[CONF_COACH_YEAR] == "mdi:calendar"
+    assert profile_icons[CONF_OVERALL_HEIGHT] == "mdi:arrow-expand-vertical"
+    assert profile_icons[CONF_FUEL_TANK_CAPACITY] == "mdi:gas-station"
+    assert profile_icons[CONF_FRESH_WATER_TANK_CAPACITY] == "mdi:water"
+    assert profile_icons[CONF_MAIN_REAR_WHEEL_CONFIGURATION] == "mdi:circle-multiple"
     assert (
         hass.states.get(
             profile_entities[CONF_MAIN_REAR_WHEEL_CONFIGURATION].entity_id
