@@ -78,6 +78,7 @@ _WHEEL_CONFIGURATIONS = {
     WHEEL_CONFIGURATION_SINGLE,
     WHEEL_CONFIGURATION_DUAL,
 }
+_TIRE_ENTITY_DOMAINS = ("sensor", "number", "input_number")
 
 
 class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -339,7 +340,7 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
                 else vol.Optional(field)
             )
             fields[marker] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor")
+                selector.EntitySelectorConfig(domain=list(_TIRE_ENTITY_DOMAINS))
             )
 
     number_selector = selector.NumberSelector(
@@ -422,7 +423,14 @@ def _normalize_options(
             entity_id = user_input.get(f"tire_{key}", existing_tire_mappings.get(key))
             if entity_id is None:
                 continue
-            if not isinstance(entity_id, str) or not entity_id.startswith("sensor."):
+            if not isinstance(entity_id, str):
+                return {}, "invalid_tire_entity_mapping"
+            entity_domain, separator, object_id = entity_id.partition(".")
+            if (
+                not separator
+                or not object_id
+                or entity_domain not in _TIRE_ENTITY_DOMAINS
+            ):
                 return {}, "invalid_tire_entity_mapping"
             if entity_id in selected_entities:
                 return {}, "duplicate_tire_entity_mapping"

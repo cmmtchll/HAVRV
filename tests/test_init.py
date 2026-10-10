@@ -441,6 +441,101 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+async def test_tire_sources_and_threshold_changes_reload_and_follow_state(
+    hass: HomeAssistant,
+) -> None:
+    """Apply edited source selections and limits, then follow each new source."""
+    hass.states.async_set("sensor.old_pressure", "60", {"unit_of_measurement": "psi"})
+    hass.states.async_set(
+        "sensor.template_temperature", "30", {"unit_of_measurement": "°C"}
+    )
+    hass.states.async_set("input_number.tire_battery", "50")
+    hass.states.async_set("number.new_pressure", "60", {"unit_of_measurement": "psi"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Tire RV",
+        unique_id="tire rv",
+        data={
+            CONF_NAME: "Tire RV",
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_METRIC,
+            CONF_REAR_AXLE_COUNT: 1,
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "single",
+        },
+        options={
+            CONF_TIRE_ENTITY_MAPPINGS: {
+                "front_left_pressure": "sensor.old_pressure",
+                "front_left_temperature": "sensor.template_temperature",
+                "front_left_battery": "input_number.tire_battery",
+            },
+            CONF_TIRE_PRESSURE_THRESHOLDS: {
+                "front": {"low": 300, "high": 800},
+            },
+            CONF_TIRE_TEMPERATURE_HIGH: 40,
+            CONF_TIRE_BATTERY_LOW: 20,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+
+    def registered_entity(domain: str, unique_id: str) -> er.RegistryEntry:
+        return next(
+            entity
+            for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+            if entity.entity_id.startswith(f"{domain}.")
+            and entity.unique_id == unique_id
+        )
+
+    pressure = registered_entity("sensor", f"{entry.entry_id}_tire_front_left_pressure")
+    temperature_problem = registered_entity(
+        "binary_sensor", f"{entry.entry_id}_tire_front_left_temperature"
+    )
+    battery_problem = registered_entity(
+        "binary_sensor", f"{entry.entry_id}_tire_front_left_battery"
+    )
+    tire_problem = registered_entity(
+        "binary_sensor", f"{entry.entry_id}_tire_front_left_problem"
+    )
+    assert hass.states.get(tire_problem.entity_id).state == "off"
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={
+            "tire_front_left_pressure": "number.new_pressure",
+            "tire_front_pressure_low": 450,
+        },
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert hass.states.get(tire_problem.entity_id).state == "on"
+
+    hass.states.async_set("number.new_pressure", "70", {"unit_of_measurement": "psi"})
+    await hass.async_block_till_done()
+    assert hass.states.get(pressure.entity_id).state == "70.0"
+    assert hass.states.get(tire_problem.entity_id).state == "off"
+
+    hass.states.async_set("sensor.old_pressure", "10")
+    await hass.async_block_till_done()
+    assert hass.states.get(pressure.entity_id).state == "70.0"
+    assert hass.states.get(tire_problem.entity_id).state == "off"
+
+    hass.states.async_set(
+        "sensor.template_temperature", "50", {"unit_of_measurement": "°C"}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(tire_problem.entity_id).state == "on"
+    assert hass.states.get(temperature_problem.entity_id).state == "on"
+
+    hass.states.async_set("input_number.tire_battery", "10")
+    await hass.async_block_till_done()
+    assert hass.states.get(battery_problem.entity_id).state == "on"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_options_reload_adds_platform_to_existing_entry(
     hass: HomeAssistant,
 ) -> None:
