@@ -20,7 +20,7 @@ implemented integration behavior, not just repository configuration.
 - Saved RV profile values, including dimensions, tank capacities, axle count,
   and wheel layouts, exposed as profile sensors on each RV device.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
-- Ruff, pytest, integration coverage threshold, and CI validation.
+- Ruff, pytest, a 96% integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.
 
 These foundations do not mean all Bronze rules are complete. Mapping is
@@ -32,6 +32,28 @@ Profile setup currently excludes vehicle weight ratings, tire size/load-range
 and inflation details, wheelbase/tow rating, and powertrain, generator,
 electrical-service, and propane data. These remain potential future profile
 fields and are not used in calculations or alerts.
+
+## Automated validation
+
+Home Assistant defines the quality scale as a checklist; there is no general
+CI job that awards a tier. Most rules require reviewing runtime behavior,
+documentation, or whether a rule applies. For Core integrations, `hassfest` reads
+`quality_scale.yaml` (rule statuses are `todo`, `done`, or `exempt`) and checks
+that the manifest's `quality_scale` tier has all lower-tier rules marked
+complete or exempt. Its static rule validators cover config flow, runtime
+data, setup failure handling, unique config entries, discovery,
+reconfiguration, and strict typing. This validator runs only for integrations
+inside Home Assistant Core; it skips standalone custom integrations such as
+HAVRV. Therefore, the existing Home Assistant validation job does not assign
+HAVRV a tier.
+
+The `Quality scale checks` GitHub Actions job enforces the directly measurable
+coverage rules: the pytest configuration requires at least 96% coverage across
+the integration (above Silver's 95% threshold), and the config flow module
+must have 100% coverage (Bronze). HACS validation, Home Assistant integration
+validation, and Ruff lint/format checks remain separate CI jobs. Passing these
+checks is not a tier certification; the remaining checklist rules still need
+implementation and review.
 
 ## Implementation gates
 
