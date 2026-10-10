@@ -31,6 +31,9 @@ jobs:
       - name: Check config flow coverage
         run: python -m coverage report --include=custom_components/havrv/config_flow.py --fail-under=100
 
+      - name: Audit Bronze through Platinum criteria
+        run: python scripts/quality_scale_audit.py
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

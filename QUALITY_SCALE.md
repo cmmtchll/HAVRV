@@ -33,27 +33,30 @@ and inflation details, wheelbase/tow rating, and powertrain, generator,
 electrical-service, and propane data. These remain potential future profile
 fields and are not used in calculations or alerts.
 
-## Automated validation
+## Quality-scale audit and CI
 
-Home Assistant defines the quality scale as a checklist; there is no general
-CI job that awards a tier. Most rules require reviewing runtime behavior,
-documentation, or whether a rule applies. For Core integrations, `hassfest` reads
-`quality_scale.yaml` (rule statuses are `todo`, `done`, or `exempt`) and checks
-that the manifest's `quality_scale` tier has all lower-tier rules marked
-complete or exempt. Its static rule validators cover config flow, runtime
-data, setup failure handling, unique config entries, discovery,
-reconfiguration, and strict typing. This validator runs only for integrations
-inside Home Assistant Core; it skips standalone custom integrations such as
-HAVRV. Therefore, the existing Home Assistant validation job does not assign
-HAVRV a tier.
+The current Home Assistant [checklist](https://developers.home-assistant.io/docs/core/integration-quality-scale/checklist/)
+contains 54 rules across Bronze, Silver, Gold, and Platinum. Each rule is
+tracked in `custom_components/havrv/quality_scale.yaml` as `done`, `exempt`,
+or `todo`, with a rationale and, for completed rules, repository evidence.
+`scripts/quality_scale_audit.py` verifies that every official rule is present,
+rejects unknown rules and invalid statuses, checks evidence paths, and writes
+the status of every rule and cumulative tier readiness to the GitHub Actions
+step summary. Rules requiring product, runtime, or documentation judgment are
+explicitly assessed in the checklist; they are not inferred from a generic
+static-analysis result. A `todo` means the criterion is not met. `exempt` must
+include the reason it does not apply.
 
-The `Quality scale checks` GitHub Actions job enforces the directly measurable
-coverage rules: the pytest configuration requires at least 96% coverage across
-the integration (above Silver's 95% threshold), and the config flow module
-must have 100% coverage (Bronze). HACS validation, Home Assistant integration
-validation, and Ruff lint/format checks remain separate CI jobs. Passing these
-checks is not a tier certification; the remaining checklist rules still need
-implementation and review.
+CI also independently runs the complete pytest suite, enforces at least 96%
+coverage across the integration and 100% config-flow coverage, and runs Ruff
+lint and formatting, HACS validation, and Home Assistant integration
+validation. The latter is hassfest-based, but Home Assistant's own
+`quality_scale.yaml` tier validator only runs for integrations in Home
+Assistant Core, so it does not audit a standalone custom integration like
+HAVRV. The local auditor fills that checklist-tracking gap; it does not award a
+tier. A successful audit job means all rules are assessed and the other
+automated checks passed, while the summary clearly shows which criteria remain
+unmet and whether each cumulative tier's checklist is ready.
 
 ## Implementation gates
 
@@ -85,4 +88,5 @@ behavior and test it.
 The official rule names and current requirements are in the
 [Home Assistant quality-scale checklist](https://developers.home-assistant.io/docs/core/integration-quality-scale/checklist/).
 Update this document as rules become implemented or are formally determined
-not applicable.
+not applicable. Keep the rule catalog in `scripts/quality_scale_audit.py` in
+sync with the linked official checklist when Home Assistant changes it.
