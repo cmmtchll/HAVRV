@@ -18,7 +18,7 @@ implemented integration behavior, not just repository configuration.
   without mappings remain supported; entity configuration is editable through
   the options flow.
 - Saved RV profile values, including dimensions, tank capacities, axle count,
-  and wheel layouts, exposed as profile sensors on each RV device.
+  and wheel layouts, exposed as uniquely named sensors on each RV device.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
 - Ruff, pytest, a 96% integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.
