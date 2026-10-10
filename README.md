@@ -88,7 +88,7 @@ fields or safety calculations.
 This repository targets Home Assistant Core `2026.10.0` and Python `3.14.2`
 or newer in the `3.14` series. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 environment setup, tests, formatting, and validation commands. See
-[QUALITY_SCALE.md](QUALITY_SCALE.md) for the Bronze-to-Gold implementation
+[QUALITY_SCALE.md](QUALITY_SCALE.md) for the Bronze-to-Platinum implementation
 roadmap.
 
 ## Support

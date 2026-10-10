@@ -31,10 +31,17 @@ ruff check .
 ruff format --check .
 pytest
 python -m coverage report --include=custom_components/havrv/config_flow.py --fail-under=100
+python scripts/quality_scale_audit.py
 ```
 
 The pytest configuration enforces at least 96% coverage for the integration.
-The additional coverage report enforces full config-flow module coverage.
+The additional coverage report enforces full config-flow module coverage. The
+quality-scale audit reports every Bronze-through-Platinum rule and whether the
+current checklist assessment marks it done, exempt, or todo. A successful audit
+means the checklist is complete and evidence references are valid; it does not
+mean every tier is ready. The GitHub Actions summary shows unmet criteria.
+When changing a rule's assessment, update
+`custom_components/havrv/quality_scale.yaml` with a rationale and evidence.
 When adding code, add tests for normal behavior, failure cases, and config-entry
 lifecycle behavior as applicable.
 

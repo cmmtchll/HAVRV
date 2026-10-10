@@ -1,0 +1,163 @@
+rules:
+  action-setup:
+    status: exempt
+    comment: No integration service actions are registered; mapped entity controls use their native platform actions.
+  appropriate-polling:
+    status: exempt
+    comment: HAVRV is local-push and subscribes to source entity state changes; it does not poll.
+  brands:
+    status: done
+    comment: HACS-compatible icon asset is present at custom_components/havrv/brand/icon.png.
+  common-modules:
+    status: done
+    comment: Shared source-entity behavior is centralized in custom_components/havrv/entity.py.
+  config-flow-test-coverage:
+    status: done
+    comment: CI enforces 100% config-flow module coverage with tests/test_config_flow.py.
+  config-flow:
+    status: done
+    comment: UI setup flow, field descriptions, config data and options are implemented in custom_components/havrv/config_flow.py and custom_components/havrv/strings.json.
+  dependency-transparency:
+    status: done
+    comment: No runtime requirements are declared in custom_components/havrv/manifest.json.
+  docs-actions:
+    status: exempt
+    comment: No integration service actions are provided; controls are exposed as standard mapped entities.
+  docs-triggers:
+    status: exempt
+    comment: HAVRV does not provide integration-specific triggers.
+  docs-conditions:
+    status: exempt
+    comment: HAVRV does not provide integration-specific conditions.
+  docs-high-level-description:
+    status: done
+    comment: The integration purpose and supported use are described in README.md.
+  docs-installation-instructions:
+    status: done
+    comment: HACS and manual setup steps are documented in README.md.
+  docs-removal-instructions:
+    status: done
+    comment: Config-entry removal behavior is documented in README.md.
+  entity-event-setup:
+    status: done
+    comment: Source state listeners are registered and removed with entity lifecycle in custom_components/havrv/entity.py.
+  entity-unique-id:
+    status: done
+    comment: Mapped and profile entities define unique IDs in custom_components/havrv/entity.py and custom_components/havrv/sensor.py.
+  has-entity-name:
+    status: done
+    comment: Mapped and profile entities set has_entity_name in custom_components/havrv/entity.py and custom_components/havrv/sensor.py.
+  runtime-data:
+    status: done
+    comment: Typed config-entry runtime data is populated in custom_components/havrv/__init__.py.
+  test-before-configure:
+    status: exempt
+    comment: Setup only maps existing local Home Assistant entities and has no remote connection or credentials to test.
+  test-before-setup:
+    status: exempt
+    comment: Setup has no external service or device connection; unavailable source entities are intentionally supported.
+  unique-config-entry:
+    status: done
+    comment: Case-insensitive profile uniqueness is implemented and tested in custom_components/havrv/config_flow.py and tests/test_config_flow.py.
+  action-exceptions:
+    status: exempt
+    comment: No integration service actions are registered that can raise service-action failures.
+  config-entry-unloading:
+    status: done
+    comment: Platforms unload through the config-entry lifecycle and are tested in tests/test_init.py.
+  docs-configuration-parameters:
+    status: done
+    comment: Profile fields, measurement units, and entity mapping options are described in README.md.
+  docs-installation-parameters:
+    status: done
+    comment: README.md documents installation methods and prerequisites; no integration-specific install parameters are required.
+  entity-unavailable:
+    status: done
+    comment: Mapped entities become unavailable when sources are absent or unavailable and are tested in tests/test_entities.py.
+  integration-owner:
+    status: done
+    comment: An active code owner is declared in custom_components/havrv/manifest.json.
+  log-when-unavailable:
+    status: exempt
+    comment: HAVRV has no external connection; unavailable local source entities do not require connection-recovery logging.
+  parallel-updates:
+    status: todo
+    comment: Explicitly declare and verify the parallel update setting for each entity platform.
+  reauthentication-flow:
+    status: exempt
+    comment: HAVRV has no authentication, credentials, or external service.
+  test-coverage:
+    status: done
+    comment: CI enforces at least 96% coverage for custom_components/havrv in pyproject.toml.
+  devices:
+    status: done
+    comment: RV and mapped-system devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py.
+  diagnostics:
+    status: todo
+    comment: Implement and test a diagnostics platform with sensitive-data redaction.
+  discovery-update-info:
+    status: exempt
+    comment: HAVRV has no discoverable network device or address information to update.
+  discovery:
+    status: exempt
+    comment: HAVRV is a virtual profile and user-selected entity mapper, not a physical device integration.
+  docs-data-update:
+    status: todo
+    comment: Document that source changes are mirrored on state events and profile values change through configuration.
+  docs-examples:
+    status: todo
+    comment: Add complete end-user automation examples for supported mapped entity types.
+  docs-known-limitations:
+    status: done
+    comment: README.md identifies planned profile fields and project functionality not yet implemented.
+  docs-supported-devices:
+    status: exempt
+    comment: HAVRV maps arbitrary Home Assistant entities and does not support a fixed manufacturer or device list.
+  docs-supported-functions:
+    status: todo
+    comment: Document supported source domains, mirrored attributes, controls, and platform behavior in detail.
+  docs-troubleshooting:
+    status: todo
+    comment: Add user-facing troubleshooting steps for missing, unavailable, and incorrectly mapped source entities.
+  docs-use-cases:
+    status: todo
+    comment: Add user-facing use cases showing how RV profiles and mapped systems are used.
+  dynamic-devices:
+    status: exempt
+    comment: HAVRV is a virtual profile mapper; mapped system devices are user-selected, not discovered physical devices.
+  entity-category:
+    status: todo
+    comment: Review each entity type and assign an appropriate entity category where applicable.
+  entity-device-class:
+    status: todo
+    comment: Review profile sensors for applicable device classes; source classes are currently forwarded.
+  entity-disabled-by-default:
+    status: exempt
+    comment: Entities are explicitly configured or profile values entered by the user; no optional noisy entity set is generated.
+  entity-translations:
+    status: done
+    comment: Profile entity names are translated in custom_components/havrv/strings.json.
+  exception-translations:
+    status: exempt
+    comment: No integration exception classes or untranslated user-facing exception messages are currently exposed.
+  icon-translations:
+    status: todo
+    comment: Add translated icon definitions for HAVRV-owned entities where appropriate.
+  reconfiguration-flow:
+    status: todo
+    comment: Add or formally assess a UI reconfiguration path for profile fields beyond the existing mapping options flow.
+  repair-issues:
+    status: exempt
+    comment: There are no remote device, service, or credential conditions that require user-intervention repair issues.
+  stale-devices:
+    status: todo
+    comment: Verify and implement removal of obsolete system devices after mappings are removed or changed.
+  async-dependency:
+    status: exempt
+    comment: HAVRV declares no external runtime dependencies.
+  inject-websession:
+    status: exempt
+    comment: HAVRV has no HTTP client or external service dependency that could use Home Assistant's web session.
+  strict-typing:
+    status: todo
+    comment: Add and enforce a strict type-checking configuration for all integration modules.
