@@ -1,7 +1,9 @@
 """Tests for mapped HAVRV entities."""
 
+from types import ModuleType
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.components.light import ColorMode
@@ -10,12 +12,23 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.havrv import binary_sensor, climate, light, sensor, switch
 from custom_components.havrv.binary_sensor import HavrvBinarySensor
 from custom_components.havrv.climate import HavrvClimate
 from custom_components.havrv.const import DOMAIN
 from custom_components.havrv.light import HavrvLight
 from custom_components.havrv.sensor import HavrvSensor
 from custom_components.havrv.switch import HavrvSwitch
+
+
+@pytest.mark.parametrize(
+    "platform",
+    [binary_sensor, climate, light, sensor, switch],
+    ids=["binary_sensor", "climate", "light", "sensor", "switch"],
+)
+def test_platforms_declare_parallel_updates(platform: ModuleType) -> None:
+    """Declare no extra parallelism for event-driven proxies."""
+    assert platform.PARALLEL_UPDATES == 0
 
 
 def _entry() -> MockConfigEntry:
