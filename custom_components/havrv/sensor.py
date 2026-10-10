@@ -1,5 +1,6 @@
 """Sensor platform for mapped HAVRV source entities."""
 
+import math
 from collections.abc import Callable
 
 from homeassistant.components.sensor import (
@@ -36,6 +37,7 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .entity import HavrvSourceEntity, async_add_source_entities
+from .tire import HavrvTireEntity, TirePosition, tire_positions
 
 PARALLEL_UPDATES = 0
 
@@ -132,7 +134,7 @@ _PROFILE_SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key=CONF_REAR_AXLE_COUNT,
-        name="Number of rear axles",
+        name="Number of rear axle assemblies",
         translation_key=CONF_REAR_AXLE_COUNT,
         icon="mdi:car",
     ),
@@ -232,6 +234,73 @@ class HavrvProfileSensor(SensorEntity):
         return self._native_value
 
 
+class HavrvTireSensor(HavrvTireEntity, SensorEntity):
+    """Expose a configured source reading on its generated tire device."""
+
+    entity_description: SensorEntityDescription
+
+    def __init__(
+        self,
+        entry: HavrvConfigEntry,
+        position: TirePosition,
+        metric: str,
+    ) -> None:
+        """Initialize a tire reading sensor."""
+        super().__init__(entry, position)
+        descriptions = {
+            "pressure": ("Pressure", "tire_pressure", "mdi:gauge"),
+            "temperature": (
+                "Temperature",
+                "tire_temperature",
+                "mdi:thermometer",
+            ),
+            "battery": ("Battery level", "tire_battery", "mdi:battery"),
+        }
+        name, translation_key, icon = descriptions[metric]
+        self.entity_description = SensorEntityDescription(
+            key=metric,
+            name=name,
+            translation_key=translation_key,
+            icon=icon,
+        )
+        self._metric = metric
+        self._attr_unique_id = f"{entry.entry_id}_tire_{position.key}_{metric}"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the configured source's numeric reading."""
+        state = self._source_state(self._metric)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return None
+        try:
+            value = float(state.state)
+        except ValueError:
+            return None
+        return value if math.isfinite(value) else None
+
+    @property
+    def available(self) -> bool:
+        """Return whether the configured source has a usable numeric reading."""
+        return self.native_value is not None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the configured source unit."""
+        return self._source_attributes(self._metric).get("unit_of_measurement")
+
+    @property
+    def device_class(self) -> SensorDeviceClass | None:
+        """Forward the configured source device class."""
+        value = self._source_attributes(self._metric).get("device_class")
+        return None if value is None else SensorDeviceClass(value)
+
+    @property
+    def state_class(self) -> SensorStateClass | None:
+        """Forward the configured source state class."""
+        value = self._source_attributes(self._metric).get("state_class")
+        return None if value is None else SensorStateClass(value)
+
+
 def _profile_sensor_unit(entry: HavrvConfigEntry, key: str) -> str | None:
     """Return the unit used when this profile value was entered."""
     metric = entry.runtime_data.measurement_system == UNIT_SYSTEM_METRIC
@@ -277,3 +346,10 @@ async def async_setup_entry(
     """Set up mapped sensor entities."""
     async_add_source_entities(entry, "sensor", HavrvSensor, async_add_entities)
     async_add_entities(_profile_sensors(entry))
+    async_add_entities(
+        [
+            HavrvTireSensor(entry, position, metric)
+            for position in tire_positions(entry.data)
+            for metric in ("pressure", "temperature", "battery")
+        ]
+    )

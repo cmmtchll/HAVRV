@@ -29,6 +29,10 @@ from custom_components.havrv.const import (
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    CONF_TIRE_BATTERY_LOW,
+    CONF_TIRE_ENTITY_MAPPINGS,
+    CONF_TIRE_PRESSURE_THRESHOLDS,
+    CONF_TIRE_TEMPERATURE_HIGH,
     DOMAIN,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
@@ -169,7 +173,7 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
         fresh_water_tank_capacity=160.0,
         gray_water_tank_capacity=100.0,
         black_water_tank_capacity=80.0,
-        rear_axle_count=2,
+        rear_axle_count=3,
         main_rear_wheel_configuration="dual",
         tag_axle_present=True,
         tag_axle_wheel_configuration="single",
@@ -182,8 +186,12 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
         if entity.unique_id.startswith(f"{entry.entry_id}_profile_")
     }
     rear_axles = hass.states.get(profile_entities[CONF_REAR_AXLE_COUNT].entity_id)
-    assert rear_axles.state == "2"
-    assert rear_axles.attributes["friendly_name"].endswith("Number of rear axles")
+    assert rear_axles.state == "3"
+    assert entry.version == 2
+    assert entry.data[CONF_REAR_AXLE_COUNT] == 3
+    assert rear_axles.attributes["friendly_name"].endswith(
+        "Number of rear axle assemblies"
+    )
     assert profile_entities[CONF_REAR_AXLE_COUNT].entity_category is None
     profile_names = [
         hass.states.get(entity.entity_id).attributes["friendly_name"]
@@ -306,6 +314,130 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     )
     await hass.async_block_till_done()
     assert hass.states.get(mapped_entity.entity_id).state == "13.6"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_setup_creates_tire_devices_readings_and_problem_sensors(
+    hass: HomeAssistant,
+) -> None:
+    """Expose each tire position with mirrored readings and diagnostics."""
+    hass.states.async_set(
+        "sensor.front_left_pressure",
+        "35",
+        {"unit_of_measurement": "psi", "device_class": "pressure"},
+    )
+    hass.states.async_set(
+        "sensor.front_left_temperature",
+        "110",
+        {"unit_of_measurement": "°F", "device_class": "temperature"},
+    )
+    hass.states.async_set(
+        "sensor.front_left_battery",
+        "15",
+        {"unit_of_measurement": "%", "device_class": "battery"},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Tire RV",
+        unique_id="tire rv",
+        data={
+            CONF_NAME: "Tire RV",
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_METRIC,
+            CONF_REAR_AXLE_COUNT: 1,
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "single",
+        },
+        options={
+            CONF_TIRE_ENTITY_MAPPINGS: {
+                "front_left_pressure": "sensor.front_left_pressure",
+                "front_left_temperature": "sensor.front_left_temperature",
+                "front_left_battery": "sensor.front_left_battery",
+            },
+            CONF_TIRE_PRESSURE_THRESHOLDS: {
+                "front": {"low": 300, "high": 800},
+            },
+            CONF_TIRE_TEMPERATURE_HIGH: 40,
+            CONF_TIRE_BATTERY_LOW: 20,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entities = {
+        f"{entity.entity_id.split('.')[0]}:{entity.unique_id}": entity
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+    }
+    pressure = entities[f"sensor:{entry.entry_id}_tire_front_left_pressure"]
+    temperature = entities[f"sensor:{entry.entry_id}_tire_front_left_temperature"]
+    battery = entities[f"sensor:{entry.entry_id}_tire_front_left_battery"]
+    assert round(float(hass.states.get(pressure.entity_id).state)) == 241
+    assert round(float(hass.states.get(temperature.entity_id).state)) == 43
+    assert hass.states.get(battery.entity_id).state == "15.0"
+
+    expected_problems = {
+        "pressure": True,
+        "temperature": True,
+        "battery": True,
+        "data_present": True,
+        "problem": True,
+    }
+    for problem, expected in expected_problems.items():
+        entity = entities[f"binary_sensor:{entry.entry_id}_tire_front_left_{problem}"]
+        assert hass.states.get(entity.entity_id).state == ("on" if expected else "off")
+
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert {device.name for device in devices} == {
+        "Tire RV",
+        "Front Left Tire",
+        "Front Right Tire",
+        "Rear Axle 1 Left Tire",
+        "Rear Axle 1 Right Tire",
+    }
+    front_tire = next(device for device in devices if device.name == "Front Left Tire")
+    rv_device = next(device for device in devices if device.name == "Tire RV")
+    assert front_tire.via_device_id == rv_device.id
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    hass.states.async_set(
+        "sensor.front_left_pressure", "60", {"unit_of_measurement": "psi"}
+    )
+    hass.states.async_set(
+        "sensor.front_left_temperature", "100", {"unit_of_measurement": "°F"}
+    )
+    hass.states.async_set(
+        "sensor.front_left_battery", "50", {"unit_of_measurement": "%"}
+    )
+    await hass.async_block_till_done()
+    assert (
+        hass.states.get(
+            entities[
+                f"binary_sensor:{entry.entry_id}_tire_front_left_problem"
+            ].entity_id
+        ).state
+        == "off"
+    )
+    hass.states.async_set("sensor.front_left_pressure", "unavailable")
+    await hass.async_block_till_done()
+    assert (
+        hass.states.get(
+            entities[
+                f"binary_sensor:{entry.entry_id}_tire_front_left_data_present"
+            ].entity_id
+        ).state
+        == "off"
+    )
+    assert hass.states.get(pressure.entity_id).state == "unavailable"
+    assert (
+        hass.states.get(
+            entities[
+                f"binary_sensor:{entry.entry_id}_tire_front_left_problem"
+            ].entity_id
+        ).state
+        == "on"
+    )
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

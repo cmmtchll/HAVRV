@@ -1,6 +1,6 @@
 """Tests for mapped HAVRV entities."""
 
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -15,10 +15,32 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.havrv import binary_sensor, climate, light, sensor, switch
 from custom_components.havrv.binary_sensor import HavrvBinarySensor
 from custom_components.havrv.climate import HavrvClimate
-from custom_components.havrv.const import DOMAIN
+from custom_components.havrv.const import (
+    CONF_TIRE_BATTERY_LOW,
+    CONF_TIRE_ENTITY_MAPPINGS,
+    CONF_TIRE_PRESSURE_THRESHOLDS,
+    CONF_TIRE_TEMPERATURE_HIGH,
+    DOMAIN,
+    TIRE_BATTERY,
+    TIRE_FRONT,
+    TIRE_PRESSURE,
+    TIRE_TEMPERATURE,
+    UNIT_SYSTEM_METRIC,
+    UNIT_SYSTEM_US_CUSTOMARY,
+)
 from custom_components.havrv.light import HavrvLight
 from custom_components.havrv.sensor import HavrvSensor
 from custom_components.havrv.switch import HavrvSwitch
+from custom_components.havrv.tire import (
+    TirePosition,
+    _numeric_state,
+    _pressure_in_profile_units,
+    _temperature_in_profile_units,
+    overall_tire_problem,
+    tire_data_present,
+    tire_positions,
+    tire_problem,
+)
 
 
 @pytest.mark.parametrize(
@@ -31,12 +53,13 @@ def test_platforms_declare_parallel_updates(platform: ModuleType) -> None:
     assert platform.PARALLEL_UPDATES == 0
 
 
-def _entry() -> MockConfigEntry:
+def _entry(*, options: dict | None = None) -> MockConfigEntry:
     """Create a profile entry for entity tests."""
     return MockConfigEntry(
         domain=DOMAIN,
         title="Test RV",
         data={CONF_NAME: "Test RV"},
+        options=options or {},
         unique_id="test rv",
     )
 
@@ -260,3 +283,130 @@ async def test_climate_mirrors_attributes_and_forwards_controls(
         ("set_swing_mode", {"entity_id": "climate.living_area", "swing_mode": "off"}),
         ("set_humidity", {"entity_id": "climate.living_area", "humidity": 50}),
     ]
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "measurement_system", "expected"),
+    [
+        (10, "psi", UNIT_SYSTEM_METRIC, pytest.approx(68.9476)),
+        (100, "kPa", UNIT_SYSTEM_US_CUSTOMARY, pytest.approx(14.5038, abs=0.001)),
+        (1, "bar", UNIT_SYSTEM_METRIC, 100),
+        (1, "bar", UNIT_SYSTEM_US_CUSTOMARY, pytest.approx(14.5038, abs=0.001)),
+        (10, None, UNIT_SYSTEM_METRIC, 10),
+        (10, "mmHg", UNIT_SYSTEM_METRIC, None),
+    ],
+)
+def test_pressure_conversion(
+    value: float, unit: str | None, measurement_system: str, expected: float | None
+) -> None:
+    """Convert supported tire-pressure source units to profile units."""
+    assert _pressure_in_profile_units(value, unit, measurement_system) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "measurement_system", "expected"),
+    [
+        (32, "°F", UNIT_SYSTEM_METRIC, 0),
+        (0, "°C", UNIT_SYSTEM_US_CUSTOMARY, 32),
+        (20, "°C", UNIT_SYSTEM_METRIC, 20),
+        (68, "°F", UNIT_SYSTEM_US_CUSTOMARY, 68),
+        (20, None, UNIT_SYSTEM_METRIC, 20),
+        (20, "K", UNIT_SYSTEM_METRIC, None),
+    ],
+)
+def test_temperature_conversion(
+    value: float, unit: str | None, measurement_system: str, expected: float | None
+) -> None:
+    """Convert supported tire-temperature source units to profile units."""
+    assert _temperature_in_profile_units(value, unit, measurement_system) == expected
+
+
+def test_tire_positions_require_known_axle_and_wheel_layout() -> None:
+    """Avoid inventing rear tire positions for incomplete or invalid layouts."""
+    assert tire_positions({}) == []
+    assert tire_positions({"rear_axle_count": 1})[0].key == "front_left"
+    assert tire_positions(
+        {
+            "rear_axle_count": 1,
+            "main_rear_wheel_configuration": "unknown",
+        }
+    ) == tire_positions({"rear_axle_count": 1})
+
+
+async def test_tire_data_and_threshold_evaluation_reject_invalid_sources(
+    hass: HomeAssistant,
+) -> None:
+    """Handle missing, nonnumeric, and unit-incompatible tire source readings."""
+    position = TirePosition("front_left", "Front Left Tire", TIRE_FRONT)
+    entry = _entry(
+        options={
+            CONF_TIRE_ENTITY_MAPPINGS: {
+                "front_left_pressure": "sensor.tire_pressure",
+                "front_left_temperature": "sensor.tire_temperature",
+                "front_left_battery": "sensor.tire_battery",
+            },
+            CONF_TIRE_PRESSURE_THRESHOLDS: {
+                TIRE_FRONT: {"low": 300, "high": 800},
+            },
+            CONF_TIRE_TEMPERATURE_HIGH: 60,
+            CONF_TIRE_BATTERY_LOW: 20,
+        }
+    )
+    entry.runtime_data = SimpleNamespace(measurement_system=UNIT_SYSTEM_METRIC)
+    hass.states.async_set("sensor.tire_pressure", "nan", {"unit_of_measurement": "psi"})
+    hass.states.async_set(
+        "sensor.tire_temperature", "40", {"unit_of_measurement": "kelvin"}
+    )
+    hass.states.async_set("sensor.tire_battery", "10", {"unit_of_measurement": "V"})
+
+    assert not tire_data_present(hass, entry, position)
+    assert _numeric_state(hass, None) is None
+    assert _numeric_state(hass, "sensor.missing") is None
+    assert tire_problem(hass, entry, position, TIRE_PRESSURE) is None
+    assert tire_problem(hass, entry, position, TIRE_TEMPERATURE) is None
+    assert tire_problem(hass, entry, position, TIRE_BATTERY) is None
+    with pytest.raises(ValueError, match="Unsupported tire problem"):
+        tire_problem(hass, entry, position, "unknown")
+    assert overall_tire_problem(hass, entry, position)
+
+    hass.states.async_set("sensor.tire_pressure", "unavailable")
+    assert _numeric_state(hass, "sensor.tire_pressure") is None
+    hass.states.async_set("sensor.tire_pressure", "pressure-error")
+    assert _numeric_state(hass, "sensor.tire_pressure") is None
+
+    hass.states.async_set(
+        "sensor.tire_pressure", "500", {"unit_of_measurement": "mmHg"}
+    )
+    hass.states.async_set(
+        "sensor.tire_temperature", "20", {"unit_of_measurement": "°C"}
+    )
+    hass.states.async_set("sensor.tire_battery", "50", {"unit_of_measurement": "%"})
+    assert tire_data_present(hass, entry, position)
+    assert tire_problem(hass, entry, position, TIRE_PRESSURE) is None
+    assert overall_tire_problem(hass, entry, position)
+
+
+async def test_tire_problem_limits_can_be_unconfigured(hass: HomeAssistant) -> None:
+    """Leave problem sensors unevaluated until user-configured limits exist."""
+    position = TirePosition("front_left", "Front Left Tire", TIRE_FRONT)
+    entry = _entry(
+        options={
+            CONF_TIRE_ENTITY_MAPPINGS: {
+                "front_left_pressure": "sensor.tire_pressure",
+                "front_left_temperature": "sensor.tire_temperature",
+                "front_left_battery": "sensor.tire_battery",
+            },
+        }
+    )
+    entry.runtime_data = SimpleNamespace(measurement_system=UNIT_SYSTEM_METRIC)
+    hass.states.async_set("sensor.tire_pressure", "500", {"unit_of_measurement": "kPa"})
+    hass.states.async_set(
+        "sensor.tire_temperature", "20", {"unit_of_measurement": "°C"}
+    )
+    hass.states.async_set("sensor.tire_battery", "50")
+
+    assert tire_problem(hass, entry, position, TIRE_PRESSURE) is None
+    assert tire_problem(hass, entry, position, TIRE_TEMPERATURE) is None
+    assert tire_problem(hass, entry, position, TIRE_BATTERY) is None
+    assert tire_data_present(hass, entry, position)
+    assert not overall_tire_problem(hass, entry, position)
