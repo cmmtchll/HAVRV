@@ -30,12 +30,14 @@ from .const import (
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    CONF_TANK_ENTITY_MAPPINGS,
     DOMAIN,
     SUPPORTED_ENTITY_DOMAINS,
     SYSTEM_CATEGORIES,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
 )
+from .tank import TANK_DEFINITIONS
 from .tire import tire_positions
 
 
@@ -119,6 +121,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         model=entry.runtime_data.model or "RV",
     )
     entry.runtime_data.device_id = rv_device.id
+    tank_mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
+    for tank, (tank_name, capacity_key) in TANK_DEFINITIONS.items():
+        if data.get(capacity_key) is not None or tank in tank_mappings:
+            device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                identifiers={(DOMAIN, f"{entry.entry_id}_tank_{tank}")},
+                name=tank_name,
+                via_device=(DOMAIN, entry.entry_id),
+            )
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     mappings = _entry_entity_mappings(entry)

@@ -43,11 +43,9 @@ from .const import (
     CONF_TANK_ENTITY_MAPPINGS,
     CONF_TANK_THRESHOLDS,
     DOMAIN,
-    TANK_BLACK_WATER,
     TANK_EMPTY_PERCENT,
     TANK_FRESH_WATER,
     TANK_FULL_PERCENT,
-    TANK_GRAY_WATER,
     TANK_PROBLEM,
     TANK_TYPES,
     TANK_WARNING,
@@ -56,7 +54,7 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .entity import HavrvSourceEntity, async_add_source_entities
-from .tank import STATUS_OPTIONS, tank_percent, tank_status
+from .tank import STATUS_OPTIONS, TANK_DEFINITIONS, tank_percent, tank_status
 from .tire import (
     HavrvTireEntity,
     TireMonitorGroup,
@@ -719,22 +717,17 @@ def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
     """Create tank devices from configured capacities and mapped level sources."""
     mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
     entities: list[Entity] = []
-    tank_names = {
-        TANK_FRESH_WATER: ("Fresh-water tank", CONF_FRESH_WATER_TANK_CAPACITY),
-        TANK_GRAY_WATER: ("Gray-water tank", CONF_GRAY_WATER_TANK_CAPACITY),
-        TANK_BLACK_WATER: ("Black-water tank", CONF_BLACK_WATER_TANK_CAPACITY),
-    }
     for tank in TANK_TYPES:
-        source_entity_id = mappings.get(tank)
-        if source_entity_id is None:
-            continue
-        name, capacity_key = tank_names[tank]
-        entities.append(HavrvTankLevelSensor(entry, tank, name, source_entity_id))
+        name, capacity_key = TANK_DEFINITIONS[tank]
         capacity = entry.data.get(capacity_key)
         if capacity is not None:
             entities.append(
                 HavrvTankCapacitySensor(entry, tank, name, capacity_key, capacity)
             )
+        source_entity_id = mappings.get(tank)
+        if source_entity_id is None:
+            continue
+        entities.append(HavrvTankLevelSensor(entry, tank, name, source_entity_id))
 
         def derived(key: str, translation_key: str) -> SensorEntityDescription:
             return SensorEntityDescription(
