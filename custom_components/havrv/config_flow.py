@@ -447,8 +447,6 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
         )
     )
     measurement_system = entry.data.get(CONF_MEASUREMENT_SYSTEM, UNIT_SYSTEM_METRIC)
-    if measurement_system not in DEFAULT_TIRE_PRESSURE:
-        measurement_system = UNIT_SYSTEM_METRIC
     pressure_thresholds = existing_options.get(CONF_TIRE_PRESSURE_THRESHOLDS, {})
     tire_groups = {position.group for position in tire_positions(entry.data)}
     for group in (TIRE_FRONT, TIRE_AXLE, TIRE_TAG):
