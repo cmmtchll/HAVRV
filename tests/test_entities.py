@@ -13,7 +13,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.havrv import binary_sensor, climate, light, sensor, switch
+from custom_components.havrv import (
+    binary_sensor,
+    climate,
+    light,
+    select,
+    sensor,
+    switch,
+)
 from custom_components.havrv.binary_sensor import HavrvBinarySensor
 from custom_components.havrv.climate import HavrvClimate
 from custom_components.havrv.const import (
@@ -46,8 +53,8 @@ from custom_components.havrv.tire import (
 
 @pytest.mark.parametrize(
     "platform",
-    [binary_sensor, climate, light, sensor, switch],
-    ids=["binary_sensor", "climate", "light", "sensor", "switch"],
+    [binary_sensor, climate, light, select, sensor, switch],
+    ids=["binary_sensor", "climate", "light", "select", "sensor", "switch"],
 )
 def test_platforms_declare_parallel_updates(platform: ModuleType) -> None:
     """Declare no extra parallelism for event-driven proxies."""

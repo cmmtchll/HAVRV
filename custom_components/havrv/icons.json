@@ -46,6 +46,18 @@
       "tire_battery": {
         "default": "mdi:battery"
       }
+    },
+    "select": {
+      "operation_mode": {
+        "default": "mdi:rv-truck",
+        "state": {
+          "storage": "mdi:warehouse",
+          "driving": "mdi:steering",
+          "campsite_full_service": "mdi:campfire",
+          "campsite_minimal": "mdi:tent",
+          "maintenance": "mdi:wrench"
+        }
+      }
     }
   }
 }

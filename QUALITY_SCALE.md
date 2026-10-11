@@ -24,6 +24,8 @@ implemented integration behavior, not just repository configuration.
   devices, plus percentage, optional direction-aware threshold status, and
   last-filled/last-emptied history sensors. Fuel-level devices are not
   implemented.
+- An Operations device with a restorable operation-mode selector. The mode
+  does not yet change problem detection.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
 - Ruff, pytest, a 96% integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.

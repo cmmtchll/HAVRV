@@ -118,6 +118,8 @@ its child devices. Confirm that:
 - Mapped entities follow their source states.
 - Tank and tire readings appear for the source entities you selected.
 - Source units and any configured limits are appropriate for your equipment.
+- The **Operations** device shows an **Operation mode** selector. It is unset
+  until you choose a mode; the mode does not change problem detection.
 
 For a missing or unavailable reading, check the original source entity in Home
 Assistant first. The [troubleshooting guide](TROUBLESHOOTING.md) covers common

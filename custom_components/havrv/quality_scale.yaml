@@ -43,10 +43,10 @@ rules:
     comment: Source state listeners are registered and removed with entity lifecycle in custom_components/havrv/entity.py.
   entity-unique-id:
     status: done
-    comment: Mapped and profile entities define unique IDs in custom_components/havrv/entity.py and custom_components/havrv/sensor.py.
+    comment: Mapped, profile, and operation-mode entities define unique IDs in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, and custom_components/havrv/select.py.
   has-entity-name:
     status: done
-    comment: Mapped and profile entities set has_entity_name in custom_components/havrv/entity.py and custom_components/havrv/sensor.py.
+    comment: Mapped, profile, and operation-mode entities set has_entity_name in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, and custom_components/havrv/select.py.
   runtime-data:
     status: done
     comment: Typed config-entry runtime data is populated in custom_components/havrv/__init__.py.
@@ -82,7 +82,7 @@ rules:
     comment: HAVRV has no external connection; unavailable local source entities do not require connection-recovery logging.
   parallel-updates:
     status: done
-    comment: All five platform modules explicitly set PARALLEL_UPDATES = 0 and tests/test_entities.py verifies each declaration; mirrors are event-driven and controls delegate concurrency to the mapped source domain.
+    comment: All six platform modules explicitly set PARALLEL_UPDATES = 0 and tests/test_entities.py verifies each declaration; mirrors are event-driven, the operation-mode select is local, and controls delegate concurrency to the mapped source domain.
   reauthentication-flow:
     status: exempt
     comment: HAVRV has no authentication, credentials, or external service.
@@ -91,7 +91,7 @@ rules:
     comment: CI enforces at least 96% coverage for custom_components/havrv in pyproject.toml.
   devices:
     status: done
-    comment: RV and mapped-system devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py.
+    comment: RV and mapped-system devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py; the Operations device is created in custom_components/havrv/select.py and tested in tests/test_operations.py.
   diagnostics:
     status: done
     comment: Diagnostics export redacted entry and entity data in custom_components/havrv/diagnostics.py, tested in tests/test_diagnostics.py.
@@ -136,13 +136,13 @@ rules:
     comment: Entities are explicitly configured or profile values entered by the user; no optional noisy entity set is generated.
   entity-translations:
     status: done
-    comment: Profile entity names are translated in custom_components/havrv/strings.json.
+    comment: Profile entity names and operation-mode states are translated in custom_components/havrv/strings.json.
   exception-translations:
     status: exempt
     comment: No integration exception classes or untranslated user-facing exception messages are currently exposed.
   icon-translations:
     status: done
-    comment: HAVRV-owned profile icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py.
+    comment: HAVRV-owned profile and operation-mode icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py.
   reconfiguration-flow:
     status: done
     comment: The reconfigure flow updates profile details while retaining identity and mappings in custom_components/havrv/config_flow.py, tested in tests/test_config_flow.py.

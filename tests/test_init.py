@@ -105,8 +105,10 @@ async def test_setup_uses_home_assistant_units_when_profile_omits_units(
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     assert entry.runtime_data.measurement_system == UNIT_SYSTEM_US_CUSTOMARY
-    assert len(entry.runtime_data.platforms) == 1
-    assert entry.runtime_data.platforms[0].value == "sensor"
+    assert [platform.value for platform in entry.runtime_data.platforms] == [
+        "select",
+        "sensor",
+    ]
     profile_entities = {
         entity.unique_id.removeprefix(f"{entry.entry_id}_profile_"): entity
         for entity in er.async_entries_for_config_entry(
@@ -330,7 +332,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
 
     entity_registry = er.async_get(hass)
     mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    assert len(mapped_entities) == 7
+    assert len(mapped_entities) == 8
     mapped_entity = next(
         entity
         for entity in mapped_entities
@@ -342,6 +344,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
     assert {device.name for device in devices} == {
         "Adventure RV",
+        "Operations",
         "Power",
         "Water",
         "Chassis",
@@ -387,7 +390,7 @@ async def test_removed_system_mapping_removes_its_stale_device(
     await hass.async_block_till_done()
 
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
-    assert {device.name for device in devices} == {"Adventure RV"}
+    assert {device.name for device in devices} == {"Adventure RV", "Operations"}
     assert not any(
         entity.unique_id.endswith("sensor.house_battery_voltage")
         for entity in er.async_entries_for_config_entry(
@@ -438,6 +441,7 @@ async def test_reconfigure_removes_obsolete_tire_devices(
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
         "Adventure RV",
+        "Operations",
         "All Tire Monitor",
         "Front Left Tire",
         "Front Right Tire",
@@ -527,6 +531,7 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
         "Tire RV",
+        "Operations",
         "All Tire Monitor",
         "Front Left Tire",
         "Front Right Tire",
@@ -690,8 +695,10 @@ async def test_options_reload_adds_platform_to_existing_entry(
     entry.add_to_hass(hass)
 
     assert await hass.config_entries.async_setup(entry.entry_id)
-    assert len(entry.runtime_data.platforms) == 1
-    assert entry.runtime_data.platforms[0].value == "sensor"
+    assert [platform.value for platform in entry.runtime_data.platforms] == [
+        "select",
+        "sensor",
+    ]
 
     form = await hass.config_entries.options.async_init(entry.entry_id)
     await hass.config_entries.options.async_configure(
@@ -715,7 +722,7 @@ async def test_options_reload_adds_platform_to_existing_entry(
         for device in dr.async_entries_for_config_entry(
             dr.async_get(hass), entry.entry_id
         )
-    } == {"Adventure RV", "Power"}
+    } == {"Adventure RV", "Operations", "Power"}
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -810,6 +817,7 @@ async def test_setup_creates_complete_tank_devices_without_sources(
         "Black-water tank",
         "Fresh-water tank",
         "Gray-water tank",
+        "Operations",
         "Water",
     }
     rv_device = next(device for device in devices if device.name == "Adventure RV")
