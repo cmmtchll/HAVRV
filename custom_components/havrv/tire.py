@@ -1,8 +1,10 @@
 """Tire topology and reading helpers."""
 
 import math
+from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from statistics import median
 from typing import Any
 
@@ -51,11 +53,82 @@ class TirePosition:
 
 @dataclass(frozen=True)
 class TireMonitorGroup:
-    """Like-for-like tire positions to compare on one axle."""
+    """Tire positions analyzed together."""
 
     key: str
     name: str
     positions: tuple[TirePosition, ...]
+
+
+class TireMonitorHistory:
+    """Track recent normalized values for each tire in one monitor group."""
+
+    _WINDOW = timedelta(hours=12)
+    _MIN_SAMPLES = 3
+    _OUTLIER_THRESHOLD = 3.5
+
+    def __init__(self) -> None:
+        """Initialize empty per-tire histories."""
+        self._samples: dict[str, deque[tuple[datetime, float]]] = {}
+
+    def record(self, position: TirePosition, now: datetime, value: float) -> None:
+        """Record a reading and discard samples outside the rolling window."""
+        samples = self._samples.setdefault(position.key, deque())
+        samples.append((now, value))
+        cutoff = now - self._WINDOW
+        while samples and samples[0][0] < cutoff:
+            samples.popleft()
+
+    def can_analyze(
+        self,
+        readings: list[tuple[TirePosition, float]],
+        now: datetime,
+    ) -> bool:
+        """Return whether two current readings have enough prior samples."""
+        return (
+            sum(self._baseline(position, now) is not None for position, _ in readings)
+            >= 2
+        )
+
+    def outlier(
+        self,
+        readings: list[tuple[TirePosition, float]],
+        now: datetime,
+    ) -> str | None:
+        """Identify a unique tire that deviates from its own recent baseline."""
+        candidates = []
+        for position, value in readings:
+            if (baseline := self._baseline(position, now)) is None:
+                continue
+            center = median(baseline)
+            mad = median(abs(sample - center) for sample in baseline)
+            deviation = abs(value - center)
+            score = (
+                float("inf")
+                if mad == 0 and deviation > 0
+                else 0.0
+                if mad == 0
+                else 0.6745 * deviation / mad
+            )
+            if score > self._OUTLIER_THRESHOLD:
+                candidates.append(position.name)
+
+        if len(candidates) == 1:
+            return candidates[0]
+        return "No outlier"
+
+    def _baseline(self, position: TirePosition, now: datetime) -> list[float] | None:
+        """Return recent prior samples, excluding the latest reading."""
+        samples = self._samples.get(position.key)
+        if samples is None:
+            return None
+        cutoff = now - self._WINDOW
+        baseline = [value for sample_time, value in samples if sample_time >= cutoff]
+        if baseline:
+            baseline.pop()
+        if len(baseline) < self._MIN_SAMPLES:
+            return None
+        return baseline
 
 
 class HavrvTireEntity(Entity):
@@ -156,25 +229,26 @@ def tire_positions(profile: Mapping[str, Any]) -> list[TirePosition]:
 
 
 def tire_monitor_groups(profile: dict[str, Any], metric: str) -> list[TireMonitorGroup]:
-    """Group axle positions that are comparable for one tire measurement."""
+    """Build axle-specific and all-tire comparison groups."""
     if metric not in (TIRE_PRESSURE, TIRE_TEMPERATURE):
         raise ValueError(f"Unsupported tire monitor metric: {metric}")
 
     axles: dict[str, list[TirePosition]] = {}
-    for position in tire_positions(profile):
+    all_positions = tire_positions(profile)
+    for position in all_positions:
         axle_key = _axle_key(position)
         axles.setdefault(axle_key, []).append(position)
 
     groups: list[TireMonitorGroup] = []
-    for axle_key, positions in axles.items():
+    for axle_key, axle_positions in axles.items():
         axle_name = _axle_name(axle_key)
         if metric == TIRE_TEMPERATURE and any(
-            position.key.endswith(("_inner", "_outer")) for position in positions
+            position.key.endswith(("_inner", "_outer")) for position in axle_positions
         ):
             for wheel in ("inner", "outer"):
                 wheel_positions = tuple(
                     position
-                    for position in positions
+                    for position in axle_positions
                     if position.key.endswith(f"_{wheel}")
                 )
                 if wheel_positions:
@@ -190,9 +264,17 @@ def tire_monitor_groups(profile: dict[str, Any], metric: str) -> list[TireMonito
                 TireMonitorGroup(
                     key=axle_key,
                     name=axle_name,
-                    positions=tuple(positions),
+                    positions=tuple(axle_positions),
                 )
             )
+    if all_positions:
+        groups.append(
+            TireMonitorGroup(
+                key="all_tires",
+                name="All tires",
+                positions=tuple(all_positions),
+            )
+        )
     return groups
 
 
@@ -221,39 +303,6 @@ def tire_monitor_spread(
     if len(values) < 2:
         return None
     return max(values) - min(values)
-
-
-def tire_monitor_outlier(
-    hass: HomeAssistant,
-    entry: Any,
-    group: TireMonitorGroup,
-    metric: str,
-) -> str | None:
-    """Return the unique modified-z-score outlier, or None without enough data."""
-    readings = tire_monitor_readings(hass, entry, group, metric)
-    if len(readings) < 3:
-        return None
-
-    values = [value for _, value in readings]
-    center = median(values)
-    deviations = [abs(value - center) for value in values]
-    mad = median(deviations)
-
-    if mad == 0:
-        candidates = [
-            position.name
-            for (position, value), deviation in zip(readings, deviations, strict=True)
-            if deviation > 0
-        ]
-    else:
-        candidates = [
-            position.name
-            for (position, _), deviation in zip(readings, deviations, strict=True)
-            if 0.6745 * deviation / mad > 3.5
-        ]
-    if len(candidates) == 1:
-        return candidates[0]
-    return "No outlier"
 
 
 def _axle_key(position: TirePosition) -> str:

@@ -59,12 +59,12 @@ from .tank import STATUS_OPTIONS, TANK_DEFINITIONS, tank_percent, tank_status
 from .tire import (
     HavrvTireEntity,
     TireMonitorGroup,
+    TireMonitorHistory,
     TirePosition,
     pressure_in_profile_units,
     source_entity_id,
     temperature_in_profile_units,
     tire_monitor_groups,
-    tire_monitor_outlier,
     tire_monitor_readings,
     tire_monitor_spread,
     tire_positions,
@@ -552,7 +552,7 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
 
 
 class HavrvTireMonitorSensor(SensorEntity):
-    """Analyze comparable tire readings on one axle of the RV."""
+    """Analyze comparable tire readings on an axle or across the whole RV."""
 
     entity_description: SensorEntityDescription
     _attr_has_entity_name = True
@@ -569,6 +569,7 @@ class HavrvTireMonitorSensor(SensorEntity):
         self._group = group
         self._metric = metric
         self._analysis = analysis
+        self._history = TireMonitorHistory()
         metric_name = "pressure" if metric == TIRE_PRESSURE else "temperature"
         if analysis == "spread":
             name = f"{group.name} {metric_name} spread"
@@ -621,12 +622,31 @@ class HavrvTireMonitorSensor(SensorEntity):
     def async_on_source_state_changed(
         self, event: Event[EventStateChangedData]
     ) -> None:
-        """Recalculate the comparison when one of its sources changes."""
+        """Record changed readings and recalculate the comparison."""
+        entity_id = event.data["entity_id"]
+        now = dt_util.utcnow()
+        readings = dict(
+            (position.key, value)
+            for position, value in tire_monitor_readings(
+                self.hass, self._entry, self._group, self._metric
+            )
+        )
+        for position in self._group.positions:
+            if (
+                source_entity_id(self._entry, position, self._metric) == entity_id
+                and position.key in readings
+            ):
+                self._history.record(position, now, readings[position.key])
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to source state changes."""
+        """Seed histories from current readings and subscribe to source changes."""
         await super().async_added_to_hass()
+        now = dt_util.utcnow()
+        for position, value in tire_monitor_readings(
+            self.hass, self._entry, self._group, self._metric
+        ):
+            self._history.record(position, now, value)
         if self._source_entity_ids:
             self.async_on_remove(
                 async_track_state_change_event(
@@ -638,8 +658,8 @@ class HavrvTireMonitorSensor(SensorEntity):
 
     @property
     def _minimum_readings(self) -> int:
-        """Return the minimum sample count needed for this analysis."""
-        return 2 if self._analysis == "spread" else 3
+        """Return the minimum number of current peer readings."""
+        return 2
 
     @property
     def _readings(self) -> list[tuple[TirePosition, float]]:
@@ -648,8 +668,13 @@ class HavrvTireMonitorSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Require enough comparable, normalized readings for the analysis."""
-        return len(self._readings) >= self._minimum_readings
+        """Require enough comparable readings and prior history if needed."""
+        readings = self._readings
+        if len(readings) < self._minimum_readings:
+            return False
+        return self._analysis == "spread" or self._history.can_analyze(
+            readings, dt_util.utcnow()
+        )
 
     @property
     def native_value(self) -> float | str | None:
@@ -660,7 +685,7 @@ class HavrvTireMonitorSensor(SensorEntity):
             return tire_monitor_spread(
                 self.hass, self._entry, self._group, self._metric
             )
-        return tire_monitor_outlier(self.hass, self._entry, self._group, self._metric)
+        return self._history.outlier(self._readings, dt_util.utcnow())
 
     @property
     def native_unit_of_measurement(self) -> str | None:
@@ -673,18 +698,30 @@ class HavrvTireMonitorSensor(SensorEntity):
         return "°C" if metric else "°F"
 
     @property
+    def suggested_unit_of_measurement(self) -> str | None:
+        """Keep spreads in the RV profile's unit instead of HA's display unit."""
+        if self._analysis == "spread":
+            return self.native_unit_of_measurement
+        return None
+
+    @property
     def extra_state_attributes(self) -> dict[str, int | str]:
         """Describe the usable and expected readings in this comparison."""
-        return {
+        attributes = {
             "valid_readings": len(self._readings),
             "compared_tires": len(self._group.positions),
             "minimum_readings": self._minimum_readings,
             "analysis": (
                 "maximum minus minimum"
                 if self._analysis == "spread"
-                else "modified z-score greater than 3.5 using median absolute deviation"
+                else "modified z-score greater than 3.5 against each tire's 12-hour "
+                "median absolute deviation baseline"
             ),
         }
+        if self._analysis == "outlier":
+            attributes["minimum_history_readings"] = 3
+            attributes["history_window_hours"] = 12
+        return attributes
 
 
 def _profile_sensor_unit(entry: HavrvConfigEntry, key: str) -> str | None:
