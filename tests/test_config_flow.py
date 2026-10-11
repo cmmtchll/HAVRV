@@ -8,7 +8,6 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import selector
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
