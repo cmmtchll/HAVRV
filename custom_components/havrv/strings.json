@@ -58,6 +58,50 @@
           "location_entities": "Select existing sensors, controls, or climate entities for RV location.",
           "other_entities": "Select other existing entities to include with this RV."
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure RV profile",
+        "description": "Update the saved vehicle details for this RV. The profile name and existing system/tire mappings are not changed.",
+        "data": {
+          "coach_year": "Coach year",
+          "manufacturer": "Chassis manufacturer",
+          "coach_builder": "Coach builder or converter",
+          "make": "Chassis make",
+          "model": "Coach model",
+          "coach_identifier": "Coach identifier",
+          "measurement_system": "Measurement system",
+          "storage_zone_id": "Storage location zone",
+          "overall_height": "Overall height",
+          "overall_length": "Overall length",
+          "overall_width": "Overall width",
+          "fuel_tank_capacity": "Fuel tank capacity",
+          "fresh_water_tank_capacity": "Fresh-water tank capacity",
+          "gray_water_tank_capacity": "Gray-water tank capacity",
+          "black_water_tank_capacity": "Black-water tank capacity",
+          "rear_axle_count": "Number of rear axle assemblies, including a tag axle",
+          "main_rear_wheel_configuration": "Main rear axle wheels",
+          "tag_axle_wheel_configuration": "Tag axle wheels"
+        },
+        "data_description": {
+          "coach_year": "The model year of the coach.",
+          "manufacturer": "The chassis manufacturer, for example Prevost.",
+          "coach_builder": "The company that built or converted the coach.",
+          "make": "The chassis make, for example H3-45.",
+          "model": "The coach model or conversion name.",
+          "coach_identifier": "An owner-assigned or manufacturer-provided coach number.",
+          "measurement_system": "Used to interpret dimensions and tank capacities entered here.",
+          "storage_zone_id": "Select the Home Assistant zone where the RV is normally stored.",
+          "overall_height": "Meters for metric, or feet for US customary.",
+          "overall_length": "Meters for metric, or feet for US customary.",
+          "overall_width": "Meters for metric, or feet for US customary.",
+          "fuel_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "fresh_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "gray_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "black_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "rear_axle_count": "Count all rear axle assemblies, including the tag axle if present. The front axle is not included.",
+          "main_rear_wheel_configuration": "Whether the main rear axle has single or dual wheels.",
+          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one."
+        }
       }
     },
     "error": {
@@ -69,7 +113,8 @@
       "main_rear_wheel_configuration_required": "Choose the wheel layout for each main rear axle."
     },
     "abort": {
-      "already_configured": "An RV with this name is already configured."
+      "already_configured": "An RV with this name is already configured.",
+      "reconfigure_successful": "RV profile updated successfully."
     }
   },
   "options": {

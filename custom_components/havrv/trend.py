@@ -1,6 +1,7 @@
 """Tire pressure trend detection from in-memory readings."""
 
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -67,10 +68,11 @@ class PressureTrendTracker:
         window = self._window(now, TIRE_SUDDEN_DROP_WINDOW_SECONDS)
         if _span(window) < TIRE_SUDDEN_DROP_MIN_SPAN_SECONDS:
             return None
+        normalized = [sample.normalized for sample in window]
         values = (
-            [s.normalized for s in window]
-            if all(s.normalized is not None for s in window)
-            else [s.raw for s in window]
+            [value for value in normalized if value is not None]
+            if all(value is not None for value in normalized)
+            else [sample.raw for sample in window]
         )
         return _fell(values, TIRE_SUDDEN_DROP_FRACTION)
 
@@ -101,7 +103,7 @@ def _span(samples: list[PressureSample]) -> float:
     return (samples[-1].time - samples[0].time).total_seconds()
 
 
-def _fell(values: list[float | None], fraction: float) -> bool:
+def _fell(values: Sequence[float | None], fraction: float) -> bool:
     """Return whether recent values sit below the window peak by the fraction."""
     peak = max(v for v in values if v is not None)
     current = max(v for v in values[-_CONFIRMING_SAMPLES:] if v is not None)

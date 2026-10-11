@@ -15,6 +15,7 @@ test = [
     "pytest-homeassistant-custom-component>=0.13.368,<0.14",
     "pytest-cov>=6.0.0",
     "ruff>=0.14.0",
+    "mypy>=2.3,<3",
 ]
 
 [tool.pytest.ini_options]
@@ -40,3 +41,8 @@ ignore = ["D203", "D213"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["custom_components/havrv"]

@@ -1,0 +1,357 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add an RV",
+        "description": "Create an RV profile. Vehicle details are optional. Dimensions use meters or feet, and tank capacities use liters or US gallons according to the selected measurement system.",
+        "data": {
+          "name": "RV profile name",
+          "coach_year": "Coach year",
+          "manufacturer": "Chassis manufacturer",
+          "coach_builder": "Coach builder or converter",
+          "make": "Chassis make",
+          "model": "Coach model",
+          "coach_identifier": "Coach identifier",
+          "measurement_system": "Measurement system",
+          "storage_zone_id": "Storage location zone",
+          "overall_height": "Overall height",
+          "overall_length": "Overall length",
+          "overall_width": "Overall width",
+          "fuel_tank_capacity": "Fuel tank capacity",
+          "fresh_water_tank_capacity": "Fresh-water tank capacity",
+          "gray_water_tank_capacity": "Gray-water tank capacity",
+          "black_water_tank_capacity": "Black-water tank capacity",
+          "rear_axle_count": "Number of rear axle assemblies, including a tag axle",
+          "main_rear_wheel_configuration": "Main rear axle wheels",
+          "tag_axle_wheel_configuration": "Tag axle wheels",
+          "power_entities": "Power system entities",
+          "water_entities": "Water system entities",
+          "chassis_entities": "Chassis system entities",
+          "climate_entities": "Climate system entities",
+          "location_entities": "Location system entities",
+          "other_entities": "Other RV entities"
+        },
+        "data_description": {
+          "name": "A unique name for this RV profile.",
+          "coach_year": "The model year of the coach.",
+          "manufacturer": "The chassis manufacturer, for example Prevost.",
+          "coach_builder": "The company that built or converted the coach, for example Liberty.",
+          "make": "The chassis make, for example H3-45.",
+          "model": "The coach model or conversion name, for example Elegant Lady.",
+          "coach_identifier": "An owner-assigned or manufacturer-provided coach number.",
+          "measurement_system": "Used to interpret dimensions and tank capacities entered here.",
+          "storage_zone_id": "Select the Home Assistant zone where the RV is normally stored.",
+          "overall_height": "Meters for metric, or feet for US customary.",
+          "overall_length": "Meters for metric, or feet for US customary.",
+          "overall_width": "Meters for metric, or feet for US customary.",
+          "fuel_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "fresh_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "gray_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "black_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "rear_axle_count": "Count all rear axle assemblies, including the tag axle if present. One means a single main rear axle; two means one main axle and a tag axle; three means two main axles and a tag axle. The front axle is not included.",
+          "main_rear_wheel_configuration": "Whether the main rear axle has single or dual wheels.",
+          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one.",
+          "power_entities": "Select existing sensors, controls, or climate entities for the RV power system.",
+          "water_entities": "Select existing sensors, controls, or climate entities for the RV water system.",
+          "chassis_entities": "Select existing sensors, controls, or climate entities for the RV chassis.",
+          "climate_entities": "Select existing sensors, controls, or climate entities for RV climate systems.",
+          "location_entities": "Select existing sensors, controls, or climate entities for RV location.",
+          "other_entities": "Select other existing entities to include with this RV."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure RV profile",
+        "description": "Update the saved vehicle details for this RV. The profile name and existing system/tire mappings are not changed.",
+        "data": {
+          "coach_year": "Coach year",
+          "manufacturer": "Chassis manufacturer",
+          "coach_builder": "Coach builder or converter",
+          "make": "Chassis make",
+          "model": "Coach model",
+          "coach_identifier": "Coach identifier",
+          "measurement_system": "Measurement system",
+          "storage_zone_id": "Storage location zone",
+          "overall_height": "Overall height",
+          "overall_length": "Overall length",
+          "overall_width": "Overall width",
+          "fuel_tank_capacity": "Fuel tank capacity",
+          "fresh_water_tank_capacity": "Fresh-water tank capacity",
+          "gray_water_tank_capacity": "Gray-water tank capacity",
+          "black_water_tank_capacity": "Black-water tank capacity",
+          "rear_axle_count": "Number of rear axle assemblies, including a tag axle",
+          "main_rear_wheel_configuration": "Main rear axle wheels",
+          "tag_axle_wheel_configuration": "Tag axle wheels"
+        },
+        "data_description": {
+          "coach_year": "The model year of the coach.",
+          "manufacturer": "The chassis manufacturer, for example Prevost.",
+          "coach_builder": "The company that built or converted the coach.",
+          "make": "The chassis make, for example H3-45.",
+          "model": "The coach model or conversion name.",
+          "coach_identifier": "An owner-assigned or manufacturer-provided coach number.",
+          "measurement_system": "Used to interpret dimensions and tank capacities entered here.",
+          "storage_zone_id": "Select the Home Assistant zone where the RV is normally stored.",
+          "overall_height": "Meters for metric, or feet for US customary.",
+          "overall_length": "Meters for metric, or feet for US customary.",
+          "overall_width": "Meters for metric, or feet for US customary.",
+          "fuel_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "fresh_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "gray_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "black_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
+          "rear_axle_count": "Count all rear axle assemblies, including the tag axle if present. The front axle is not included.",
+          "main_rear_wheel_configuration": "Whether the main rear axle has single or dual wheels.",
+          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one."
+        }
+      }
+    },
+    "error": {
+      "name_required": "Enter a name for this RV.",
+      "invalid_coach_year": "Enter a whole model year from 1900 through next year.",
+      "invalid_measurement": "Dimensions and tank capacities must be numbers greater than zero.",
+      "tag_axle_wheel_configuration_required": "Choose the wheel layout for the tag axle.",
+      "tag_wheel_configuration_without_tag_axle": "A tag axle wheel layout is only valid when the rear axle assembly count is greater than one.",
+      "main_rear_wheel_configuration_required": "Choose the wheel layout for each main rear axle."
+    },
+    "abort": {
+      "already_configured": "An RV with this name is already configured.",
+      "reconfigure_successful": "RV profile updated successfully."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Map RV system entities",
+        "description": "Choose existing entities for RV systems and each generated tire. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
+        "data": {
+          "power_entities": "Power system entities",
+          "water_entities": "Water system entities",
+          "chassis_entities": "Chassis system entities",
+          "climate_entities": "Climate system entities",
+          "location_entities": "Location system entities",
+              "other_entities": "Other RV entities",
+          "tire_front_left_pressure": "Front left tire pressure source",
+          "tire_front_left_temperature": "Front left tire temperature source",
+          "tire_front_left_battery": "Front left tire battery source",
+          "tire_front_right_pressure": "Front right tire pressure source",
+          "tire_front_right_temperature": "Front right tire temperature source",
+          "tire_front_right_battery": "Front right tire battery source",
+          "tire_rear_axle_1_left_pressure": "Rear axle 1 left tire pressure source",
+          "tire_rear_axle_1_left_temperature": "Rear axle 1 left tire temperature source",
+          "tire_rear_axle_1_left_battery": "Rear axle 1 left tire battery source",
+          "tire_rear_axle_1_right_pressure": "Rear axle 1 right tire pressure source",
+          "tire_rear_axle_1_right_temperature": "Rear axle 1 right tire temperature source",
+          "tire_rear_axle_1_right_battery": "Rear axle 1 right tire battery source",
+          "tire_rear_axle_1_left_inner_pressure": "Rear axle 1 left inner tire pressure source",
+          "tire_rear_axle_1_left_inner_temperature": "Rear axle 1 left inner tire temperature source",
+          "tire_rear_axle_1_left_inner_battery": "Rear axle 1 left inner tire battery source",
+          "tire_rear_axle_1_left_outer_pressure": "Rear axle 1 left outer tire pressure source",
+          "tire_rear_axle_1_left_outer_temperature": "Rear axle 1 left outer tire temperature source",
+          "tire_rear_axle_1_left_outer_battery": "Rear axle 1 left outer tire battery source",
+          "tire_rear_axle_1_right_inner_pressure": "Rear axle 1 right inner tire pressure source",
+          "tire_rear_axle_1_right_inner_temperature": "Rear axle 1 right inner tire temperature source",
+          "tire_rear_axle_1_right_inner_battery": "Rear axle 1 right inner tire battery source",
+          "tire_rear_axle_1_right_outer_pressure": "Rear axle 1 right outer tire pressure source",
+          "tire_rear_axle_1_right_outer_temperature": "Rear axle 1 right outer tire temperature source",
+          "tire_rear_axle_1_right_outer_battery": "Rear axle 1 right outer tire battery source",
+          "tire_rear_axle_2_left_pressure": "Rear axle 2 left tire pressure source",
+          "tire_rear_axle_2_left_temperature": "Rear axle 2 left tire temperature source",
+          "tire_rear_axle_2_left_battery": "Rear axle 2 left tire battery source",
+          "tire_rear_axle_2_right_pressure": "Rear axle 2 right tire pressure source",
+          "tire_rear_axle_2_right_temperature": "Rear axle 2 right tire temperature source",
+          "tire_rear_axle_2_right_battery": "Rear axle 2 right tire battery source",
+          "tire_rear_axle_2_left_inner_pressure": "Rear axle 2 left inner tire pressure source",
+          "tire_rear_axle_2_left_inner_temperature": "Rear axle 2 left inner tire temperature source",
+          "tire_rear_axle_2_left_inner_battery": "Rear axle 2 left inner tire battery source",
+          "tire_rear_axle_2_left_outer_pressure": "Rear axle 2 left outer tire pressure source",
+          "tire_rear_axle_2_left_outer_temperature": "Rear axle 2 left outer tire temperature source",
+          "tire_rear_axle_2_left_outer_battery": "Rear axle 2 left outer tire battery source",
+          "tire_rear_axle_2_right_inner_pressure": "Rear axle 2 right inner tire pressure source",
+          "tire_rear_axle_2_right_inner_temperature": "Rear axle 2 right inner tire temperature source",
+          "tire_rear_axle_2_right_inner_battery": "Rear axle 2 right inner tire battery source",
+          "tire_rear_axle_2_right_outer_pressure": "Rear axle 2 right outer tire pressure source",
+          "tire_rear_axle_2_right_outer_temperature": "Rear axle 2 right outer tire temperature source",
+          "tire_rear_axle_2_right_outer_battery": "Rear axle 2 right outer tire battery source",
+          "tire_tag_axle_left_pressure": "Tag axle left tire pressure source",
+          "tire_tag_axle_left_temperature": "Tag axle left tire temperature source",
+          "tire_tag_axle_left_battery": "Tag axle left tire battery source",
+          "tire_tag_axle_right_pressure": "Tag axle right tire pressure source",
+          "tire_tag_axle_right_temperature": "Tag axle right tire temperature source",
+          "tire_tag_axle_right_battery": "Tag axle right tire battery source",
+          "tire_tag_axle_left_inner_pressure": "Tag axle left inner tire pressure source",
+          "tire_tag_axle_left_inner_temperature": "Tag axle left inner tire temperature source",
+          "tire_tag_axle_left_inner_battery": "Tag axle left inner tire battery source",
+          "tire_tag_axle_left_outer_pressure": "Tag axle left outer tire pressure source",
+          "tire_tag_axle_left_outer_temperature": "Tag axle left outer tire temperature source",
+          "tire_tag_axle_left_outer_battery": "Tag axle left outer tire battery source",
+          "tire_tag_axle_right_inner_pressure": "Tag axle right inner tire pressure source",
+          "tire_tag_axle_right_inner_temperature": "Tag axle right inner tire temperature source",
+          "tire_tag_axle_right_inner_battery": "Tag axle right inner tire battery source",
+          "tire_tag_axle_right_outer_pressure": "Tag axle right outer tire pressure source",
+          "tire_tag_axle_right_outer_temperature": "Tag axle right outer tire temperature source",
+          "tire_tag_axle_right_outer_battery": "Tag axle right outer tire battery source",
+              "tire_front_pressure_low": "Front tire low-pressure limit",
+          "tire_front_pressure_high": "Front tire high-pressure limit",
+          "tire_axle_pressure_low": "Rear axle low-pressure limit",
+          "tire_axle_pressure_high": "Rear axle high-pressure limit",
+          "tire_tag_pressure_low": "Tag axle low-pressure limit",
+          "tire_tag_pressure_high": "Tag axle high-pressure limit",
+          "tire_temperature_high": "High tire-temperature limit",
+          "tire_battery_low": "Low tire-battery limit"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity_mapping": "Choose valid source entities.",
+      "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system.",
+      "invalid_tire_entity_mapping": "Choose a sensor, number entity, or input number helper for each tire reading.",
+      "duplicate_tire_entity_mapping": "A tire source entity can only be assigned once.",
+      "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
+      "invalid_tire_pressure_threshold": "Pressure limits must be non-negative, and the high limit must be greater than the low limit.",
+      "invalid_tire_temperature_threshold": "The high temperature limit must be a valid non-negative number.",
+      "invalid_tire_battery_threshold": "The low battery limit must be between 0 and 100 percent."
+    }
+  },
+  "selector": {
+    "measurement_system": {
+      "options": {
+        "metric": "Metric (meters and liters)",
+        "us_customary": "US customary (feet and US gallons)"
+      }
+    },
+    "rear_axle_count": {
+      "options": {
+        "one": "One rear axle assembly",
+        "two": "Two rear axle assemblies",
+        "three": "Three rear axle assemblies"
+      }
+    },
+    "wheel_configuration": {
+      "options": {
+        "single": "Single wheels",
+        "dual": "Dual wheels"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "coach_year": {
+        "name": "Coach year",
+        "icon": "mdi:calendar"
+      },
+      "manufacturer": {
+        "name": "Chassis manufacturer",
+        "icon": "mdi:factory"
+      },
+      "coach_builder": {
+        "name": "Coach builder",
+        "icon": "mdi:bus"
+      },
+      "make": {
+        "name": "Chassis make",
+        "icon": "mdi:car-info"
+      },
+      "model": {
+        "name": "Coach model",
+        "icon": "mdi:bus"
+      },
+      "coach_identifier": {
+        "name": "Coach identifier",
+        "icon": "mdi:identifier"
+      },
+      "storage_zone_id": {
+        "name": "Storage zone",
+        "icon": "mdi:map-marker"
+      },
+      "measurement_system": {
+        "name": "Measurement system",
+        "icon": "mdi:ruler-square"
+      },
+      "overall_height": {
+        "name": "Overall height",
+        "icon": "mdi:arrow-expand-vertical"
+      },
+      "overall_length": {
+        "name": "Overall length",
+        "icon": "mdi:arrow-expand-horizontal"
+      },
+      "overall_width": {
+        "name": "Overall width",
+        "icon": "mdi:arrow-left-right"
+      },
+      "fuel_tank_capacity": {
+        "name": "Fuel tank capacity",
+        "icon": "mdi:gas-station"
+      },
+      "fresh_water_tank_capacity": {
+        "name": "Fresh-water tank capacity",
+        "icon": "mdi:water"
+      },
+      "gray_water_tank_capacity": {
+        "name": "Gray-water tank capacity",
+        "icon": "mdi:water-minus"
+      },
+      "black_water_tank_capacity": {
+        "name": "Black-water tank capacity",
+        "icon": "mdi:toilet"
+      },
+      "rear_axle_count": {
+        "name": "Number of rear axle assemblies",
+        "icon": "mdi:car"
+      },
+      "main_rear_wheel_configuration": {
+        "name": "Main rear axle wheel configuration",
+        "icon": "mdi:circle-multiple"
+      },
+      "tag_axle_present": {
+        "name": "Tag axle present",
+        "icon": "mdi:car"
+      },
+      "tag_axle_wheel_configuration": {
+        "name": "Tag axle wheel configuration",
+        "icon": "mdi:circle-multiple"
+      },
+      "tire_pressure": {
+        "name": "Pressure",
+        "icon": "mdi:gauge"
+      },
+      "tire_temperature": {
+        "name": "Temperature",
+        "icon": "mdi:thermometer"
+      },
+      "tire_battery": {
+        "name": "Battery level",
+        "icon": "mdi:battery"
+      }
+    },
+    "binary_sensor": {
+      "tire_pressure_problem": {
+        "name": "Pressure problem",
+        "icon": "mdi:gauge"
+      },
+      "tire_temperature_problem": {
+        "name": "Temperature problem",
+        "icon": "mdi:thermometer-alert"
+      },
+      "tire_battery_problem": {
+        "name": "Battery problem",
+        "icon": "mdi:battery-alert"
+      },
+      "tire_data_present": {
+        "name": "Data present",
+        "icon": "mdi:check-circle-outline"
+      },
+      "tire_problem": {
+        "name": "Tire problem",
+        "icon": "mdi:alert-circle"
+      },
+      "tire_pressure_sudden_drop": {
+        "name": "Sudden pressure drop",
+        "icon": "mdi:chart-bell-curve"
+      },
+      "tire_pressure_slow_loss": {
+        "name": "Slow pressure loss",
+        "icon": "mdi:chart-bell-curve"
+      }
+    }
+  }
+}

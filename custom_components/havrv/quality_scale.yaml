@@ -93,8 +93,8 @@ rules:
     status: done
     comment: RV and mapped-system devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py.
   diagnostics:
-    status: todo
-    comment: Implement and test a diagnostics platform with sensitive-data redaction.
+    status: done
+    comment: Diagnostics export redacted entry and entity data in custom_components/havrv/diagnostics.py, tested in tests/test_diagnostics.py.
   discovery-update-info:
     status: exempt
     comment: HAVRV has no discoverable network device or address information to update.
@@ -102,11 +102,11 @@ rules:
     status: exempt
     comment: HAVRV is a virtual profile and user-selected entity mapper, not a physical device integration.
   docs-data-update:
-    status: todo
-    comment: Document that source changes are mirrored on state events and profile values change through configuration.
+    status: done
+    comment: README.md documents event-driven source updates and configuration-based profile changes.
   docs-examples:
-    status: todo
-    comment: Add complete end-user automation examples for supported mapped entity types.
+    status: done
+    comment: README.md provides end-user automation examples for mapped binary sensors and switches.
   docs-known-limitations:
     status: done
     comment: README.md identifies planned profile fields and project functionality not yet implemented.
@@ -114,23 +114,23 @@ rules:
     status: exempt
     comment: HAVRV maps arbitrary Home Assistant entities and does not support a fixed manufacturer or device list.
   docs-supported-functions:
-    status: todo
-    comment: Document supported source domains, mirrored attributes, controls, and platform behavior in detail.
+    status: done
+    comment: README.md lists supported source domains, mirrored attributes, controls, availability, and update behavior.
   docs-troubleshooting:
-    status: todo
-    comment: Add user-facing troubleshooting steps for missing, unavailable, and incorrectly mapped source entities.
+    status: done
+    comment: README.md provides troubleshooting guidance for missing mappings, unavailable sources, controls, tire readings, and profile values.
   docs-use-cases:
-    status: todo
-    comment: Add user-facing use cases showing how RV profiles and mapped systems are used.
+    status: done
+    comment: README.md describes profile reference, system grouping, and entity-independent automation use cases.
   dynamic-devices:
-    status: exempt
-    comment: HAVRV is a virtual profile mapper; mapped system devices are user-selected, not discovered physical devices.
+    status: done
+    comment: Options changes add mapped system devices after setup, tested in tests/test_init.py.
   entity-category:
-    status: todo
-    comment: Review each entity type and assign an appropriate entity category where applicable.
+    status: done
+    comment: Mapped entities preserve source categories and tire problem entities use diagnostic categories in custom_components/havrv/entity.py and custom_components/havrv/binary_sensor.py.
   entity-device-class:
-    status: todo
-    comment: Review profile sensors for applicable device classes; source classes are currently forwarded.
+    status: done
+    comment: Profile dimensions and capacities use applicable sensor device classes in custom_components/havrv/sensor.py, covered by tests/test_init.py.
   entity-disabled-by-default:
     status: exempt
     comment: Entities are explicitly configured or profile values entered by the user; no optional noisy entity set is generated.
@@ -141,17 +141,17 @@ rules:
     status: exempt
     comment: No integration exception classes or untranslated user-facing exception messages are currently exposed.
   icon-translations:
-    status: todo
-    comment: Add translated icon definitions for HAVRV-owned entities where appropriate.
+    status: done
+    comment: HAVRV-owned profile icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py.
   reconfiguration-flow:
-    status: todo
-    comment: Add or formally assess a UI reconfiguration path for profile fields beyond the existing mapping options flow.
+    status: done
+    comment: The reconfigure flow updates profile details while retaining identity and mappings in custom_components/havrv/config_flow.py, tested in tests/test_config_flow.py.
   repair-issues:
     status: exempt
     comment: There are no remote device, service, or credential conditions that require user-intervention repair issues.
   stale-devices:
-    status: todo
-    comment: Verify and implement removal of obsolete system devices after mappings are removed or changed.
+    status: done
+    comment: Stale mapped entities and empty system or tire child devices are removed during setup in custom_components/havrv/__init__.py, tested in tests/test_init.py.
   async-dependency:
     status: exempt
     comment: HAVRV declares no external runtime dependencies.
@@ -159,5 +159,5 @@ rules:
     status: exempt
     comment: HAVRV has no HTTP client or external service dependency that could use Home Assistant's web session.
   strict-typing:
-    status: todo
-    comment: Add and enforce a strict type-checking configuration for all integration modules.
+    status: done
+    comment: Strict mypy configuration and CI enforcement cover integration source in pyproject.toml and .github/workflows/validate.yml.

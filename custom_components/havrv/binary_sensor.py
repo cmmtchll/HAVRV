@@ -3,12 +3,18 @@
 from collections.abc import Callable
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
+from homeassistant.components.binary_sensor.const import BinarySensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.const import EntityCategory
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    callback,
+)
 from homeassistant.helpers.entity import Entity
 from homeassistant.util import dt as dt_util
 
@@ -35,7 +41,7 @@ class HavrvBinarySensor(HavrvSourceEntity, BinarySensorEntity):
     @property
     def name(self) -> str | None:
         """Return the source sensor name."""
-        return self.source_attributes.get("friendly_name", self._source_entity_id)
+        return self.source_name
 
     @property
     def is_on(self) -> bool | None:
@@ -48,7 +54,7 @@ class HavrvBinarySensor(HavrvSourceEntity, BinarySensorEntity):
     @property
     def icon(self) -> str | None:
         """Return the source icon."""
-        return self.source_attributes.get("icon")
+        return self.source_icon
 
     @property
     def device_class(self) -> BinarySensorDeviceClass | None:
@@ -72,37 +78,32 @@ class HavrvTireBinarySensor(HavrvTireEntity, BinarySensorEntity):
         super().__init__(entry, position)
         descriptions = {
             "pressure": (
-                "Pressure problem",
                 "tire_pressure_problem",
                 BinarySensorDeviceClass.PROBLEM,
             ),
             "temperature": (
-                "Temperature problem",
                 "tire_temperature_problem",
                 BinarySensorDeviceClass.PROBLEM,
             ),
             "battery": (
-                "Battery problem",
                 "tire_battery_problem",
                 BinarySensorDeviceClass.PROBLEM,
             ),
             "data_present": (
-                "Data present",
                 "tire_data_present",
                 BinarySensorDeviceClass.CONNECTIVITY,
             ),
             "problem": (
-                "Problem",
                 "tire_problem",
                 BinarySensorDeviceClass.PROBLEM,
             ),
         }
-        name, translation_key, device_class = descriptions[problem]
+        translation_key, device_class = descriptions[problem]
         self.entity_description = BinarySensorEntityDescription(
             key=problem,
-            name=name,
             translation_key=translation_key,
             device_class=device_class,
+            entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._problem = problem
         self._attr_unique_id = f"{entry.entry_id}_tire_{position.key}_{problem}"
@@ -136,6 +137,7 @@ class HavrvTirePressureTrendBinarySensor(HavrvTireEntity, BinarySensorEntity):
             key=trend,
             translation_key=f"tire_{trend}",
             device_class=BinarySensorDeviceClass.PROBLEM,
+            entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_tire_{position.key}_{trend}"
 
@@ -152,7 +154,9 @@ class HavrvTirePressureTrendBinarySensor(HavrvTireEntity, BinarySensorEntity):
         self._record_reading()
 
     @callback
-    def async_on_source_state_changed(self, event: Event) -> None:
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Record the new reading before writing the detector state."""
         self._record_reading()
         super().async_on_source_state_changed(event)

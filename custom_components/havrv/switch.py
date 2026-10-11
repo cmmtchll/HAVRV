@@ -18,7 +18,7 @@ class HavrvSwitch(HavrvSourceEntity, SwitchEntity):
     @property
     def name(self) -> str | None:
         """Return the source switch name."""
-        return self.source_attributes.get("friendly_name", self._source_entity_id)
+        return self.source_name
 
     @property
     def is_on(self) -> bool | None:
@@ -31,7 +31,7 @@ class HavrvSwitch(HavrvSourceEntity, SwitchEntity):
     @property
     def icon(self) -> str | None:
         """Return the source icon."""
-        return self.source_attributes.get("icon")
+        return self.source_icon
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Turn on the source switch."""

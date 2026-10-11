@@ -4,7 +4,9 @@ from collections.abc import Callable
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, State, callback
+from homeassistant.const import EntityCategory
+from homeassistant.core import Event, EventStateChangedData, State, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -48,7 +50,9 @@ class HavrvSourceEntity(Entity):
         return self.hass.states.get(self._source_entity_id)
 
     @callback
-    def async_on_source_state_changed(self, event: Event) -> None:
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Write the proxy state when the source changes."""
         self.async_write_ha_state()
 
@@ -66,6 +70,24 @@ class HavrvSourceEntity(Entity):
         """Return source attributes for platform-specific entity metadata."""
         state = self._source_state
         return {} if state is None else state.attributes
+
+    @property
+    def source_name(self) -> str:
+        """Return a valid display name from the source or its entity ID."""
+        name = self.source_attributes.get("friendly_name")
+        return name if isinstance(name, str) else self._source_entity_id
+
+    @property
+    def source_icon(self) -> str | None:
+        """Return a valid icon from the source."""
+        icon = self.source_attributes.get("icon")
+        return icon if isinstance(icon, str) else None
+
+    @property
+    def entity_category(self) -> EntityCategory | None:
+        """Preserve the source entity's configuration/diagnostic category."""
+        source = er.async_get(self.hass).async_get(self._source_entity_id)
+        return None if source is None else source.entity_category
 
 
 def source_entities(
