@@ -383,6 +383,7 @@ async def test_user_flow_stores_grouped_source_entity_mappings(
             CONF_NAME: "Adventure RV",
             "power_entities": ["sensor.house_battery_voltage"],
             "water_entities": ["binary_sensor.fresh_water_low"],
+            "outdoor_climate_entities": ["sensor.outdoor_temperature"],
         },
     )
 
@@ -390,6 +391,7 @@ async def test_user_flow_stores_grouped_source_entity_mappings(
     assert result["data"][CONF_ENTITY_MAPPINGS] == {
         "power": ["sensor.house_battery_voltage"],
         "water": ["binary_sensor.fresh_water_low"],
+        "outdoor_climate": ["sensor.outdoor_temperature"],
     }
 
 

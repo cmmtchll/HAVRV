@@ -278,6 +278,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     )
     hass.states.async_set("binary_sensor.fresh_water_low", "off")
     hass.states.async_set("switch.water_pump", "off")
+    hass.states.async_set("sensor.patio_temperature", "22")
     hass.states.async_set(
         "light.patio",
         "off",
@@ -300,6 +301,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
                     "binary_sensor.fresh_water_low",
                     "switch.water_pump",
                 ],
+                "patio": ["sensor.patio_temperature"],
                 "chassis": ["light.patio"],
                 "climate": ["climate.cabin"],
             },
@@ -313,7 +315,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
 
     entity_registry = er.async_get(hass)
     mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    assert len(mapped_entities) == 7
+    assert len(mapped_entities) == 8
     mapped_entity = next(
         entity
         for entity in mapped_entities
@@ -327,6 +329,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
         "Adventure RV",
         "Power",
         "Water",
+        "Patio",
         "Chassis",
         "Climate",
     }

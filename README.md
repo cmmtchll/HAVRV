@@ -16,8 +16,8 @@ a driver for a particular RV manufacturer or device.
 > switches, lights, and climate entities to RV system devices. HAVRV exposes
 > live read-only sensor values and forwards control actions for mapped
 > switches, lights, and climate entities. Configured tire positions expose
-> readings and problem-state binary sensors; notifications and triggers are
-> not implemented yet.
+> readings and problem-state binary sensors; notifications, operation modes,
+> and pre-departure checks are not implemented yet.
 
 ## Installation
 
@@ -46,13 +46,16 @@ Add one entry for each RV and give each profile a unique name. The name is
 required; vehicle details are optional and are stored in Home Assistant's
 config-entry storage.
 
-During setup, optionally assign existing Home Assistant entities to the power,
-water, chassis, climate, location, or other group. HAVRV creates an RV device
-and a child device for each group with mapped entities. Sensors and binary
-sensors are mirrored as read-only entities; switches, lights, and climate
-controls operate their selected source entities. Configure the integration
-later to change the mapping. Remove the HAVRV config entry to remove its
-devices and exposed entities; the source entities are not removed.
+During setup, optionally assign existing Home Assistant entities to a group:
+power, water, chassis, climate, location, other, electrical, cockpit, patio,
+cellar, wet bay, indoor climate, or outdoor climate. These groups are
+user-selected; HAVRV does not assume that an RV has every system or area. Each
+source entity can be assigned to only one group, and a child device is created
+only for groups that have mapped entities. Sensors and binary sensors are
+mirrored as read-only entities; switches, lights, and climate controls operate
+their selected source entities. Configure the integration later to change the
+mapping. Remove the HAVRV config entry to remove its devices and exposed
+entities; the source entities are not removed.
 
 The profile can include the coach year, chassis manufacturer and make, coach
 builder/converter and model, coach identifier, and a Home Assistant zone for
