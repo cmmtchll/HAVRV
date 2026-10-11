@@ -99,7 +99,7 @@ async def test_derived_tank_entities(hass: HomeAssistant) -> None:
     status = _find(hass, entry, "tank_fresh_water_status")
     filled = _find(hass, entry, "tank_fresh_water_last_filled")
     emptied = _find(hass, entry, "tank_gray_water_last_emptied")
-    assert _find(hass, entry, "tank_gray_water_status") is None
+    assert _find(hass, entry, "tank_gray_water_status") is not None
     assert hass.states.get(pct).state == "50.0"
     assert hass.states.get(status).state == "ok"
     assert hass.states.get(filled).state == "unknown"

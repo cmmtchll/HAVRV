@@ -42,6 +42,7 @@ from .const import (
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
     CONF_TANK_ENTITY_MAPPINGS,
     CONF_TANK_THRESHOLDS,
+    DEFAULT_TANK_THRESHOLDS,
     DOMAIN,
     TANK_EMPTY_PERCENT,
     TANK_FRESH_WATER,
@@ -224,7 +225,7 @@ class HavrvTankLevelSensor(HavrvSensor):
         entry: HavrvConfigEntry,
         tank: str,
         tank_name: str,
-        source_entity_id: str,
+        source_entity_id: str | None,
     ) -> None:
         """Initialize a tank level sensor."""
         parent_device_id = entry.runtime_data.device_id
@@ -338,7 +339,7 @@ class HavrvTankDerivedSensor(HavrvSourceEntity, SensorEntity):
         tank: str,
         tank_name: str,
         capacity_key: str,
-        source_entity_id: str,
+        source_entity_id: str | None,
         description: SensorEntityDescription,
     ) -> None:
         """Initialize a derived tank sensor."""
@@ -402,7 +403,7 @@ class HavrvTankStatusSensor(HavrvTankDerivedSensor):
         tank: str,
         tank_name: str,
         capacity_key: str,
-        source_entity_id: str,
+        source_entity_id: str | None,
         description: SensorEntityDescription,
         warning: float,
         problem: float,
@@ -725,7 +726,7 @@ def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
                 HavrvTankCapacitySensor(entry, tank, name, capacity_key, capacity)
             )
         source_entity_id = mappings.get(tank)
-        if source_entity_id is None:
+        if capacity is None and source_entity_id is None:
             continue
         entities.append(HavrvTankLevelSensor(entry, tank, name, source_entity_id))
 
@@ -741,15 +742,16 @@ def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
             HavrvTankPercentageSensor(*args, derived("percentage", "tank_percentage"))
         )
         thresholds = entry.options.get(CONF_TANK_THRESHOLDS, {}).get(tank)
-        if thresholds is not None:
-            entities.append(
-                HavrvTankStatusSensor(
-                    *args,
-                    derived("status", "tank_status"),
-                    thresholds[TANK_WARNING],
-                    thresholds[TANK_PROBLEM],
-                )
+        warning, problem = (
+            (thresholds[TANK_WARNING], thresholds[TANK_PROBLEM])
+            if thresholds is not None
+            else DEFAULT_TANK_THRESHOLDS[tank]
+        )
+        entities.append(
+            HavrvTankStatusSensor(
+                *args, derived("status", "tank_status"), warning, problem
             )
+        )
         history_key = "last_filled" if tank == TANK_FRESH_WATER else "last_emptied"
         entities.append(
             HavrvTankHistorySensor(*args, derived(history_key, f"tank_{history_key}"))

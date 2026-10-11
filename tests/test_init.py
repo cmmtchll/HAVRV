@@ -720,7 +720,7 @@ async def test_options_reload_adds_platform_to_existing_entry(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_setup_creates_only_selected_tank_devices_and_optional_capacities(
+async def test_setup_creates_complete_tank_devices_without_sources(
     hass: HomeAssistant,
 ) -> None:
     """Create configured tank devices without assuming every tank exists."""
@@ -770,6 +770,7 @@ async def test_setup_creates_only_selected_tank_devices_and_optional_capacities(
     assert set(level_entities) == {
         f"{entry.entry_id}_tank_fresh_water_level",
         f"{entry.entry_id}_tank_gray_water_level",
+        f"{entry.entry_id}_tank_black_water_level",
     }
     fresh_level = level_entities[f"{entry.entry_id}_tank_fresh_water_level"]
     assert hass.states.get(fresh_level.entity_id).state == "72.0"
@@ -795,10 +796,14 @@ async def test_setup_creates_only_selected_tank_devices_and_optional_capacities(
         if entity.unique_id == f"{entry.entry_id}_tank_black_water_capacity"
     )
     assert hass.states.get(black_capacity.entity_id).state == "120.0"
-    assert not any(
-        entity.unique_id == f"{entry.entry_id}_tank_black_water_level"
-        for entity in entities
+    black_level = hass.states.get(
+        next(
+            entity.entity_id
+            for entity in entities
+            if entity.unique_id == f"{entry.entry_id}_tank_black_water_level"
+        )
     )
+    assert black_level.state == "unavailable"
 
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
@@ -887,3 +892,50 @@ async def test_sensors_report_in_profile_units(hass: HomeAssistant) -> None:
     temperature = states[f"{entry.entry_id}_tire_front_left_temperature"]
     assert temperature.attributes["unit_of_measurement"] == "°F"
     assert round(float(temperature.state)) == 150
+
+
+async def test_capacity_only_tank_has_all_sensors_and_attaches_later(
+    hass: HomeAssistant,
+) -> None:
+    """A tank with only a capacity gets every sensor and works once hooked up."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        unique_id="adventure rv",
+        data={
+            CONF_NAME: "Adventure RV",
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_METRIC,
+            CONF_ENTITY_MAPPINGS: {},
+            CONF_FRESH_WATER_TANK_CAPACITY: 400.0,
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    suffixes = ("level", "capacity", "percentage", "status", "last_filled")
+    for suffix in suffixes:
+        assert registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_tank_fresh_water_{suffix}"
+        )
+    level_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_tank_fresh_water_level"
+    )
+    assert hass.states.get(level_id).state == "unavailable"
+    assert not any(
+        entity.unique_id.startswith(f"{entry.entry_id}_tank_gray_water")
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+    )
+
+    hass.states.async_set("sensor.fresh", "100", {"unit_of_measurement": "L"})
+    hass.config_entries.async_update_entry(
+        entry, options={CONF_TANK_ENTITY_MAPPINGS: {"fresh_water": "sensor.fresh"}}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(level_id).state == "100.0"
+    percentage_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_tank_fresh_water_percentage"
+    )
+    assert hass.states.get(percentage_id).state == "25.0"
