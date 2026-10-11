@@ -29,6 +29,7 @@ from custom_components.havrv.const import (
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    CONF_TANK_ENTITY_MAPPINGS,
     CONF_TIRE_BATTERY_LOW,
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_THRESHOLDS,
@@ -341,6 +342,107 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     )
     await hass.async_block_till_done()
     assert hass.states.get(mapped_entity.entity_id).state == "13.6"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_setup_creates_only_selected_tank_devices_and_optional_capacities(
+    hass: HomeAssistant,
+) -> None:
+    """Create configured tank devices without assuming every tank exists."""
+    hass.states.async_set(
+        "sensor.fresh_water_level",
+        "72",
+        {"friendly_name": "Fresh water", "unit_of_measurement": "%"},
+    )
+    hass.states.async_set(
+        "sensor.gray_water_level",
+        "35",
+        {"unit_of_measurement": "%"},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        unique_id="adventure rv",
+        data={
+            CONF_NAME: "Adventure RV",
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_METRIC,
+            CONF_ENTITY_MAPPINGS: {
+                "water": ["sensor.fresh_water_level"],
+            },
+            CONF_FRESH_WATER_TANK_CAPACITY: 400.0,
+            CONF_BLACK_WATER_TANK_CAPACITY: 120.0,
+        },
+        options={
+            CONF_TANK_ENTITY_MAPPINGS: {
+                "fresh_water": "sensor.fresh_water_level",
+                "gray_water": "sensor.gray_water_level",
+            },
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entities = er.async_entries_for_config_entry(registry, entry.entry_id)
+    level_entities = {
+        entity.unique_id: entity
+        for entity in entities
+        if "_tank_" in entity.unique_id and entity.unique_id.endswith("_level")
+    }
+    assert set(level_entities) == {
+        f"{entry.entry_id}_tank_fresh_water_level",
+        f"{entry.entry_id}_tank_gray_water_level",
+    }
+    fresh_level = level_entities[f"{entry.entry_id}_tank_fresh_water_level"]
+    assert hass.states.get(fresh_level.entity_id).state == "72.0"
+    assert (
+        hass.states.get(fresh_level.entity_id).attributes["unit_of_measurement"] == "%"
+    )
+
+    capacity = next(
+        entity
+        for entity in entities
+        if entity.unique_id == f"{entry.entry_id}_tank_fresh_water_capacity"
+    )
+    capacity_state = hass.states.get(capacity.entity_id)
+    assert capacity_state.state == "400.0"
+    assert capacity_state.attributes["unit_of_measurement"] == "L"
+    assert not any(
+        entity.unique_id == f"{entry.entry_id}_tank_gray_water_capacity"
+        for entity in entities
+    )
+    assert not any(
+        entity.unique_id == f"{entry.entry_id}_tank_black_water_level"
+        for entity in entities
+    )
+
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert {device.name for device in devices} == {
+        "Adventure RV",
+        "Fresh-water tank",
+        "Gray-water tank",
+        "Water",
+    }
+    rv_device = next(device for device in devices if device.name == "Adventure RV")
+    assert all(
+        device.via_device_id == rv_device.id
+        for device in devices
+        if device.name != "Adventure RV"
+    )
+    assert fresh_level.device_id == next(
+        device.id for device in devices if device.name == "Fresh-water tank"
+    )
+    assert any(
+        entity.unique_id == f"{entry.entry_id}_water_sensor.fresh_water_level"
+        for entity in entities
+    )
+
+    hass.states.async_set("sensor.fresh_water_level", "68")
+    await hass.async_block_till_done()
+    assert hass.states.get(fresh_level.entity_id).state == "68.0"
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

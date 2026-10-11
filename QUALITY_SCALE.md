@@ -19,6 +19,10 @@ implemented integration behavior, not just repository configuration.
   the options flow.
 - Saved RV profile values, including dimensions, tank capacities, axle count,
   and wheel layouts, exposed as uniquely named sensors on each RV device.
+- Explicit optional mappings for fresh-, gray-, and black-water tank levels
+  create individual tank devices and expose configured capacities on those
+  devices. Tank thresholds, tank history, and fuel-level devices are not
+  implemented.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
 - Ruff, pytest, a 96% integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.

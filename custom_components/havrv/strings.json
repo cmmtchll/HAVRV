@@ -26,6 +26,9 @@
           "tag_axle_wheel_configuration": "Tag axle wheels",
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
+          "fresh_water_tank_level": "Fresh-water tank level sensor",
+          "gray_water_tank_level": "Gray-water tank level sensor",
+          "black_water_tank_level": "Black-water tank level sensor",
           "chassis_entities": "Chassis system entities",
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
@@ -53,6 +56,9 @@
           "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one.",
           "power_entities": "Select existing sensors, controls, or climate entities for the RV power system.",
           "water_entities": "Select existing sensors, controls, or climate entities for the RV water system.",
+          "fresh_water_tank_level": "Select the existing sensor for the fresh-water tank level. Leave blank when the tank or sensor is not present.",
+          "gray_water_tank_level": "Select the existing sensor for the gray-water tank level. Leave blank when the tank or sensor is not present.",
+          "black_water_tank_level": "Select the existing sensor for the black-water tank level. Leave blank when the tank or sensor is not present.",
           "chassis_entities": "Select existing sensors, controls, or climate entities for the RV chassis.",
           "climate_entities": "Select existing sensors, controls, or climate entities for RV climate systems.",
           "location_entities": "Select existing sensors, controls, or climate entities for RV location.",
@@ -76,7 +82,7 @@
     "step": {
       "init": {
         "title": "Map RV system entities",
-        "description": "Choose existing entities for RV systems and each generated tire. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
+        "description": "Choose existing entities for RV systems, optional water-tank level sensors, and each generated tire. Tank devices are created only for selected sensors. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
         "data": {
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
@@ -248,6 +254,12 @@
       },
       "tire_pressure": {
         "name": "Pressure"
+      },
+      "tank_level": {
+        "name": "Level"
+      },
+      "tank_capacity": {
+        "name": "Capacity"
       },
       "tire_temperature": {
         "name": "Temperature"

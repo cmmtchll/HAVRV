@@ -39,6 +39,7 @@ from custom_components.havrv.const import (
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    CONF_TANK_ENTITY_MAPPINGS,
     CONF_TIRE_BATTERY_LOW,
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_THRESHOLDS,
@@ -161,6 +162,53 @@ def test_options_normalization_stores_tire_sources_and_thresholds() -> None:
     }
     assert options[CONF_TIRE_TEMPERATURE_HIGH] == 80
     assert options[CONF_TIRE_BATTERY_LOW] == 20
+
+
+def test_tank_options_store_individual_level_sources() -> None:
+    """Store optional level sensors by explicitly selected tank type."""
+    options, error = _normalize_options(
+        {
+            "fresh_water_tank_level": "sensor.fresh_level",
+            "black_water_tank_level": "sensor.black_level",
+        },
+        _tire_profile_entry(),
+    )
+
+    assert error is None
+    assert options[CONF_TANK_ENTITY_MAPPINGS] == {
+        "fresh_water": "sensor.fresh_level",
+        "black_water": "sensor.black_level",
+    }
+
+
+@pytest.mark.parametrize(
+    ("user_input", "expected_error"),
+    [
+        (
+            {"fresh_water_tank_level": "binary_sensor.fresh_level"},
+            "invalid_tank_entity_mapping",
+        ),
+        (
+            {
+                "fresh_water_tank_level": "sensor.shared_level",
+                "gray_water_tank_level": "sensor.shared_level",
+            },
+            "duplicate_tank_entity_mapping",
+        ),
+        (
+            {"fresh_water_tank_level": 123},
+            "invalid_tank_entity_mapping",
+        ),
+    ],
+)
+def test_tank_options_reject_invalid_level_mappings(
+    user_input: dict, expected_error: str
+) -> None:
+    """Reject invalid or conflicting tank level sources."""
+    options, error = _normalize_options(user_input, _tire_profile_entry())
+
+    assert options == {}
+    assert error == expected_error
 
 
 @pytest.mark.parametrize(
@@ -422,6 +470,11 @@ async def test_options_flow_updates_source_entity_mappings(
             CONF_NAME: "Adventure RV",
             CONF_ENTITY_MAPPINGS: {"water": ["sensor.fresh_water_level"]},
         },
+        options={
+            CONF_TANK_ENTITY_MAPPINGS: {
+                "fresh_water": "sensor.fresh_water_level",
+            },
+        },
         unique_id="adventure rv",
     )
     entry.add_to_hass(hass)
@@ -437,6 +490,9 @@ async def test_options_flow_updates_source_entity_mappings(
     assert entry.options[CONF_ENTITY_MAPPINGS] == {
         "power": ["sensor.house_battery_voltage"],
         "water": ["sensor.fresh_water_level"],
+    }
+    assert entry.options[CONF_TANK_ENTITY_MAPPINGS] == {
+        "fresh_water": "sensor.fresh_water_level",
     }
 
 

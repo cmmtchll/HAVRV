@@ -33,7 +33,12 @@ from .const import (
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    CONF_TANK_ENTITY_MAPPINGS,
     DOMAIN,
+    TANK_BLACK_WATER,
+    TANK_FRESH_WATER,
+    TANK_GRAY_WATER,
+    TANK_TYPES,
     UNIT_SYSTEM_METRIC,
 )
 from .entity import HavrvSourceEntity, async_add_source_entities
@@ -206,6 +211,36 @@ class HavrvSensor(HavrvSourceEntity, SensorEntity):
         return self.source_attributes.get("suggested_display_precision")
 
 
+class HavrvTankLevelSensor(HavrvSensor):
+    """Expose a selected tank-level source on its own tank device."""
+
+    entity_description = SensorEntityDescription(
+        key="tank_level",
+        name="Level",
+        translation_key="tank_level",
+    )
+
+    def __init__(
+        self,
+        entry: HavrvConfigEntry,
+        tank: str,
+        tank_name: str,
+        source_entity_id: str,
+    ) -> None:
+        """Initialize a tank level sensor."""
+        parent_device_id = entry.runtime_data.device_id
+        if parent_device_id is None:
+            raise RuntimeError("RV device must be registered before platform setup")
+        super().__init__(entry, "water", source_entity_id, parent_device_id)
+        self._attr_unique_id = f"{entry.entry_id}_tank_{tank}_level"
+        self._attr_device_info = _tank_device_info(entry, tank, tank_name)
+
+    @property
+    def name(self) -> str | None:
+        """Use the translated level name instead of the source entity name."""
+        return None
+
+
 class HavrvProfileSensor(SensorEntity):
     """Expose one configured RV profile value on its RV device."""
 
@@ -232,6 +267,34 @@ class HavrvProfileSensor(SensorEntity):
     def native_value(self) -> str | int | float | bool:
         """Return the configured profile value."""
         return self._native_value
+
+
+class HavrvTankCapacitySensor(HavrvProfileSensor):
+    """Expose an optional profile capacity on its corresponding tank device."""
+
+    entity_description = SensorEntityDescription(
+        key="tank_capacity",
+        name="Capacity",
+        translation_key="tank_capacity",
+    )
+
+    def __init__(
+        self,
+        entry: HavrvConfigEntry,
+        tank: str,
+        tank_name: str,
+        capacity_key: str,
+        capacity: float | int,
+    ) -> None:
+        """Initialize a tank capacity sensor."""
+        super().__init__(
+            entry,
+            self.entity_description,
+            capacity,
+            _profile_sensor_unit(entry, capacity_key),
+        )
+        self._attr_unique_id = f"{entry.entry_id}_tank_{tank}_capacity"
+        self._attr_device_info = _tank_device_info(entry, tank, tank_name)
 
 
 class HavrvTireSensor(HavrvTireEntity, SensorEntity):
@@ -316,6 +379,43 @@ def _profile_sensor_unit(entry: HavrvConfigEntry, key: str) -> str | None:
     return None
 
 
+def _tank_device_info(
+    entry: HavrvConfigEntry, tank: str, tank_name: str
+) -> dict[str, object]:
+    """Return stable device information for a tank."""
+    parent_device_id = entry.runtime_data.device_id
+    if parent_device_id is None:
+        raise RuntimeError("RV device must be registered before platform setup")
+    return {
+        "identifiers": {(DOMAIN, f"{entry.entry_id}_tank_{tank}")},
+        "name": tank_name,
+        "via_device_id": parent_device_id,
+    }
+
+
+def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
+    """Create entities for explicitly mapped tank-level sources."""
+    mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
+    entities: list[Entity] = []
+    tank_names = {
+        TANK_FRESH_WATER: ("Fresh-water tank", CONF_FRESH_WATER_TANK_CAPACITY),
+        TANK_GRAY_WATER: ("Gray-water tank", CONF_GRAY_WATER_TANK_CAPACITY),
+        TANK_BLACK_WATER: ("Black-water tank", CONF_BLACK_WATER_TANK_CAPACITY),
+    }
+    for tank in TANK_TYPES:
+        source_entity_id = mappings.get(tank)
+        if source_entity_id is None:
+            continue
+        name, capacity_key = tank_names[tank]
+        entities.append(HavrvTankLevelSensor(entry, tank, name, source_entity_id))
+        capacity = entry.data.get(capacity_key)
+        if capacity is not None:
+            entities.append(
+                HavrvTankCapacitySensor(entry, tank, name, capacity_key, capacity)
+            )
+    return entities
+
+
 def _profile_sensors(entry: HavrvConfigEntry) -> list[HavrvProfileSensor]:
     """Create sensors for configured RV profile fields."""
     profile_data = entry.data
@@ -346,6 +446,7 @@ async def async_setup_entry(
     """Set up mapped sensor entities."""
     async_add_source_entities(entry, "sensor", HavrvSensor, async_add_entities)
     async_add_entities(_profile_sensors(entry))
+    async_add_entities(_tank_entities(entry))
     async_add_entities(
         [
             HavrvTireSensor(entry, position, metric)

@@ -76,6 +76,16 @@ Assistant does not allow read-only sensors in its **Configuration** category;
 that category is intended for configuration controls. These specifications
 are not diagnostics, so marking them as **Diagnostic** would also be misleading.
 
+Use the integration's options to select an existing sensor for each
+fresh-water, gray-water, or black-water tank level. Each selected source creates
+a separate tank device beneath the RV device with a live **Level** sensor; a
+configured tank capacity is also exposed as a **Capacity** sensor on that tank
+device. Tank selections are optional, and HAVRV does not infer tank type from
+source entity IDs or names. The original system-mapped entities and profile
+capacity sensors remain unchanged. Fuel tank levels are not part of this first
+version; a fuel capacity may still be stored as profile data. Tank alert
+thresholds and last-emptied/last-filled history are not implemented.
+
 When the rear axle count is configured, HAVRV generates tire devices for the
 front axle and configured rear axle assemblies. Single wheels are named by
 side; dual wheels have separate inner and outer tire devices. The tag axle is
