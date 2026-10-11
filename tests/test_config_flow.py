@@ -17,6 +17,7 @@ from custom_components.havrv.config_flow import (
 from custom_components.havrv.config_flow import (
     _normalize_entity_mappings,
     _normalize_options,
+    _options_schema,
 )
 from custom_components.havrv.const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
@@ -204,6 +205,32 @@ def test_tank_options_accept_number_and_input_number_sources() -> None:
         "fresh_water": "number.fresh_level",
         "gray_water": "input_number.gray_level",
     }
+
+
+def test_tank_options_accept_template_sensor_sources() -> None:
+    """Allow template sensors as tank level sources."""
+    options, error = _normalize_options(
+        {"fresh_water_tank_level": "sensor.template_fresh_level"},
+        _tire_profile_entry(),
+    )
+
+    assert error is None
+    assert options[CONF_TANK_ENTITY_MAPPINGS] == {
+        "fresh_water": "sensor.template_fresh_level",
+    }
+
+
+def test_all_tank_level_selectors_accept_numeric_entity_domains() -> None:
+    """Offer sensor and numeric helper domains for each tank level."""
+    schema = _options_schema(_tire_profile_entry())
+    selectors = {marker.schema: selector for marker, selector in schema.schema.items()}
+
+    for tank in ("fresh_water", "gray_water", "black_water"):
+        assert selectors[f"{tank}_tank_level"].config["domain"] == [
+            "sensor",
+            "number",
+            "input_number",
+        ]
 
 
 @pytest.mark.parametrize(

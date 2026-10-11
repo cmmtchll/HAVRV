@@ -404,7 +404,7 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
             else vol.Optional(field)
         )
         fields[marker] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor")
+            selector.EntitySelectorConfig(domain=list(_NUMERIC_ENTITY_DOMAINS))
         )
 
     percent_selector = selector.NumberSelector(

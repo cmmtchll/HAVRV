@@ -121,7 +121,7 @@
     "step": {
       "init": {
         "title": "Map RV system entities",
-        "description": "Choose existing entities for RV systems and each generated tire. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
+        "description": "Choose existing entities for RV systems, optional water-tank levels, and each generated tire. Tank and tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
         "data": {
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
@@ -129,6 +129,9 @@
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
           "other_entities": "Other RV entities",
+          "fresh_water_tank_level": "Fresh-water tank level source",
+          "gray_water_tank_level": "Gray-water tank level source",
+          "black_water_tank_level": "Black-water tank level source",
           "tire_front_left_pressure": "Front left tire pressure source",
           "tire_front_left_temperature": "Front left tire temperature source",
           "tire_front_left_battery": "Front left tire battery source",
@@ -203,6 +206,8 @@
     "error": {
       "invalid_entity_mapping": "Choose valid source entities.",
       "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system.",
+      "invalid_tank_entity_mapping": "Choose a sensor, number entity, or input number helper for each tank level.",
+      "duplicate_tank_entity_mapping": "A tank level source entity can only be assigned once.",
       "invalid_tire_entity_mapping": "Choose a sensor, number entity, or input number helper for each tire reading.",
       "duplicate_tire_entity_mapping": "A tire source entity can only be assigned once.",
       "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
