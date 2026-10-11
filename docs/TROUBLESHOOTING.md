@@ -30,6 +30,12 @@ reports a usable level. **Percentage** requires a capacity in the RV profile.
 **Status** requires both warning and problem percentages. Tank types are
 selected explicitly; HAVRV does not identify them from entity names.
 
+## The operation mode is unknown
+
+HAVRV does not detect or default the operation mode. Choose a mode on the
+**Operations** device or with the `select.select_option` action. The last
+selection is restored after a restart; it is lost if the RV profile is removed.
+
 ## A tire reading or problem state is missing
 
 Check the per-tire pressure, temperature, and battery source selections and

@@ -12,6 +12,8 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.icon import async_get_icons
+from homeassistant.helpers.translation import async_get_translations
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     mock_restore_cache,
@@ -150,3 +152,15 @@ async def test_unknown_restored_mode_is_ignored(hass: HomeAssistant) -> None:
 
     assert hass.states.get(mode_entry.entity_id).state == "unknown"
     assert entry.runtime_data.operation_mode is None
+
+
+async def test_operation_mode_icons_and_translations(hass: HomeAssistant) -> None:
+    """Every operation mode has a translated name and icon."""
+    icons = (await async_get_icons(hass, "entity", {DOMAIN}))[DOMAIN]["select"]
+    translations = await async_get_translations(hass, "en", "entity", {DOMAIN})
+    prefix = f"component.{DOMAIN}.entity.select.operation_mode"
+    assert icons["operation_mode"]["default"] == "mdi:rv-truck"
+    assert translations[f"{prefix}.name"] == "Operation mode"
+    for mode in OPERATION_MODES:
+        assert icons["operation_mode"]["state"][mode].startswith("mdi:")
+        assert translations[f"{prefix}.state.{mode}"]
