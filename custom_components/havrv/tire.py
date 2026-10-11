@@ -1,11 +1,18 @@
 """Tire topology and reading helpers."""
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from statistics import median
 from typing import Any
 
-from homeassistant.core import Event, HomeAssistant, State, callback
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -78,7 +85,9 @@ class HavrvTireEntity(Entity):
         )
 
     @callback
-    def async_on_source_state_changed(self, event: Event) -> None:
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Write the tire state when one of its source sensors changes."""
         self.async_write_ha_state()
 
@@ -105,7 +114,7 @@ class HavrvTireEntity(Entity):
         return {} if state is None else state.attributes
 
 
-def tire_positions(profile: dict[str, Any]) -> list[TirePosition]:
+def tire_positions(profile: Mapping[str, Any]) -> list[TirePosition]:
     """Build stable tire positions from the configured axle and wheel layout."""
     rear_axle_count = profile.get(CONF_REAR_AXLE_COUNT)
     has_tag_axle = profile.get(CONF_TAG_AXLE_PRESENT, False)
@@ -296,7 +305,8 @@ def tire_entity_key(position: TirePosition, metric: str) -> str:
 def source_entity_id(entry: Any, position: TirePosition, metric: str) -> str | None:
     """Return the configured source entity for a tire metric."""
     mappings = entry.options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
-    return mappings.get(tire_entity_key(position, metric))
+    entity_id = mappings.get(tire_entity_key(position, metric))
+    return entity_id if isinstance(entity_id, str) else None
 
 
 def configured_threshold(

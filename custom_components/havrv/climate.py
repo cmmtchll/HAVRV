@@ -3,7 +3,8 @@
 from collections.abc import Callable
 from typing import Any
 
-from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
+from homeassistant.components.climate import ClimateEntity
+from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
@@ -19,47 +20,64 @@ class HavrvClimate(HavrvSourceEntity, ClimateEntity):
     @property
     def name(self) -> str | None:
         """Return the source climate name."""
-        return self.source_attributes.get("friendly_name", self._source_entity_id)
+        return self.source_name
 
     @property
-    def hvac_mode(self) -> str | None:
+    def hvac_mode(self) -> HVACMode | None:
         """Return the source HVAC mode."""
-        return self._source_state.state if self.available else None
+        state = self._source_state
+        if state is None or not self.available:
+            return None
+        try:
+            return HVACMode(state.state)
+        except ValueError:
+            return None
 
     @property
-    def hvac_modes(self) -> list[str]:
+    def hvac_modes(self) -> list[HVACMode]:
         """Return the source HVAC modes."""
-        return self.source_attributes.get("hvac_modes", [])
+        modes = self.source_attributes.get("hvac_modes", [])
+        if not isinstance(modes, list):
+            return []
+        valid_modes = []
+        for mode in modes:
+            if isinstance(mode, str):
+                try:
+                    valid_modes.append(HVACMode(mode))
+                except ValueError:
+                    continue
+        return valid_modes
 
     @property
     def current_temperature(self) -> float | None:
         """Return the current source temperature."""
-        return self.source_attributes.get("current_temperature")
+        return self._float_attribute("current_temperature")
 
     @property
     def current_humidity(self) -> int | None:
         """Return the current source humidity."""
-        return self.source_attributes.get("current_humidity")
+        value = self.source_attributes.get("current_humidity")
+        return value if isinstance(value, int) else None
 
     @property
     def icon(self) -> str | None:
         """Return the source icon."""
-        return self.source_attributes.get("icon")
+        return self.source_icon
 
     @property
     def target_temperature(self) -> float | None:
         """Return the source target temperature."""
-        return self.source_attributes.get("temperature")
+        return self._float_attribute("temperature")
 
     @property
     def target_temperature_high(self) -> float | None:
         """Return the source high target temperature."""
-        return self.source_attributes.get("target_temp_high")
+        return self._float_attribute("target_temp_high")
 
     @property
     def target_temperature_low(self) -> float | None:
         """Return the source low target temperature."""
-        return self.source_attributes.get("target_temp_low")
+        return self._float_attribute("target_temp_low")
 
     @property
     def fan_mode(self) -> str | None:
@@ -69,28 +87,36 @@ class HavrvClimate(HavrvSourceEntity, ClimateEntity):
     @property
     def fan_modes(self) -> list[str] | None:
         """Return the source fan modes."""
-        return self.source_attributes.get("fan_modes")
+        modes = self.source_attributes.get("fan_modes")
+        return (
+            [mode for mode in modes if isinstance(mode, str)]
+            if isinstance(modes, list)
+            else None
+        )
 
     @property
     def min_temp(self) -> float:
         """Return the source minimum temperature."""
-        return self.source_attributes.get("min_temp", 7)
+        value = self._float_attribute("min_temp")
+        return 7 if value is None else value
 
     @property
     def max_temp(self) -> float:
         """Return the source maximum temperature."""
-        return self.source_attributes.get("max_temp", 35)
+        value = self._float_attribute("max_temp")
+        return 35 if value is None else value
 
     @property
     def target_temperature_step(self) -> float | None:
         """Return the source target temperature step."""
-        return self.source_attributes.get("target_temp_step")
+        return self._float_attribute("target_temp_step")
 
     @property
-    def temperature_unit(self) -> str | None:
+    def temperature_unit(self) -> str:
         """Return the source temperature unit."""
-        return self.source_attributes.get(
-            "temperature_unit", self.hass.config.units.temperature_unit
+        unit = self.source_attributes.get("temperature_unit")
+        return (
+            unit if isinstance(unit, str) else self.hass.config.units.temperature_unit
         )
 
     @property
@@ -121,17 +147,27 @@ class HavrvClimate(HavrvSourceEntity, ClimateEntity):
     @property
     def target_humidity(self) -> int | None:
         """Return the source target humidity."""
-        return self.source_attributes.get("humidity")
+        value = self.source_attributes.get("humidity")
+        return value if isinstance(value, int) else None
 
     @property
     def min_humidity(self) -> int:
         """Return the source minimum humidity."""
-        return self.source_attributes.get("min_humidity", 30)
+        value = self.source_attributes.get("min_humidity")
+        return value if isinstance(value, int) else 30
 
     @property
     def max_humidity(self) -> int:
         """Return the source maximum humidity."""
-        return self.source_attributes.get("max_humidity", 99)
+        value = self.source_attributes.get("max_humidity")
+        return value if isinstance(value, int) else 99
+
+    def _float_attribute(self, key: str) -> float | None:
+        """Return a numeric source attribute, excluding booleans."""
+        value = self.source_attributes.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value)
 
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
         """Set the source HVAC mode."""

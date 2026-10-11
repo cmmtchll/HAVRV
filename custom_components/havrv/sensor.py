@@ -9,7 +9,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -57,117 +57,86 @@ PARALLEL_UPDATES = 0
 _PROFILE_SENSOR_DESCRIPTIONS = (
     SensorEntityDescription(
         key=CONF_COACH_YEAR,
-        name="Coach year",
         translation_key=CONF_COACH_YEAR,
-        icon="mdi:calendar",
     ),
     SensorEntityDescription(
         key=CONF_MANUFACTURER,
-        name="Chassis manufacturer",
         translation_key=CONF_MANUFACTURER,
-        icon="mdi:factory",
     ),
     SensorEntityDescription(
         key=CONF_COACH_BUILDER,
-        name="Coach builder",
         translation_key=CONF_COACH_BUILDER,
-        icon="mdi:bus",
     ),
     SensorEntityDescription(
         key=CONF_MAKE,
-        name="Chassis make",
         translation_key=CONF_MAKE,
-        icon="mdi:car-info",
     ),
     SensorEntityDescription(
         key=CONF_MODEL,
-        name="Coach model",
         translation_key=CONF_MODEL,
-        icon="mdi:bus",
     ),
     SensorEntityDescription(
         key=CONF_COACH_IDENTIFIER,
-        name="Coach identifier",
         translation_key=CONF_COACH_IDENTIFIER,
-        icon="mdi:identifier",
     ),
     SensorEntityDescription(
         key=CONF_STORAGE_ZONE_ID,
-        name="Storage zone",
         translation_key=CONF_STORAGE_ZONE_ID,
-        icon="mdi:map-marker",
     ),
     SensorEntityDescription(
         key=CONF_MEASUREMENT_SYSTEM,
-        name="Measurement system",
         translation_key=CONF_MEASUREMENT_SYSTEM,
-        icon="mdi:ruler-square",
     ),
     SensorEntityDescription(
         key=CONF_OVERALL_HEIGHT,
-        name="Overall height",
         translation_key=CONF_OVERALL_HEIGHT,
-        icon="mdi:arrow-expand-vertical",
+        device_class=SensorDeviceClass.DISTANCE,
     ),
     SensorEntityDescription(
         key=CONF_OVERALL_LENGTH,
-        name="Overall length",
         translation_key=CONF_OVERALL_LENGTH,
-        icon="mdi:arrow-expand-horizontal",
+        device_class=SensorDeviceClass.DISTANCE,
     ),
     SensorEntityDescription(
         key=CONF_OVERALL_WIDTH,
-        name="Overall width",
         translation_key=CONF_OVERALL_WIDTH,
-        icon="mdi:arrow-left-right",
+        device_class=SensorDeviceClass.DISTANCE,
     ),
     SensorEntityDescription(
         key=CONF_FUEL_TANK_CAPACITY,
-        name="Fuel tank capacity",
         translation_key=CONF_FUEL_TANK_CAPACITY,
-        icon="mdi:gas-station",
+        device_class=SensorDeviceClass.VOLUME_STORAGE,
     ),
     SensorEntityDescription(
-        name="Fresh-water tank capacity",
         key=CONF_FRESH_WATER_TANK_CAPACITY,
         translation_key=CONF_FRESH_WATER_TANK_CAPACITY,
-        icon="mdi:water",
+        device_class=SensorDeviceClass.VOLUME_STORAGE,
     ),
     SensorEntityDescription(
-        name="Gray-water tank capacity",
         key=CONF_GRAY_WATER_TANK_CAPACITY,
         translation_key=CONF_GRAY_WATER_TANK_CAPACITY,
-        icon="mdi:water-minus",
+        device_class=SensorDeviceClass.VOLUME_STORAGE,
     ),
     SensorEntityDescription(
-        name="Black-water tank capacity",
         key=CONF_BLACK_WATER_TANK_CAPACITY,
         translation_key=CONF_BLACK_WATER_TANK_CAPACITY,
-        icon="mdi:toilet",
+        device_class=SensorDeviceClass.VOLUME_STORAGE,
     ),
     SensorEntityDescription(
         key=CONF_REAR_AXLE_COUNT,
-        name="Number of rear axle assemblies",
         translation_key=CONF_REAR_AXLE_COUNT,
-        icon="mdi:car",
     ),
     SensorEntityDescription(
-        name="Main rear axle wheel configuration",
         key=CONF_MAIN_REAR_WHEEL_CONFIGURATION,
         translation_key=CONF_MAIN_REAR_WHEEL_CONFIGURATION,
-        icon="mdi:circle-multiple",
     ),
     SensorEntityDescription(
         key=CONF_TAG_AXLE_PRESENT,
-        name="Tag axle present",
         translation_key=CONF_TAG_AXLE_PRESENT,
-        icon="mdi:car",
     ),
     SensorEntityDescription(
-        name="Tag axle wheel configuration",
         key=CONF_TAG_AXLE_WHEEL_CONFIGURATION,
         translation_key=CONF_TAG_AXLE_WHEEL_CONFIGURATION,
-        icon="mdi:circle-multiple",
     ),
 )
 
@@ -178,7 +147,7 @@ class HavrvSensor(HavrvSourceEntity, SensorEntity):
     @property
     def name(self) -> str | None:
         """Return the source sensor name."""
-        return self.source_attributes.get("friendly_name", self._source_entity_id)
+        return self.source_name
 
     @property
     def native_value(self) -> float | str | None:
@@ -194,29 +163,33 @@ class HavrvSensor(HavrvSourceEntity, SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the source unit."""
-        return self.source_attributes.get("unit_of_measurement")
+        unit = self.source_attributes.get("unit_of_measurement")
+        return unit if isinstance(unit, str) else None
 
     @property
     def icon(self) -> str | None:
         """Return the source icon."""
-        return self.source_attributes.get("icon")
+        return self.source_icon
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
         """Return the source sensor device class."""
         device_class = self.source_attributes.get("device_class")
-        return None if device_class is None else SensorDeviceClass(device_class)
+        return (
+            SensorDeviceClass(device_class) if isinstance(device_class, str) else None
+        )
 
     @property
     def state_class(self) -> SensorStateClass | None:
         """Return the source sensor state class."""
         state_class = self.source_attributes.get("state_class")
-        return None if state_class is None else SensorStateClass(state_class)
+        return SensorStateClass(state_class) if isinstance(state_class, str) else None
 
     @property
     def suggested_display_precision(self) -> int | None:
         """Return the source sensor's suggested display precision."""
-        return self.source_attributes.get("suggested_display_precision")
+        precision = self.source_attributes.get("suggested_display_precision")
+        return precision if isinstance(precision, int) else None
 
 
 class HavrvProfileSensor(SensorEntity):
@@ -261,20 +234,13 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
         """Initialize a tire reading sensor."""
         super().__init__(entry, position)
         descriptions = {
-            "pressure": ("Pressure", "tire_pressure", "mdi:gauge"),
-            "temperature": (
-                "Temperature",
-                "tire_temperature",
-                "mdi:thermometer",
-            ),
-            "battery": ("Battery level", "tire_battery", "mdi:battery"),
+            "pressure": "tire_pressure",
+            "temperature": "tire_temperature",
+            "battery": "tire_battery",
         }
-        name, translation_key, icon = descriptions[metric]
         self.entity_description = SensorEntityDescription(
             key=metric,
-            name=name,
-            translation_key=translation_key,
-            icon=icon,
+            translation_key=descriptions[metric],
         )
         self._metric = metric
         self._attr_unique_id = f"{entry.entry_id}_tire_{position.key}_{metric}"
@@ -381,7 +347,9 @@ class HavrvTireMonitorSensor(SensorEntity):
         )
 
     @callback
-    def async_on_source_state_changed(self, event: Event) -> None:
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Recalculate the comparison when one of its sources changes."""
         self.async_write_ha_state()
 
@@ -492,7 +460,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up mapped sensor entities."""
     async_add_source_entities(entry, "sensor", HavrvSensor, async_add_entities)
-    async_add_entities(_profile_sensors(entry))
+    async_add_entities(list(_profile_sensors(entry)))
     async_add_entities(
         [
             HavrvTireSensor(entry, position, metric)
@@ -504,7 +472,7 @@ async def async_setup_entry(
         [
             HavrvTireMonitorSensor(entry, group, metric, analysis)
             for metric in (TIRE_PRESSURE, TIRE_TEMPERATURE)
-            for group in tire_monitor_groups(entry.data, metric)
+            for group in tire_monitor_groups(dict(entry.data), metric)
             for analysis in ("spread", "outlier")
         ]
     )

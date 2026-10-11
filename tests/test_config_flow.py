@@ -505,6 +505,67 @@ async def test_options_flow_rejects_duplicate_source_entities(
     assert result["errors"] == {"base": "duplicate_entity_mapping"}
 
 
+async def test_reconfigure_flow_updates_profile_and_preserves_mappings(
+    hass: HomeAssistant,
+) -> None:
+    """Edit vehicle details without changing profile identity or mappings."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        unique_id="adventure rv",
+        data={
+            CONF_NAME: "Adventure RV",
+            CONF_ENTITY_MAPPINGS: {"power": ["sensor.house_voltage"]},
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_METRIC,
+            CONF_REAR_AXLE_COUNT: 1,
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "single",
+        },
+        options={CONF_ENTITY_MAPPINGS: {"water": ["binary_sensor.tank_low"]}},
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+
+    form = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+    )
+    assert form["step_id"] == "reconfigure"
+
+    invalid = await hass.config_entries.flow.async_configure(
+        form["flow_id"],
+        user_input={CONF_REAR_AXLE_COUNT: "two"},
+    )
+    assert invalid["type"] is FlowResultType.FORM
+    assert invalid["errors"]["base"] == "tag_axle_wheel_configuration_required"
+
+    result = await hass.config_entries.flow.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_US_CUSTOMARY,
+            CONF_OVERALL_HEIGHT: 12.5,
+            CONF_REAR_AXLE_COUNT: "two",
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
+            CONF_TAG_AXLE_WHEEL_CONFIGURATION: "single",
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.title == "Adventure RV"
+    assert entry.unique_id == "adventure rv"
+    assert entry.data[CONF_ENTITY_MAPPINGS] == {"power": ["sensor.house_voltage"]}
+    assert entry.options[CONF_ENTITY_MAPPINGS] == {"water": ["binary_sensor.tank_low"]}
+    assert entry.data[CONF_OVERALL_HEIGHT] == 12.5
+    assert entry.data[CONF_TAG_AXLE_PRESENT] is True
+    assert entry.runtime_data.overall_height == 12.5
+    assert entry.runtime_data.tag_axle_present is True
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_user_flow_rejects_duplicate_name(hass: HomeAssistant) -> None:
     """Reject duplicate RV profile names."""
     entry = MockConfigEntry(

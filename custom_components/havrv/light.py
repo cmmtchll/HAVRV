@@ -3,7 +3,8 @@
 from collections.abc import Callable
 from typing import Any
 
-from homeassistant.components.light import ColorMode, LightEntity
+from homeassistant.components.light import LightEntity
+from homeassistant.components.light.const import ColorMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
@@ -19,7 +20,7 @@ class HavrvLight(HavrvSourceEntity, LightEntity):
     @property
     def name(self) -> str | None:
         """Return the source light name."""
-        return self.source_attributes.get("friendly_name", self._source_entity_id)
+        return self.source_name
 
     @property
     def is_on(self) -> bool | None:
@@ -32,7 +33,7 @@ class HavrvLight(HavrvSourceEntity, LightEntity):
     @property
     def icon(self) -> str | None:
         """Return the source icon."""
-        return self.source_attributes.get("icon")
+        return self.source_icon
 
     @property
     def supported_color_modes(self) -> set[ColorMode]:

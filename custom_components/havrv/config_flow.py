@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from datetime import date
 from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 from homeassistant.util.unit_system import METRIC_SYSTEM, US_CUSTOMARY_SYSTEM
 
@@ -95,7 +96,7 @@ class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -119,7 +120,46 @@ class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=_profile_schema(
                 default_measurement_system=_default_measurement_system(self.hass)
-            ),
+            ),  # type: ignore[arg-type]
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit saved vehicle details without changing profile identity."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if user_input.get(CONF_REAR_AXLE_COUNT) == AXLE_COUNT_ONE:
+                user_input.pop(CONF_TAG_AXLE_WHEEL_CONFIGURATION, None)
+            profile, error = _normalize_profile(
+                {CONF_NAME: entry.data[CONF_NAME], **user_input},
+                default_measurement_system=_default_measurement_system(self.hass),
+            )
+            if error:
+                errors["base"] = error
+            else:
+                profile_updates = {
+                    key: value
+                    for key, value in profile.items()
+                    if key not in (CONF_NAME, CONF_ENTITY_MAPPINGS)
+                }
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates=profile_updates,
+                    reason="reconfigure_successful",
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_profile_schema(
+                default_measurement_system=_default_measurement_system(self.hass),
+                existing_data=entry.data,
+                include_name=False,
+                include_mappings=False,
+            ),  # type: ignore[arg-type]
             errors=errors,
         )
 
@@ -129,7 +169,7 @@ class HavrvOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Edit source-entity mappings."""
         errors: dict[str, str] = {}
 
@@ -145,7 +185,7 @@ class HavrvOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_options_schema(self.config_entry),
+            data_schema=_options_schema(self.config_entry),  # type: ignore[arg-type]
             errors=errors,
         )
 
@@ -159,8 +199,29 @@ def _default_measurement_system(hass: HomeAssistant) -> str:
     return UNIT_SYSTEM_METRIC
 
 
-def _profile_schema(*, default_measurement_system: str) -> vol.Schema:
+def _profile_schema(
+    *,
+    default_measurement_system: str,
+    existing_data: Mapping[str, Any] | None = None,
+    include_name: bool = True,
+    include_mappings: bool = True,
+) -> vol.Schema:
     """Build the RV profile form schema."""
+    marker_defaults = dict(existing_data or {})
+    marker_defaults.setdefault(CONF_MEASUREMENT_SYSTEM, default_measurement_system)
+    if isinstance(marker_defaults.get(CONF_REAR_AXLE_COUNT), int):
+        marker_defaults[CONF_REAR_AXLE_COUNT] = {
+            1: AXLE_COUNT_ONE,
+            2: AXLE_COUNT_TWO,
+            3: AXLE_COUNT_THREE,
+        }.get(marker_defaults[CONF_REAR_AXLE_COUNT])
+
+    def marker(field: str) -> vol.Optional:
+        """Create an optional field marker with its saved profile value."""
+        if field in marker_defaults:
+            return vol.Optional(field, default=marker_defaults[field])
+        return vol.Optional(field)
+
     numeric_selector = selector.NumberSelector(
         selector.NumberSelectorConfig(
             min=0,
@@ -176,49 +237,46 @@ def _profile_schema(*, default_measurement_system: str) -> vol.Schema:
         )
     )
 
-    schema: dict[vol.Marker, Any] = {
-        vol.Required(CONF_NAME, default="My RV"): selector.TextSelector(),
-        vol.Optional(CONF_COACH_YEAR): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                step=1,
-                mode=selector.NumberSelectorMode.BOX,
-            )
-        ),
-    }
-    schema.update(_entity_mapping_fields())
+    schema: dict[vol.Marker, Any] = {}
+    if include_name:
+        schema[vol.Required(CONF_NAME, default="My RV")] = selector.TextSelector()
+    schema[marker(CONF_COACH_YEAR)] = selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            step=1,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    )
+    if include_mappings:
+        schema.update(_entity_mapping_fields())
     schema.update(
-        {vol.Optional(field): selector.TextSelector() for field in _PROFILE_TEXT_FIELDS}
+        {marker(field): selector.TextSelector() for field in _PROFILE_TEXT_FIELDS}
     )
     schema.update(
         {
-            vol.Optional(
-                CONF_MEASUREMENT_SYSTEM, default=default_measurement_system
-            ): selector.SelectSelector(
+            marker(CONF_MEASUREMENT_SYSTEM): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=sorted(_UNIT_SYSTEMS),
                     mode=selector.SelectSelectorMode.DROPDOWN,
                     translation_key="measurement_system",
                 )
             ),
-            vol.Optional(CONF_STORAGE_ZONE_ID): selector.EntitySelector(
+            marker(CONF_STORAGE_ZONE_ID): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="zone")
             ),
         }
     )
-    schema.update(
-        {vol.Optional(field): numeric_selector for field in _MEASUREMENT_FIELDS}
-    )
+    schema.update({marker(field): numeric_selector for field in _MEASUREMENT_FIELDS})
     schema.update(
         {
-            vol.Optional(CONF_REAR_AXLE_COUNT): selector.SelectSelector(
+            marker(CONF_REAR_AXLE_COUNT): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[AXLE_COUNT_ONE, AXLE_COUNT_TWO, AXLE_COUNT_THREE],
                     mode=selector.SelectSelectorMode.DROPDOWN,
                     translation_key="rear_axle_count",
                 )
             ),
-            vol.Optional(CONF_MAIN_REAR_WHEEL_CONFIGURATION): wheel_selector,
-            vol.Optional(CONF_TAG_AXLE_WHEEL_CONFIGURATION): wheel_selector,
+            marker(CONF_MAIN_REAR_WHEEL_CONFIGURATION): wheel_selector,
+            marker(CONF_TAG_AXLE_WHEEL_CONFIGURATION): wheel_selector,
         }
     )
     return vol.Schema(schema)

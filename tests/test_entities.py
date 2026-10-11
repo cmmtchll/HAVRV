@@ -8,8 +8,9 @@ from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.components.light import ColorMode
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import CONF_NAME
+from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.havrv import binary_sensor, climate, light, sensor, switch
@@ -129,6 +130,22 @@ async def test_binary_sensor_mirrors_source_state_and_class(
     hass.states.async_set("binary_sensor.door", "unavailable")
     assert entity.is_on is None
     assert not entity.available
+
+
+async def test_source_entity_category_is_preserved(hass: HomeAssistant) -> None:
+    """Keep the mapped source entity's registry category."""
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor",
+        "source_integration",
+        "sensor.private_diagnostic",
+        suggested_object_id="private_diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    )
+    entity = HavrvSensor(_entry(), "power", "sensor.private_diagnostic", "parent")
+    _attach_to_hass(entity, hass)
+
+    assert entity.entity_category is EntityCategory.DIAGNOSTIC
 
 
 async def test_switch_forwards_control_services(hass: HomeAssistant) -> None:
