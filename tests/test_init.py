@@ -508,6 +508,15 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
     pressure = entities[f"sensor:{entry.entry_id}_tire_front_left_pressure"]
     temperature = entities[f"sensor:{entry.entry_id}_tire_front_left_temperature"]
     battery = entities[f"sensor:{entry.entry_id}_tire_front_left_battery"]
+    problem = entities[f"binary_sensor:{entry.entry_id}_tire_front_left_problem"]
+    assert (
+        hass.states.get(pressure.entity_id).attributes["friendly_name"]
+        == "Front Left Tire Pressure"
+    )
+    assert (
+        hass.states.get(problem.entity_id).attributes["friendly_name"]
+        == "Front Left Tire Problem"
+    )
     assert round(float(hass.states.get(pressure.entity_id).state)) == 241
     assert round(float(hass.states.get(temperature.entity_id).state)) == 43
     assert hass.states.get(battery.entity_id).state == "15.0"
