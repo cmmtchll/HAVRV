@@ -50,7 +50,7 @@ def test_normal_pressure_rise_while_heating_is_not_loss() -> None:
     tracker = PressureTrendTracker(UNIT_SYSTEM_METRIC)
     now = _feed(
         tracker,
-        [(m, 240 + m * 0.5, 20 + m * 0.05) for m in range(0, 600, 10)],
+        [(m, 240 + m * 0.5, 20 + m * 0.05) for m in range(0, 600, 1)],
     )
     assert tracker.sudden_drop(now) is False
     assert tracker.slow_loss(now) is False

@@ -103,7 +103,7 @@ flow reloads the tire entities and starts listening to the new sources.
 Each tire also exposes two pressure-trend predictors, **Sudden pressure drop**
 and **Slow pressure loss**, using fixed built-in thresholds (not
 configurable). Sudden drop turns on when pressure falls about 8% below its
-recent peak within 10 minutes (at least 2 minutes of history). Slow loss turns
+recent peak within 5 minutes (at least 2 minutes of history). Slow loss turns
 on when pressure falls about 3% over up to 12 hours (at least 4 hours of
 history and 3 readings). Pressure is compensated for temperature, so a rise
 from heating while driving or a fall from shade or cooler air is not treated as
