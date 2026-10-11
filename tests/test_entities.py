@@ -35,9 +35,9 @@ from custom_components.havrv.switch import HavrvSwitch
 from custom_components.havrv.tire import (
     TirePosition,
     _numeric_state,
-    _pressure_in_profile_units,
-    _temperature_in_profile_units,
     overall_tire_problem,
+    pressure_in_profile_units,
+    temperature_in_profile_units,
     tire_data_present,
     tire_positions,
     tire_problem,
@@ -317,7 +317,7 @@ def test_pressure_conversion(
     value: float, unit: str | None, measurement_system: str, expected: float | None
 ) -> None:
     """Convert supported tire-pressure source units to profile units."""
-    assert _pressure_in_profile_units(value, unit, measurement_system) == expected
+    assert pressure_in_profile_units(value, unit, measurement_system) == expected
 
 
 @pytest.mark.parametrize(
@@ -335,7 +335,7 @@ def test_temperature_conversion(
     value: float, unit: str | None, measurement_system: str, expected: float | None
 ) -> None:
     """Convert supported tire-temperature source units to profile units."""
-    assert _temperature_in_profile_units(value, unit, measurement_system) == expected
+    assert temperature_in_profile_units(value, unit, measurement_system) == expected
 
 
 def test_tire_positions_require_known_axle_and_wheel_layout() -> None:

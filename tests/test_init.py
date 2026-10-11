@@ -655,12 +655,12 @@ async def test_tire_sources_and_threshold_changes_reload_and_follow_state(
 
     hass.states.async_set("number.new_pressure", "70", {"unit_of_measurement": "psi"})
     await hass.async_block_till_done()
-    assert hass.states.get(pressure.entity_id).state == "70.0"
+    assert round(float(hass.states.get(pressure.entity_id).state), 1) == 482.6
     assert hass.states.get(tire_problem.entity_id).state == "off"
 
     hass.states.async_set("sensor.old_pressure", "10")
     await hass.async_block_till_done()
-    assert hass.states.get(pressure.entity_id).state == "70.0"
+    assert round(float(hass.states.get(pressure.entity_id).state), 1) == 482.6
     assert hass.states.get(tire_problem.entity_id).state == "off"
 
     hass.states.async_set(
@@ -819,3 +819,64 @@ async def test_setup_creates_only_selected_tank_devices_and_optional_capacities(
     await hass.async_block_till_done()
     assert hass.states.get(fresh_level.entity_id).state == "68.0"
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_sensors_report_in_profile_units(hass: HomeAssistant) -> None:
+    """Report tank volumes and tire readings in the RV profile's unit system."""
+    hass.states.async_set(
+        "sensor.fresh_water_level",
+        "100",
+        {"unit_of_measurement": "L", "device_class": "volume_storage"},
+    )
+    hass.states.async_set(
+        "sensor.front_left_pressure",
+        "689.5",
+        {"unit_of_measurement": "kPa", "device_class": "pressure"},
+    )
+    hass.states.async_set(
+        "sensor.front_left_temperature",
+        "65.6",
+        {"unit_of_measurement": "°C", "device_class": "temperature"},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="US RV",
+        unique_id="us rv",
+        data={
+            CONF_NAME: "US RV",
+            CONF_MEASUREMENT_SYSTEM: UNIT_SYSTEM_US_CUSTOMARY,
+            CONF_FRESH_WATER_TANK_CAPACITY: 100.0,
+            CONF_REAR_AXLE_COUNT: 1,
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "single",
+        },
+        options={
+            CONF_TANK_ENTITY_MAPPINGS: {"fresh_water": "sensor.fresh_water_level"},
+            CONF_TIRE_ENTITY_MAPPINGS: {
+                "front_left_pressure": "sensor.front_left_pressure",
+                "front_left_temperature": "sensor.front_left_temperature",
+            },
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    states = {
+        entity.unique_id: hass.states.get(entity.entity_id)
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if entity.domain == "sensor"
+    }
+    level = states[f"{entry.entry_id}_tank_fresh_water_level"]
+    assert level.attributes["unit_of_measurement"] == "gal"
+    assert round(float(level.state), 1) == 26.4
+    capacity = states[f"{entry.entry_id}_tank_fresh_water_capacity"]
+    assert capacity.attributes["unit_of_measurement"] == "gal"
+    pressure = states[f"{entry.entry_id}_tire_front_left_pressure"]
+    assert pressure.attributes["unit_of_measurement"] == "psi"
+    assert round(float(pressure.state)) == 100
+    temperature = states[f"{entry.entry_id}_tire_front_left_temperature"]
+    assert temperature.attributes["unit_of_measurement"] == "°F"
+    assert round(float(temperature.state)) == 150
