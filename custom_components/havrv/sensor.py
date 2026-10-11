@@ -12,6 +12,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -422,7 +423,9 @@ class HavrvTankHistorySensor(HavrvTankDerivedSensor, RestoreEntity):
             self._last_event = dt_util.utcnow()
 
     @callback
-    def async_on_source_state_changed(self, event: Event) -> None:
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Track the transition, then write state."""
         self._observe()
         self.async_write_ha_state()
@@ -646,9 +649,7 @@ def _profile_sensor_unit(entry: HavrvConfigEntry, key: str) -> str | None:
     return None
 
 
-def _tank_device_info(
-    entry: HavrvConfigEntry, tank: str, tank_name: str
-) -> dict[str, object]:
+def _tank_device_info(entry: HavrvConfigEntry, tank: str, tank_name: str) -> DeviceInfo:
     """Return stable device information for a tank."""
     parent_device_id = entry.runtime_data.device_id
     if parent_device_id is None:
@@ -681,32 +682,30 @@ def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
                 HavrvTankCapacitySensor(entry, tank, name, capacity_key, capacity)
             )
 
-        def derived(key: str, **kwargs: object) -> SensorEntityDescription:
+        def derived(key: str, translation_key: str) -> SensorEntityDescription:
             return SensorEntityDescription(
-                key=key, name=key.replace("_", " ").capitalize(), **kwargs
+                key=key,
+                name=key.replace("_", " ").capitalize(),
+                translation_key=translation_key,
             )
 
         args = (entry, tank, name, capacity_key, source_entity_id)
         entities.append(
-            HavrvTankPercentageSensor(
-                *args, derived("percentage", translation_key="tank_percentage")
-            )
+            HavrvTankPercentageSensor(*args, derived("percentage", "tank_percentage"))
         )
         thresholds = entry.options.get(CONF_TANK_THRESHOLDS, {}).get(tank)
         if thresholds is not None:
             entities.append(
                 HavrvTankStatusSensor(
                     *args,
-                    derived("status", translation_key="tank_status"),
+                    derived("status", "tank_status"),
                     thresholds[TANK_WARNING],
                     thresholds[TANK_PROBLEM],
                 )
             )
         history_key = "last_filled" if tank == TANK_FRESH_WATER else "last_emptied"
         entities.append(
-            HavrvTankHistorySensor(
-                *args, derived(history_key, translation_key=f"tank_{history_key}")
-            )
+            HavrvTankHistorySensor(*args, derived(history_key, f"tank_{history_key}"))
         )
     return entities
 
