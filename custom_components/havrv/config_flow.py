@@ -47,6 +47,9 @@ from .const import (
     CONF_TIRE_PRESSURE_LOW,
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
+    DEFAULT_TANK_THRESHOLDS,
+    DEFAULT_TIRE_PRESSURE,
+    DEFAULT_TIRE_TEMPERATURE_HIGH,
     DOMAIN,
     SUPPORTED_ENTITY_DOMAINS,
     SYSTEM_CATEGORIES,
@@ -417,12 +420,10 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
         configured = tank_thresholds.get(tank, {})
         for level in (TANK_WARNING, TANK_PROBLEM):
             field = f"{tank}_tank_{level}"
-            marker = (
-                vol.Optional(field, default=configured[level])
-                if level in configured
-                else vol.Optional(field)
+            default = configured.get(
+                level, DEFAULT_TANK_THRESHOLDS[tank][level == TANK_PROBLEM]
             )
-            fields[marker] = percent_selector
+            fields[vol.Optional(field, default=default)] = percent_selector
 
     tire_mappings = existing_options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
     for position in tire_positions(entry.data):
@@ -445,6 +446,9 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
             mode=selector.NumberSelectorMode.BOX,
         )
     )
+    measurement_system = entry.data.get(CONF_MEASUREMENT_SYSTEM, UNIT_SYSTEM_METRIC)
+    if measurement_system not in DEFAULT_TIRE_PRESSURE:
+        measurement_system = UNIT_SYSTEM_METRIC
     pressure_thresholds = existing_options.get(CONF_TIRE_PRESSURE_THRESHOLDS, {})
     tire_groups = {position.group for position in tire_positions(entry.data)}
     for group in (TIRE_FRONT, TIRE_AXLE, TIRE_TAG):
@@ -453,27 +457,21 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
         configured = pressure_thresholds.get(group, {})
         low_key = _pressure_threshold_field(group, CONF_TIRE_PRESSURE_LOW)
         high_key = _pressure_threshold_field(group, CONF_TIRE_PRESSURE_HIGH)
-        low_marker = (
-            vol.Optional(low_key, default=configured["low"])
-            if "low" in configured
-            else vol.Optional(low_key)
-        )
-        high_marker = (
-            vol.Optional(high_key, default=configured["high"])
-            if "high" in configured
-            else vol.Optional(high_key)
+        default_low, default_high = DEFAULT_TIRE_PRESSURE[measurement_system]
+        low_marker = vol.Optional(low_key, default=configured.get("low", default_low))
+        high_marker = vol.Optional(
+            high_key, default=configured.get("high", default_high)
         )
         fields[low_marker] = number_selector
         fields[high_marker] = number_selector
 
     if tire_groups:
-        temperature_marker = (
-            vol.Optional(
+        temperature_marker = vol.Optional(
+            CONF_TIRE_TEMPERATURE_HIGH,
+            default=existing_options.get(
                 CONF_TIRE_TEMPERATURE_HIGH,
-                default=existing_options[CONF_TIRE_TEMPERATURE_HIGH],
-            )
-            if CONF_TIRE_TEMPERATURE_HIGH in existing_options
-            else vol.Optional(CONF_TIRE_TEMPERATURE_HIGH)
+                DEFAULT_TIRE_TEMPERATURE_HIGH[measurement_system],
+            ),
         )
         battery_marker = (
             vol.Optional(
