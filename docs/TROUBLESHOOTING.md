@@ -46,9 +46,12 @@ prediction also requires a temperature source.
 ## An All Tire Monitor comparison is unavailable
 
 Spreads need at least two usable comparable readings; outlier analysis needs
-at least three. Check source availability, numeric values, and units. Pressure
-is compared by axle. Dual-wheel temperature is split into inner and outer
-comparisons.
+at least two usable readings with three prior readings per tire in the
+preceding 12 hours. Outlier history is held in memory and resets after a Home
+Assistant restart or integration reload. Check source availability, numeric
+values, and units. Axle pressure is compared by axle; dual-wheel temperature
+is split into inner and outer comparisons. Separate all-tire groups compare
+every configured tire.
 
 ## A profile value is incorrect
 

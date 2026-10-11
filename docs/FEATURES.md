@@ -88,24 +88,35 @@ not a substitute for checking tires.
 
 When tire positions are configured, HAVRV creates an **All Tire Monitor**
 child device. It exposes pressure and temperature spreads for comparable tires
-on each axle, plus pressure and temperature outlier-identity sensors.
+on each axle, plus pressure and temperature outlier-identity sensors. It also
+provides a separate **All tires** group with pressure and temperature spreads
+and outlier identities across every configured tire, regardless of axle or
+wheel position.
 
 Pressure readings are compared across positions on the same axle. Dual-wheel
 temperatures are compared separately for inner and outer tires. A spread is
 maximum minus minimum; source values with convertible units are normalized to
 the profile's units, and unitless values are interpreted in those units.
 Unavailable, nonnumeric, or unrecognized-unit readings are omitted. Fewer than
-two usable peers makes a spread unavailable; fewer than three makes outlier
-analysis unavailable.
+two usable peers makes a spread unavailable. Outlier analysis requires at
+least two currently usable tires with three prior readings each.
 
 Outliers use the standard modified z-score rule (absolute score greater than
-3.5, based on median absolute deviation). If the median absolute deviation is
-zero, a non-median value is identified only when it is the unique different
-peer. Otherwise, the identity sensor reports **No outlier**.
+3.5, based on each tire's own median absolute deviation over the preceding
+12 hours). This history lets small groups identify a tire that departs from
+its own baseline without assuming that the tires normally have identical
+readings. At least three prior readings are required for at least two currently
+usable tires in the group. If a tire's baseline has no variation, any
+current value different from its baseline median is considered a deviation.
+When no unique tire is identified, the sensor reports **No outlier**.
 
 This is relative analysis, not an alert: there is no fixed comparison
 threshold, no alert binary sensor, and no effect on individual tire problem
-or pressure-trend entities. Differences can reflect sun, shade, or tire
+or pressure-trend entities. The rolling history is held in memory and resets
+after a Home Assistant restart or integration reload; outlier sensors remain
+unavailable until enough new readings arrive. Pressure spreads and temperature
+spreads are displayed in the RV profile's selected unit, independent of Home
+Assistant's unit preference. Differences can reflect sun, shade, or tire
 heating; investigate readings in context and follow the tire manufacturer's
 guidance.
 
