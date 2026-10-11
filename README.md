@@ -16,7 +16,8 @@ a driver for a particular RV manufacturer or device.
 > switches, lights, and climate entities to RV system devices. HAVRV exposes
 > live read-only sensor values and forwards control actions for mapped
 > switches, lights, and climate entities. Configured tire positions expose
-> readings and problem-state binary sensors; notifications and triggers are
+> readings, problem-state binary sensors, and an aggregate tire monitor with
+> per-axle pressure/temperature comparisons; notifications and triggers are
 > not implemented yet.
 
 ## Installation
@@ -121,6 +122,29 @@ history is insufficient or the source is unavailable. History is kept in
 memory only, so it restarts after a Home Assistant restart or integration
 reload, and these heuristics do not feed the overall tire problem entity.
 They are early warnings, not a substitute for checking tires.
+
+When tire positions are configured, HAVRV also creates an **All Tire Monitor**
+child device. It exposes pressure and temperature spread sensors for
+comparable tires on each axle, plus pressure and temperature outlier-identity
+sensors. Pressure readings are compared across positions on the same axle.
+For dual wheels, temperature readings are compared separately for inner and
+outer tires so expected placement-related heating is not mixed together.
+Spreads are maximum minus minimum and use the RV profile's pressure or
+temperature units. Convertible source units are normalized first; sources
+without a unit are interpreted in the profile's units. Unavailable, nonnumeric,
+or unrecognized-unit readings are omitted. A spread is unavailable with fewer
+than two usable peers, and outlier analysis is unavailable with fewer than
+three.
+
+Outliers use the standard modified z-score rule (absolute modified z-score
+greater than 3.5, based on median absolute deviation). When the median absolute
+deviation is zero, a non-median reading is identified only if it is the unique
+different peer. Otherwise the identity sensor reports **No outlier**. This is
+relative analysis, not an alert: it has no fixed pressure or temperature
+threshold, does not create alert binary sensors, and does not change the
+individual tire problem or pressure-trend entities. A displayed difference
+may reflect operating conditions such as sun/shade or tire heating; investigate
+the readings in context and follow the tire manufacturer's guidance.
 
 Choose metric or US customary units. Dimensions are interpreted as meters or
 feet, and capacities as liters or US gallons. Values are stored with that unit
