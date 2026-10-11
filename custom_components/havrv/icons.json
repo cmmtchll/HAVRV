@@ -36,6 +36,15 @@
       },
       "tag_axle_wheel_configuration": {
         "default": "mdi:circle-multiple"
+      },
+      "tire_pressure": {
+        "default": "mdi:gauge"
+      },
+      "tire_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "tire_battery": {
+        "default": "mdi:battery"
       }
     }
   }

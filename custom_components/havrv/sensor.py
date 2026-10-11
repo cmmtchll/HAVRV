@@ -9,7 +9,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -347,7 +347,9 @@ class HavrvTireMonitorSensor(SensorEntity):
         )
 
     @callback
-    def async_on_source_state_changed(self, event: Event) -> None:
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Recalculate the comparison when one of its sources changes."""
         self.async_write_ha_state()
 
@@ -470,7 +472,7 @@ async def async_setup_entry(
         [
             HavrvTireMonitorSensor(entry, group, metric, analysis)
             for metric in (TIRE_PRESSURE, TIRE_TEMPERATURE)
-            for group in tire_monitor_groups(entry.data, metric)
+            for group in tire_monitor_groups(dict(entry.data), metric)
             for analysis in ("spread", "outlier")
         ]
     )

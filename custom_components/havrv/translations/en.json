@@ -128,7 +128,7 @@
           "chassis_entities": "Chassis system entities",
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
-              "other_entities": "Other RV entities",
+          "other_entities": "Other RV entities",
           "tire_front_left_pressure": "Front left tire pressure source",
           "tire_front_left_temperature": "Front left tire temperature source",
           "tire_front_left_battery": "Front left tire battery source",
@@ -189,7 +189,7 @@
           "tire_tag_axle_right_outer_pressure": "Tag axle right outer tire pressure source",
           "tire_tag_axle_right_outer_temperature": "Tag axle right outer tire temperature source",
           "tire_tag_axle_right_outer_battery": "Tag axle right outer tire battery source",
-              "tire_front_pressure_low": "Front tire low-pressure limit",
+          "tire_front_pressure_low": "Front tire low-pressure limit",
           "tire_front_pressure_high": "Front tire high-pressure limit",
           "tire_axle_pressure_low": "Rear axle low-pressure limit",
           "tire_axle_pressure_high": "Rear axle high-pressure limit",
@@ -235,122 +235,93 @@
   "entity": {
     "sensor": {
       "coach_year": {
-        "name": "Coach year",
-        "icon": "mdi:calendar"
+        "name": "Coach year"
       },
       "manufacturer": {
-        "name": "Chassis manufacturer",
-        "icon": "mdi:factory"
+        "name": "Chassis manufacturer"
       },
       "coach_builder": {
-        "name": "Coach builder",
-        "icon": "mdi:bus"
+        "name": "Coach builder"
       },
       "make": {
-        "name": "Chassis make",
-        "icon": "mdi:car-info"
+        "name": "Chassis make"
       },
       "model": {
-        "name": "Coach model",
-        "icon": "mdi:bus"
+        "name": "Coach model"
       },
       "coach_identifier": {
-        "name": "Coach identifier",
-        "icon": "mdi:identifier"
+        "name": "Coach identifier"
       },
       "storage_zone_id": {
-        "name": "Storage zone",
-        "icon": "mdi:map-marker"
+        "name": "Storage zone"
       },
       "measurement_system": {
-        "name": "Measurement system",
-        "icon": "mdi:ruler-square"
+        "name": "Measurement system"
       },
       "overall_height": {
-        "name": "Overall height",
-        "icon": "mdi:arrow-expand-vertical"
+        "name": "Overall height"
       },
       "overall_length": {
-        "name": "Overall length",
-        "icon": "mdi:arrow-expand-horizontal"
+        "name": "Overall length"
       },
       "overall_width": {
-        "name": "Overall width",
-        "icon": "mdi:arrow-left-right"
+        "name": "Overall width"
       },
       "fuel_tank_capacity": {
-        "name": "Fuel tank capacity",
-        "icon": "mdi:gas-station"
+        "name": "Fuel tank capacity"
       },
       "fresh_water_tank_capacity": {
-        "name": "Fresh-water tank capacity",
-        "icon": "mdi:water"
+        "name": "Fresh-water tank capacity"
       },
       "gray_water_tank_capacity": {
-        "name": "Gray-water tank capacity",
-        "icon": "mdi:water-minus"
+        "name": "Gray-water tank capacity"
       },
       "black_water_tank_capacity": {
-        "name": "Black-water tank capacity",
-        "icon": "mdi:toilet"
+        "name": "Black-water tank capacity"
       },
       "rear_axle_count": {
-        "name": "Number of rear axle assemblies",
-        "icon": "mdi:car"
+        "name": "Number of rear axle assemblies"
       },
       "main_rear_wheel_configuration": {
-        "name": "Main rear axle wheel configuration",
-        "icon": "mdi:circle-multiple"
+        "name": "Main rear axle wheel configuration"
       },
       "tag_axle_present": {
-        "name": "Tag axle present",
-        "icon": "mdi:car"
+        "name": "Tag axle present"
       },
       "tag_axle_wheel_configuration": {
-        "name": "Tag axle wheel configuration",
-        "icon": "mdi:circle-multiple"
+        "name": "Tag axle wheel configuration"
       },
       "tire_pressure": {
-        "name": "Pressure",
-        "icon": "mdi:gauge"
+        "name": "Pressure"
       },
       "tire_temperature": {
-        "name": "Temperature",
-        "icon": "mdi:thermometer"
+        "name": "Temperature"
       },
       "tire_battery": {
-        "name": "Battery level",
-        "icon": "mdi:battery"
+        "name": "Battery level"
       }
     },
     "binary_sensor": {
       "tire_pressure_problem": {
-        "name": "Pressure problem",
-        "icon": "mdi:gauge"
+        "name": "Pressure problem"
       },
       "tire_temperature_problem": {
-        "name": "Temperature problem",
-        "icon": "mdi:thermometer-alert"
+        "name": "Temperature problem"
       },
       "tire_battery_problem": {
-        "name": "Battery problem",
-        "icon": "mdi:battery-alert"
+        "name": "Battery problem"
       },
       "tire_data_present": {
-        "name": "Data present",
-        "icon": "mdi:check-circle-outline"
+        "name": "Data present"
       },
       "tire_problem": {
-        "name": "Tire problem",
-        "icon": "mdi:alert-circle"
+        "name": "Tire problem"
       },
       "tire_pressure_sudden_drop": {
-        "name": "Sudden pressure drop",
-        "icon": "mdi:chart-bell-curve"
+        "name": "Sudden pressure drop"
       },
       "tire_pressure_slow_loss": {
-        "name": "Slow pressure loss",
-        "icon": "mdi:chart-bell-curve"
+        "name": "Slow pressure loss"
       }
     }
   }

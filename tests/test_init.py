@@ -437,6 +437,7 @@ async def test_reconfigure_removes_obsolete_tire_devices(
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
         "Adventure RV",
+        "All Tire Monitor",
         "Front Left Tire",
         "Front Right Tire",
         "Rear Axle 1 Left Tire",
