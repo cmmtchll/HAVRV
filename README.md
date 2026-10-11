@@ -100,6 +100,21 @@ manufacturer-recommended cold inflation pressures or professional tire
 inspection. Changing a source entity or any tire threshold through the options
 flow reloads the tire entities and starts listening to the new sources.
 
+Each tire also exposes two pressure-trend predictors, **Sudden pressure drop**
+and **Slow pressure loss**, using fixed built-in thresholds (not
+configurable). Sudden drop turns on when pressure falls about 8% below its
+recent peak within 5 minutes (at least 2 minutes of history). Slow loss turns
+on when pressure falls about 3% over up to 12 hours (at least 4 hours of
+history and 3 readings). Pressure is compensated for temperature, so a rise
+from heating while driving or a fall from shade or cooler air is not treated as
+loss; slow loss therefore requires a temperature source for the tire, and
+sudden drop falls back to raw pressure when any reading in its window lacks a temperature. Pressure
+increases never trigger either predictor. The predictors report unknown while
+history is insufficient or the source is unavailable. History is kept in
+memory only, so it restarts after a Home Assistant restart or integration
+reload, and these heuristics do not feed the overall tire problem entity.
+They are early warnings, not a substitute for checking tires.
+
 Choose metric or US customary units. Dimensions are interpreted as meters or
 feet, and capacities as liters or US gallons. Values are stored with that unit
 system; the integration does not convert or verify the coach's specifications.

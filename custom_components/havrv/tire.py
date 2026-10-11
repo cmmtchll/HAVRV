@@ -254,6 +254,16 @@ def _temperature_in_profile_units(
     return None
 
 
+def tire_trend_reading(
+    hass: HomeAssistant, entry: Any, position: TirePosition
+) -> tuple[float, float | None] | None:
+    """Return the pressure and optional temperature in profile units."""
+    pressure = _source_value(hass, entry, position, TIRE_PRESSURE)
+    if pressure is None:
+        return None
+    return pressure, _source_value(hass, entry, position, TIRE_TEMPERATURE)
+
+
 def _source_value(
     hass: HomeAssistant, entry: Any, position: TirePosition, metric: str
 ) -> float | None:

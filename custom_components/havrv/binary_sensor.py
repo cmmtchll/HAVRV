@@ -8,10 +8,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity import Entity
+from homeassistant.util import dt as dt_util
 
 from . import HavrvConfigEntry
+from .const import TIRE_SLOW_LOSS, TIRE_SUDDEN_DROP
 from .entity import HavrvSourceEntity, async_add_source_entities
 from .tire import (
     HavrvTireEntity,
@@ -20,7 +22,9 @@ from .tire import (
     tire_data_present,
     tire_positions,
     tire_problem,
+    tire_trend_reading,
 )
+from .trend import PressureTrendTracker
 
 PARALLEL_UPDATES = 0
 
@@ -113,6 +117,57 @@ class HavrvTireBinarySensor(HavrvTireEntity, BinarySensorEntity):
         return tire_problem(self.hass, self._entry, self._position, self._problem)
 
 
+class HavrvTirePressureTrendBinarySensor(HavrvTireEntity, BinarySensorEntity):
+    """Predict tire pressure loss from the recent in-memory pressure history."""
+
+    entity_description: BinarySensorEntityDescription
+
+    def __init__(
+        self,
+        entry: HavrvConfigEntry,
+        position: TirePosition,
+        trend: str,
+    ) -> None:
+        """Initialize a sudden-drop or slow-loss detector."""
+        super().__init__(entry, position)
+        self._trend = trend
+        self._tracker = PressureTrendTracker(entry.runtime_data.measurement_system)
+        self.entity_description = BinarySensorEntityDescription(
+            key=trend,
+            translation_key=f"tire_{trend}",
+            device_class=BinarySensorDeviceClass.PROBLEM,
+        )
+        self._attr_unique_id = f"{entry.entry_id}_tire_{position.key}_{trend}"
+
+    def _record_reading(self) -> None:
+        """Store the current reading when the pressure is usable."""
+        if (
+            reading := tire_trend_reading(self.hass, self._entry, self._position)
+        ) is not None:
+            self._tracker.record(dt_util.utcnow(), *reading)
+
+    async def async_added_to_hass(self) -> None:
+        """Seed the history with the current reading."""
+        await super().async_added_to_hass()
+        self._record_reading()
+
+    @callback
+    def async_on_source_state_changed(self, event: Event) -> None:
+        """Record the new reading before writing the detector state."""
+        self._record_reading()
+        super().async_on_source_state_changed(event)
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the detector state, or None without usable data."""
+        if tire_trend_reading(self.hass, self._entry, self._position) is None:
+            return None
+        now = dt_util.utcnow()
+        if self._trend == TIRE_SUDDEN_DROP:
+            return self._tracker.sudden_drop(now)
+        return self._tracker.slow_loss(now)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -133,5 +188,12 @@ async def async_setup_entry(
                 "data_present",
                 "problem",
             )
+        ]
+    )
+    async_add_entities(
+        [
+            HavrvTirePressureTrendBinarySensor(entry, position, trend)
+            for position in tire_positions(entry.data)
+            for trend in (TIRE_SUDDEN_DROP, TIRE_SLOW_LOSS)
         ]
     )
