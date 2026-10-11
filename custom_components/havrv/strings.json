@@ -23,7 +23,6 @@
           "black_water_tank_capacity": "Black-water tank capacity",
           "rear_axle_count": "Number of rear axle assemblies, including a tag axle",
           "main_rear_wheel_configuration": "Main rear axle wheels",
-          "tag_axle_present": "Has a tag axle",
           "tag_axle_wheel_configuration": "Tag axle wheels",
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
@@ -49,10 +48,9 @@
           "fresh_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
           "gray_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
           "black_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
-          "rear_axle_count": "Count all rear axle assemblies, including the tag axle if present. The front axle is not included.",
+          "rear_axle_count": "Count all rear axle assemblies, including the tag axle if present. One means a single main rear axle; two means one main axle and a tag axle; three means two main axles and a tag axle. The front axle is not included.",
           "main_rear_wheel_configuration": "Whether the main rear axle has single or dual wheels.",
-          "tag_axle_present": "Turn on when the coach has an additional tag axle.",
-          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when a tag axle is present.",
+          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one.",
           "power_entities": "Select existing sensors, controls, or climate entities for the RV power system.",
           "water_entities": "Select existing sensors, controls, or climate entities for the RV water system.",
           "chassis_entities": "Select existing sensors, controls, or climate entities for the RV chassis.",
@@ -67,8 +65,8 @@
       "invalid_coach_year": "Enter a whole model year from 1900 through next year.",
       "invalid_measurement": "Dimensions and tank capacities must be numbers greater than zero.",
       "tag_axle_wheel_configuration_required": "Choose the wheel layout for the tag axle.",
-      "tag_wheel_configuration_without_tag_axle": "Choose a tag axle wheel layout only when the RV has a tag axle.",
-      "main_rear_wheel_configuration_required": "Choose the wheel layout for each non-tag rear axle."
+      "tag_wheel_configuration_without_tag_axle": "A tag axle wheel layout is only valid when the rear axle assembly count is greater than one.",
+      "main_rear_wheel_configuration_required": "Choose the wheel layout for each main rear axle."
     },
     "abort": {
       "already_configured": "An RV with this name is already configured."

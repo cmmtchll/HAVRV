@@ -7,7 +7,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.havrv import HavrvRuntimeData
+from custom_components.havrv import HavrvRuntimeData, async_migrate_entry
 from custom_components.havrv.const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
     CONF_COACH_BUILDER,
@@ -39,13 +39,14 @@ from custom_components.havrv.const import (
 )
 
 
-async def test_setup_and_unload_legacy_name_only_entry(hass: HomeAssistant) -> None:
-    """An existing name-only RV entry remains set-up and unloadable."""
+async def test_setup_and_unload_name_only_profile(hass: HomeAssistant) -> None:
+    """A profile with only its name remains set-up and unloadable."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Adventure RV",
         data={CONF_NAME: "Adventure RV"},
         unique_id="adventure rv",
+        version=3,
     )
     entry.add_to_hass(hass)
 
@@ -62,16 +63,39 @@ async def test_setup_and_unload_legacy_name_only_entry(hass: HomeAssistant) -> N
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_setup_uses_home_assistant_units_for_legacy_entry(
+async def test_migration_requires_new_profile_configuration(
     hass: HomeAssistant,
 ) -> None:
-    """Default legacy profile units to Home Assistant's unit system."""
+    """Block older profiles that use the previous axle configuration model."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        data={
+            CONF_NAME: "Adventure RV",
+            CONF_REAR_AXLE_COUNT: 2,
+            CONF_TAG_AXLE_PRESENT: True,
+        },
+        unique_id="adventure rv",
+        version=2,
+    )
+    entry.add_to_hass(hass)
+
+    assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 2
+    assert entry.data[CONF_REAR_AXLE_COUNT] == 2
+
+
+async def test_setup_uses_home_assistant_units_when_profile_omits_units(
+    hass: HomeAssistant,
+) -> None:
+    """Default profile units to Home Assistant's unit system when omitted."""
     hass.config.units = US_CUSTOMARY_SYSTEM
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Adventure RV",
         data={CONF_NAME: "Adventure RV"},
         unique_id="adventure rv",
+        version=3,
     )
     entry.add_to_hass(hass)
 
@@ -104,6 +128,7 @@ async def test_profile_sensors_use_metric_units(hass: HomeAssistant) -> None:
             CONF_OVERALL_HEIGHT: 3.8,
             CONF_FRESH_WATER_TANK_CAPACITY: 500.0,
         },
+        version=3,
     )
     entry.add_to_hass(hass)
 
@@ -152,6 +177,7 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
             CONF_TAG_AXLE_PRESENT: True,
             CONF_TAG_AXLE_WHEEL_CONFIGURATION: "single",
         },
+        version=3,
     )
     entry.add_to_hass(hass)
 
@@ -173,7 +199,7 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
         fresh_water_tank_capacity=160.0,
         gray_water_tank_capacity=100.0,
         black_water_tank_capacity=80.0,
-        rear_axle_count=3,
+        rear_axle_count=2,
         main_rear_wheel_configuration="dual",
         tag_axle_present=True,
         tag_axle_wheel_configuration="single",
@@ -186,9 +212,9 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
         if entity.unique_id.startswith(f"{entry.entry_id}_profile_")
     }
     rear_axles = hass.states.get(profile_entities[CONF_REAR_AXLE_COUNT].entity_id)
-    assert rear_axles.state == "3"
-    assert entry.version == 2
-    assert entry.data[CONF_REAR_AXLE_COUNT] == 3
+    assert rear_axles.state == "2"
+    assert entry.version == 3
+    assert entry.data[CONF_REAR_AXLE_COUNT] == 2
     assert rear_axles.attributes["friendly_name"].endswith(
         "Number of rear axle assemblies"
     )
@@ -278,6 +304,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
                 "climate": ["climate.cabin"],
             },
         },
+        version=3,
     )
     entry.add_to_hass(hass)
 
@@ -358,6 +385,7 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
             CONF_TIRE_TEMPERATURE_HIGH: 40,
             CONF_TIRE_BATTERY_LOW: 20,
         },
+        version=3,
     )
     entry.add_to_hass(hass)
 
@@ -473,6 +501,7 @@ async def test_tire_sources_and_threshold_changes_reload_and_follow_state(
             CONF_TIRE_TEMPERATURE_HIGH: 40,
             CONF_TIRE_BATTERY_LOW: 20,
         },
+        version=3,
     )
     entry.add_to_hass(hass)
 
@@ -546,6 +575,7 @@ async def test_options_reload_adds_platform_to_existing_entry(
         title="Adventure RV",
         unique_id="adventure rv",
         data={CONF_NAME: "Adventure RV"},
+        version=3,
     )
     entry.add_to_hass(hass)
 

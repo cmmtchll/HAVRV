@@ -61,9 +61,11 @@ width; fuel, fresh-water, gray-water, and black-water tank capacities; the
 number of rear axle assemblies (including a tag axle); and single/dual wheel
 arrangements for the main rear axle and optional tag axle. For example, a coach
 could be represented as a 2003 Prevost H3-45 built or converted by Liberty as
-an Elegant Lady. Existing profiles are migrated so their saved rear-axle
-counts continue to represent the same layout when tag axles were previously
-counted separately.
+an Elegant Lady. The rear axle count determines whether a tag axle is present:
+one means one main rear axle, two means one main axle plus a tag axle, and
+three means two main axles plus a tag axle. Existing profiles from older
+configuration versions must be removed and added again; HAVRV does not migrate
+them to this axle model.
 
 Configured profile values are exposed as sensors on the RV device, including
 axle count, wheel configuration, tag-axle presence, and tank capacities.
@@ -77,8 +79,8 @@ are not diagnostics, so marking them as **Diagnostic** would also be misleading.
 When the rear axle count is configured, HAVRV generates tire devices for the
 front axle and configured rear axle assemblies. Single wheels are named by
 side; dual wheels have separate inner and outer tire devices. The tag axle is
-counted as one of the configured rear axle assemblies, and the remaining rear
-assemblies use the main rear wheel configuration. Open the integration's
+inferred when the count is greater than one, and the remaining rear assemblies
+use the main rear wheel configuration. Open the integration's
 options to select the existing pressure, temperature, and battery sensor for
 each tire. Sources can be sensor entities (including template sensors), `number`
 entities, or `input_number` helpers. These are read-only mirrors; HAVRV does not
