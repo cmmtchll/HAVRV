@@ -403,8 +403,10 @@ async def test_tire_data_and_threshold_evaluation_reject_invalid_sources(
     assert overall_tire_problem(hass, entry, position)
 
 
-async def test_tire_problem_limits_can_be_unconfigured(hass: HomeAssistant) -> None:
-    """Leave problem sensors unevaluated until user-configured limits exist."""
+async def test_tire_problem_limits_default_battery_threshold(
+    hass: HomeAssistant,
+) -> None:
+    """Evaluate battery problem with the default threshold when unset."""
     position = TirePosition("front_left", "Front Left Tire", TIRE_FRONT)
     entry = _entry(
         options={
@@ -424,6 +426,9 @@ async def test_tire_problem_limits_can_be_unconfigured(hass: HomeAssistant) -> N
 
     assert tire_problem(hass, entry, position, TIRE_PRESSURE) is None
     assert tire_problem(hass, entry, position, TIRE_TEMPERATURE) is None
-    assert tire_problem(hass, entry, position, TIRE_BATTERY) is None
+    assert tire_problem(hass, entry, position, TIRE_BATTERY) is False
     assert tire_data_present(hass, entry, position)
     assert not overall_tire_problem(hass, entry, position)
+
+    hass.states.async_set("sensor.tire_battery", "15", {"unit_of_measurement": "%"})
+    assert tire_problem(hass, entry, position, TIRE_BATTERY) is True

@@ -48,6 +48,7 @@ from .const import (
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
     DEFAULT_TANK_THRESHOLDS,
+    DEFAULT_TIRE_BATTERY_LOW,
     DEFAULT_TIRE_PRESSURE,
     DEFAULT_TIRE_TEMPERATURE_HIGH,
     DOMAIN,
@@ -471,13 +472,11 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
                 DEFAULT_TIRE_TEMPERATURE_HIGH[measurement_system],
             ),
         )
-        battery_marker = (
-            vol.Optional(
-                CONF_TIRE_BATTERY_LOW,
-                default=existing_options[CONF_TIRE_BATTERY_LOW],
-            )
-            if CONF_TIRE_BATTERY_LOW in existing_options
-            else vol.Optional(CONF_TIRE_BATTERY_LOW)
+        battery_marker = vol.Optional(
+            CONF_TIRE_BATTERY_LOW,
+            default=existing_options.get(
+                CONF_TIRE_BATTERY_LOW, DEFAULT_TIRE_BATTERY_LOW
+            ),
         )
         fields[temperature_marker] = number_selector
         fields[battery_marker] = selector.NumberSelector(
@@ -608,8 +607,11 @@ def _normalize_options(
         return {}, "invalid_tire_temperature_threshold"
 
     battery_low = user_input.get(
-        CONF_TIRE_BATTERY_LOW, entry.options.get(CONF_TIRE_BATTERY_LOW)
+        CONF_TIRE_BATTERY_LOW,
+        entry.options.get(CONF_TIRE_BATTERY_LOW),
     )
+    if battery_low is None:
+        battery_low = DEFAULT_TIRE_BATTERY_LOW
     if battery_low is not None and (
         not _is_finite_number(battery_low) or not 0 <= battery_low <= 100
     ):
@@ -625,8 +627,7 @@ def _normalize_options(
         options[CONF_TIRE_PRESSURE_THRESHOLDS] = pressure_thresholds
         if temperature_high is not None:
             options[CONF_TIRE_TEMPERATURE_HIGH] = float(temperature_high)
-        if battery_low is not None:
-            options[CONF_TIRE_BATTERY_LOW] = float(battery_low)
+        options[CONF_TIRE_BATTERY_LOW] = float(battery_low)
     return options, None
 
 

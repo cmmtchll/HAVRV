@@ -164,6 +164,14 @@ def test_options_normalization_stores_tire_sources_and_thresholds() -> None:
     assert options[CONF_TIRE_BATTERY_LOW] == 20
 
 
+def test_options_normalization_defaults_tire_battery_threshold() -> None:
+    """Store the default low-battery limit when no override is submitted."""
+    options, error = _normalize_options({}, _tire_profile_entry())
+
+    assert error is None
+    assert options[CONF_TIRE_BATTERY_LOW] == 20
+
+
 def test_tank_options_store_individual_level_sources() -> None:
     """Store optional level sensors by explicitly selected tank type."""
     options, error = _normalize_options(

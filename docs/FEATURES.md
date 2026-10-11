@@ -57,10 +57,11 @@ main rear wheel configuration.
 Each tire can map pressure, temperature, and battery sources. Tire sources
 may be `sensor`, `number`, or `input_number` entities. HAVRV exposes readings,
 pressure/temperature/battery problem states, data-present state, and an
-overall tire problem state. That overall state turns on for missing readings
-or when a configured limit is exceeded or cannot be evaluated. Limits are
-optional and use the RV profile's pressure/temperature units; recognized
-source units are converted before comparison.
+overall tire problem state. Battery problem uses a default low-battery limit of
+20%, configurable in the options. That overall state turns on for missing
+readings or when a configured limit is exceeded or cannot be evaluated.
+Pressure and temperature limits are optional and use the RV profile's units;
+recognized source units are converted before comparison.
 
 Tire readings are read-only mirrors. HAVRV does not discover or control TPMS
 hardware. Tire problem entities do not send notifications and do not replace
