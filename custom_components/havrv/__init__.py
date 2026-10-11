@@ -205,7 +205,15 @@ def _remove_stale_entities_and_devices(
         is_stale_tire = is_tire_entity and not any(
             tire_key.startswith(f"{key}_") for key in active_tire_keys
         )
-        if is_stale_mapping or is_stale_tire:
+        is_moved_capacity = registry_entry.unique_id in {
+            f"{entry.entry_id}_profile_{key}"
+            for key in (
+                CONF_FRESH_WATER_TANK_CAPACITY,
+                CONF_GRAY_WATER_TANK_CAPACITY,
+                CONF_BLACK_WATER_TANK_CAPACITY,
+            )
+        }
+        if is_stale_mapping or is_stale_tire or is_moved_capacity:
             entity_registry.async_remove(registry_entry.entity_id)
 
     for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
