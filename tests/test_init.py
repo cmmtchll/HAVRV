@@ -492,7 +492,6 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
                 "front": {"low": 300, "high": 800},
             },
             CONF_TIRE_TEMPERATURE_HIGH: 40,
-            CONF_TIRE_BATTERY_LOW: 20,
         },
         version=3,
     )

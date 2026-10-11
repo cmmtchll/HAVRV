@@ -196,7 +196,7 @@
           "tire_tag_pressure_low": "Tag axle low-pressure limit",
           "tire_tag_pressure_high": "Tag axle high-pressure limit",
           "tire_temperature_high": "High tire-temperature limit",
-          "tire_battery_low": "Low tire-battery limit"
+          "tire_battery_low": "Low tire-battery limit (default 20%)"
         }
       }
     },

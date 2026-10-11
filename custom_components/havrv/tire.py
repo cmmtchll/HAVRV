@@ -25,6 +25,7 @@ from .const import (
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
+    DEFAULT_TIRE_BATTERY_LOW,
     DOMAIN,
     TIRE_AXLE,
     TIRE_BATTERY,
@@ -457,7 +458,7 @@ def tire_problem(
     if problem == TIRE_BATTERY:
         low = entry.options.get(CONF_TIRE_BATTERY_LOW)
         if low is None:
-            return None
+            low = DEFAULT_TIRE_BATTERY_LOW
         return value < float(low)
     return None
 
@@ -486,4 +487,4 @@ def _has_threshold(entry: Any, position: TirePosition, problem: str) -> bool:
         )
     if problem == TIRE_TEMPERATURE:
         return entry.options.get(CONF_TIRE_TEMPERATURE_HIGH) is not None
-    return entry.options.get(CONF_TIRE_BATTERY_LOW) is not None
+    return problem == TIRE_BATTERY
