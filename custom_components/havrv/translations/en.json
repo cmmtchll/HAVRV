@@ -328,6 +328,18 @@
       "tire_pressure_slow_loss": {
         "name": "Slow pressure loss"
       }
+    },
+    "select": {
+      "operation_mode": {
+        "name": "Operation mode",
+        "state": {
+          "storage": "Storage",
+          "driving": "Driving",
+          "campsite_full_service": "Campsite full service",
+          "campsite_minimal": "Campsite minimal",
+          "maintenance": "Maintenance"
+        }
+      }
     }
   }
 }

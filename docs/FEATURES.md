@@ -46,6 +46,21 @@ emptied** (gray/black water) records a crossing of fixed 95% / 5% boundaries.
 That timestamp is restored after restart, and the first reading after startup
 does not create an event. Fuel-level devices are not implemented.
 
+## Operations device
+
+Each RV profile has an **Operations** device with an **Operation mode**
+selector: Storage, Driving, Campsite full service, Campsite minimal, or
+Maintenance. HAVRV does not detect the mode; choose it manually or from an
+automation with the `select.select_option` action. The mode is unset until
+first selected, and the last selection is restored after a restart or reload.
+
+The mode adjusts which readings count as problems:
+
+| Mode | Behavior |
+| --- | --- |
+| Storage | A low fresh-water level is expected, so the fresh-water tank **Status** reports `ok`. Gray- and black-water limits still apply. |
+| Other modes, or unset | Tank statuses use their configured limits. |
+
 ## Tire entities
 
 When the rear axle count is configured, HAVRV creates tire devices for the
@@ -164,5 +179,7 @@ actions:
 
 HAVRV does not communicate with or discover physical RV devices. It does not
 provide notifications, integration-specific triggers or conditions, fuel
-level monitoring, or safety calculations. Tire predictors and comparisons
+level monitoring, or safety calculations. Operation modes do not yet adjust
+tire or climate limits, and pre-departure checklists or check buttons are not
+implemented. Tire predictors and comparisons
 are advisory and should not be treated as safety guarantees.

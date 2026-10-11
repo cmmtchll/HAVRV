@@ -82,7 +82,7 @@ rules:
     comment: HAVRV has no external connection; unavailable local source entities do not require connection-recovery logging.
   parallel-updates:
     status: done
-    comment: All five platform modules explicitly set PARALLEL_UPDATES = 0 and tests/test_entities.py verifies each declaration; mirrors are event-driven and controls delegate concurrency to the mapped source domain.
+    comment: All six platform modules explicitly set PARALLEL_UPDATES = 0 and tests/test_entities.py verifies each declaration; mirrors are event-driven, the operation-mode select is local, and controls delegate concurrency to the mapped source domain.
   reauthentication-flow:
     status: exempt
     comment: HAVRV has no authentication, credentials, or external service.

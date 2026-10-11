@@ -65,6 +65,7 @@ class HavrvRuntimeData:
     main_rear_wheel_configuration: str | None = None
     tag_axle_present: bool = False
     tag_axle_wheel_configuration: str | None = None
+    operation_mode: str | None = field(default=None, compare=False)
     platforms: list[Platform] = field(default_factory=list, compare=False)
     device_id: str | None = field(default=None, compare=False)
 
@@ -156,7 +157,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
     platforms.add(Platform.SENSOR)
     if positions:
         platforms.add(Platform.BINARY_SENSOR)
-    entry.runtime_data.platforms = list(platforms)
+    entry.runtime_data.platforms = [Platform.SELECT, *platforms]
+    # Restore the operation mode before mode-aware entities write their state.
+    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SELECT])
     await hass.config_entries.async_forward_entry_setups(entry, list(platforms))
     return True
 

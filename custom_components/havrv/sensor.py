@@ -13,6 +13,7 @@ from homeassistant.components.sensor import (
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -44,6 +45,7 @@ from .const import (
     CONF_TANK_THRESHOLDS,
     DEFAULT_TANK_THRESHOLDS,
     DOMAIN,
+    SIGNAL_OPERATION_MODE_CHANGED,
     TANK_EMPTY_PERCENT,
     TANK_FRESH_WATER,
     TANK_FULL_PERCENT,
@@ -417,8 +419,25 @@ class HavrvTankStatusSensor(HavrvTankDerivedSensor):
 
     @property
     def native_value(self) -> str | None:
-        """Return the status for the current fill percentage."""
-        return tank_status(self._tank, self._percent(), self._warning, self._problem)
+        """Return the status for the fill percentage and operation mode."""
+        return tank_status(
+            self._tank,
+            self._percent(),
+            self._warning,
+            self._problem,
+            self._entry.runtime_data.operation_mode,
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Re-evaluate the status when the operation mode changes."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_OPERATION_MODE_CHANGED.format(self._entry.entry_id),
+                self.async_write_ha_state,
+            )
+        )
 
 
 class HavrvTankHistorySensor(HavrvTankDerivedSensor, RestoreEntity):
