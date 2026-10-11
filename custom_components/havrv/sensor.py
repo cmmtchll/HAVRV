@@ -662,7 +662,7 @@ def _tank_device_info(entry: HavrvConfigEntry, tank: str, tank_name: str) -> Dev
 
 
 def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
-    """Create entities for explicitly mapped tank-level sources."""
+    """Create tank devices from configured capacities and mapped level sources."""
     mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
     entities: list[Entity] = []
     tank_names = {
