@@ -254,6 +254,18 @@
       },
       "tire_battery": {
         "name": "Battery level"
+      },
+      "tire_monitor_pressure_spread": {
+        "name": "{group} pressure spread"
+      },
+      "tire_monitor_temperature_spread": {
+        "name": "{group} temperature spread"
+      },
+      "tire_monitor_pressure_outlier": {
+        "name": "{group} pressure outlier tire"
+      },
+      "tire_monitor_temperature_outlier": {
+        "name": "{group} temperature outlier tire"
       }
     },
     "binary_sensor": {
