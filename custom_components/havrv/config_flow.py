@@ -35,6 +35,7 @@ from .const import (
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
     CONF_REAR_AXLE_COUNT,
+    CONF_SHORE_POWER_CONNECTED_ENTITY,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
@@ -327,6 +328,17 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
     """Build source mapping and tire alert threshold options."""
     existing_options = entry.options
     fields = _entity_mapping_fields(_entry_entity_mappings(entry))
+    shore_power_marker = (
+        vol.Optional(
+            CONF_SHORE_POWER_CONNECTED_ENTITY,
+            default=existing_options[CONF_SHORE_POWER_CONNECTED_ENTITY],
+        )
+        if CONF_SHORE_POWER_CONNECTED_ENTITY in existing_options
+        else vol.Optional(CONF_SHORE_POWER_CONNECTED_ENTITY)
+    )
+    fields[shore_power_marker] = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="binary_sensor")
+    )
     tire_mappings = existing_options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
     for position in tire_positions(entry.data):
         for metric in ("pressure", "temperature", "battery"):
@@ -480,6 +492,17 @@ def _normalize_options(
         return {}, "invalid_tire_battery_threshold"
 
     options: dict[str, Any] = {CONF_ENTITY_MAPPINGS: mappings}
+    shore_power_entity = user_input.get(
+        CONF_SHORE_POWER_CONNECTED_ENTITY,
+        entry.options.get(CONF_SHORE_POWER_CONNECTED_ENTITY),
+    )
+    if shore_power_entity is not None:
+        if not isinstance(shore_power_entity, str):
+            return {}, "invalid_shore_power_entity"
+        entity_domain, separator, object_id = shore_power_entity.partition(".")
+        if not separator or not object_id or entity_domain != "binary_sensor":
+            return {}, "invalid_shore_power_entity"
+        options[CONF_SHORE_POWER_CONNECTED_ENTITY] = shore_power_entity
     if positions:
         options[CONF_TIRE_ENTITY_MAPPINGS] = tire_mappings
         options[CONF_TIRE_PRESSURE_THRESHOLDS] = pressure_thresholds

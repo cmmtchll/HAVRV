@@ -26,6 +26,7 @@ from custom_components.havrv.const import (
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
     CONF_REAR_AXLE_COUNT,
+    CONF_SHORE_POWER_CONNECTED_ENTITY,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
@@ -341,6 +342,50 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     )
     await hass.async_block_till_done()
     assert hass.states.get(mapped_entity.entity_id).state == "13.6"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_shore_power_status_tracks_explicit_source_and_unknown_states(
+    hass: HomeAssistant,
+) -> None:
+    """Expose connection status and mark missing or invalid sources unavailable."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        unique_id="adventure rv",
+        data={CONF_NAME: "Adventure RV"},
+        options={CONF_SHORE_POWER_CONNECTED_ENTITY: "binary_sensor.shore_connected"},
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    status = next(
+        entity
+        for entity in er.async_entries_for_config_entry(
+            er.async_get(hass), entry.entry_id
+        )
+        if entity.unique_id == f"{entry.entry_id}_shore_power_connected"
+    )
+    assert hass.states.get(status.entity_id).state == "unavailable"
+
+    hass.states.async_set("binary_sensor.shore_connected", "on")
+    await hass.async_block_till_done()
+    assert hass.states.get(status.entity_id).state == "on"
+
+    hass.states.async_set("binary_sensor.shore_connected", "off")
+    await hass.async_block_till_done()
+    assert hass.states.get(status.entity_id).state == "off"
+
+    hass.states.async_set("binary_sensor.shore_connected", "unavailable")
+    await hass.async_block_till_done()
+    assert hass.states.get(status.entity_id).state == "unavailable"
+
+    hass.states.async_set("binary_sensor.shore_connected", "connected")
+    await hass.async_block_till_done()
+    assert hass.states.get(status.entity_id).state == "unavailable"
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

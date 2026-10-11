@@ -26,6 +26,7 @@ from .const import (
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
     CONF_REAR_AXLE_COUNT,
+    CONF_SHORE_POWER_CONNECTED_ENTITY,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
@@ -128,7 +129,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
     platforms.add(Platform.SENSOR)
-    if tire_positions(data):
+    if tire_positions(data) or entry.options.get(CONF_SHORE_POWER_CONNECTED_ENTITY):
         platforms.add(Platform.BINARY_SENSOR)
     entry.runtime_data.platforms = list(platforms)
     await hass.config_entries.async_forward_entry_setups(entry, list(platforms))

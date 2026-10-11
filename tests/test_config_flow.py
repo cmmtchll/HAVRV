@@ -36,6 +36,7 @@ from custom_components.havrv.const import (
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
     CONF_REAR_AXLE_COUNT,
+    CONF_SHORE_POWER_CONNECTED_ENTITY,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
@@ -161,6 +162,105 @@ def test_options_normalization_stores_tire_sources_and_thresholds() -> None:
     }
     assert options[CONF_TIRE_TEMPERATURE_HIGH] == 80
     assert options[CONF_TIRE_BATTERY_LOW] == 20
+
+
+def test_options_normalization_stores_shore_power_binary_sensor() -> None:
+    """Store the explicitly selected shore-connected status source."""
+    options, error = _normalize_options(
+        {CONF_SHORE_POWER_CONNECTED_ENTITY: "binary_sensor.shore_connected"},
+        _tire_profile_entry(),
+    )
+
+    assert error is None
+    assert options[CONF_SHORE_POWER_CONNECTED_ENTITY] == (
+        "binary_sensor.shore_connected"
+    )
+
+
+def test_options_normalization_preserves_or_clears_shore_power_mapping() -> None:
+    """Keep an existing source on partial edits and allow explicit removal."""
+    entry = _tire_profile_entry(
+        options={CONF_SHORE_POWER_CONNECTED_ENTITY: "binary_sensor.shore_connected"}
+    )
+
+    preserved, error = _normalize_options({}, entry)
+    assert error is None
+    assert preserved[CONF_SHORE_POWER_CONNECTED_ENTITY] == (
+        "binary_sensor.shore_connected"
+    )
+
+    cleared, error = _normalize_options(
+        {CONF_SHORE_POWER_CONNECTED_ENTITY: None},
+        entry,
+    )
+    assert error is None
+    assert CONF_SHORE_POWER_CONNECTED_ENTITY not in cleared
+
+
+@pytest.mark.parametrize(
+    "entity_id",
+    ["sensor.shore_voltage", "switch.shore_power", "binary_sensor", 123],
+)
+def test_options_normalization_rejects_invalid_shore_power_source(
+    entity_id: object,
+) -> None:
+    """Only accept a well-formed binary sensor as shore-connected status."""
+    options, error = _normalize_options(
+        {CONF_SHORE_POWER_CONNECTED_ENTITY: entity_id},
+        _tire_profile_entry(),
+    )
+
+    assert options == {}
+    assert error == "invalid_shore_power_entity"
+
+
+async def test_options_flow_stores_shore_power_mapping(
+    hass: HomeAssistant,
+) -> None:
+    """Allow optional shore-power status to be mapped in Configure."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        data={CONF_NAME: "Adventure RV"},
+        unique_id="adventure rv",
+    )
+    entry.add_to_hass(hass)
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={CONF_SHORE_POWER_CONNECTED_ENTITY: "binary_sensor.shore_connected"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SHORE_POWER_CONNECTED_ENTITY] == (
+        "binary_sensor.shore_connected"
+    )
+
+
+async def test_options_flow_updates_existing_shore_power_mapping(
+    hass: HomeAssistant,
+) -> None:
+    """Preselect and allow replacement of an existing shore-status source."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        data={CONF_NAME: "Adventure RV"},
+        options={CONF_SHORE_POWER_CONNECTED_ENTITY: "binary_sensor.old_source"},
+        unique_id="adventure rv",
+    )
+    entry.add_to_hass(hass)
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={CONF_SHORE_POWER_CONNECTED_ENTITY: "binary_sensor.new_source"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SHORE_POWER_CONNECTED_ENTITY] == (
+        "binary_sensor.new_source"
+    )
 
 
 @pytest.mark.parametrize(
