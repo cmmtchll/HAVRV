@@ -16,7 +16,8 @@ a driver for a particular RV manufacturer or device.
 > switches, lights, and climate entities to RV system devices. HAVRV exposes
 > live read-only sensor values and forwards control actions for mapped
 > switches, lights, and climate entities. Configured tire positions expose
-> readings and problem-state binary sensors; notifications and triggers are
+> readings, problem-state binary sensors, and an aggregate tire monitor with
+> per-axle pressure/temperature comparisons; notifications and triggers are
 > not implemented yet.
 
 ## Installation
@@ -54,6 +55,11 @@ controls operate their selected source entities. Configure the integration
 later to change the mapping. Remove the HAVRV config entry to remove its
 devices and exposed entities; the source entities are not removed.
 
+Use the config entry's **Reconfigure** action to update saved vehicle details
+after setup. The profile name is kept stable; existing system and tire mappings
+remain unchanged. Use the separate options flow to change those mappings and
+tire limits.
+
 The profile can include the coach year, chassis manufacturer and make, coach
 builder/converter and model, coach identifier, and a Home Assistant zone for
 the RV's usual storage location. It can also hold overall height, length, and
@@ -75,6 +81,8 @@ They appear under **Sensors** alongside mapped operational readings. Home
 Assistant does not allow read-only sensors in its **Configuration** category;
 that category is intended for configuration controls. These specifications
 are not diagnostics, so marking them as **Diagnostic** would also be misleading.
+Home Assistant may display device-class measurements in its globally selected
+unit system.
 
 Use the integration's options to select an existing sensor for each
 fresh-water, gray-water, or black-water tank level. Each selected source creates
@@ -134,18 +142,141 @@ memory only, so it restarts after a Home Assistant restart or integration
 reload, and these heuristics do not feed the overall tire problem entity.
 They are early warnings, not a substitute for checking tires.
 
+When tire positions are configured, HAVRV also creates an **All Tire Monitor**
+child device. It exposes pressure and temperature spread sensors for
+comparable tires on each axle, plus pressure and temperature outlier-identity
+sensors. Pressure readings are compared across positions on the same axle.
+For dual wheels, temperature readings are compared separately for inner and
+outer tires so expected placement-related heating is not mixed together.
+Spreads are maximum minus minimum and use the RV profile's pressure or
+temperature units. Convertible source units are normalized first; sources
+without a unit are interpreted in the profile's units. Unavailable, nonnumeric,
+or unrecognized-unit readings are omitted. A spread is unavailable with fewer
+than two usable peers, and outlier analysis is unavailable with fewer than
+three.
+
+Outliers use the standard modified z-score rule (absolute modified z-score
+greater than 3.5, based on median absolute deviation). When the median absolute
+deviation is zero, a non-median reading is identified only if it is the unique
+different peer. Otherwise the identity sensor reports **No outlier**. This is
+relative analysis, not an alert: it has no fixed pressure or temperature
+threshold, does not create alert binary sensors, and does not change the
+individual tire problem or pressure-trend entities. A displayed difference
+may reflect operating conditions such as sun/shade or tire heating; investigate
+the readings in context and follow the tire manufacturer's guidance.
+
 Choose metric or US customary units. Dimensions are interpreted as meters or
 feet, and capacities as liters or US gallons. Values are stored with that unit
-system; the integration does not convert or verify the coach's specifications.
-Only record values from a reliable source such as the coach documentation or
-vehicle labels. The selected zone is stored by its Home Assistant zone entity
-ID.
+system; HAVRV does not transform the saved specifications or verify their
+accuracy. Home Assistant may convert displayed measurements to its globally
+selected unit system. Only record values from a reliable source such as the
+coach documentation or vehicle labels. The selected zone is stored by its Home
+Assistant zone entity ID.
 
 Potential follow-on profile fields include GVWR and per-axle GAWR for weight
 planning, tire size/load range/recommended cold inflation pressure for tire
 care, wheelbase and tow rating, and powertrain, generator, electrical-service,
 and propane details. These are candidates for future work, not current setup
 fields or safety calculations.
+
+## Supported behavior and data updates
+
+HAVRV does not communicate with an RV or discover hardware. It creates an RV
+profile and exposes only the Home Assistant entities selected during setup or
+in the integration's options. The supported mapped domains are:
+
+| Source domain | HAVRV behavior |
+| --- | --- |
+| `sensor` | Mirrors the current state, unit, device class, state class, display precision, and icon. Numeric states remain numeric; other available states are exposed as text. |
+| `binary_sensor` | Mirrors on/off state, device class, and icon. |
+| `switch` | Mirrors state and forwards turn-on, turn-off, and toggle actions to the selected source. |
+| `light` | Mirrors state and color modes and forwards supported Home Assistant light service arguments. |
+| `climate` | Mirrors the source climate state and supported attributes and forwards climate control actions. |
+
+Mapped entities update when Home Assistant reports a source state change; HAVRV
+does not poll. If a source entity is missing, `unknown`, or `unavailable`, its
+HAVRV mirror is unavailable until a usable source state returns. Changing a
+system mapping, tire source, or tire limit in the options flow reloads the
+entry. Profile details entered during setup can be changed later with the config
+entry's **Reconfigure** action; the profile name cannot be changed there. The
+options flow does not remove the source entities themselves.
+
+Profile sensors are static coach specifications, not live measurements.
+Configured tire readings mirror the selected source entities; tire problem
+entities evaluate only limits entered by the user. Tire pressure-trend
+predictors use their documented fixed thresholds and in-memory history.
+HAVRV does not provide notifications, integration-specific triggers or
+conditions, physical-device discovery, or safety calculations.
+
+## Use cases
+
+- Keep coach identity, dimensions, capacities, axle layout, and tire layout
+  together on one RV device for dashboards and reference.
+- Group existing battery, tank, chassis, climate, and location entities under
+  RV system devices without changing their source integrations.
+- Use ordinary Home Assistant automations with the selected entities, while
+  keeping automations independent of the original source integration's naming
+  where practical.
+
+## Automation examples
+
+Replace each example entity ID with the HAVRV entity ID shown in your
+installation. Entity IDs can be customized in Home Assistant.
+
+Notify when a mapped water-level binary sensor turns on:
+
+```yaml
+alias: RV water level warning
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.rv_fresh_water_low
+    to: "on"
+actions:
+  - action: notify.notify
+    data:
+      message: "The RV fresh-water level sensor is on."
+```
+
+Turn off a mapped water-pump switch when its source reports that the RV is
+stored. Configure the trigger entity and zone state to match your installation:
+
+```yaml
+alias: Turn off RV water pump in storage
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.rv_in_storage
+    to: "on"
+conditions:
+  - condition: state
+    entity_id: switch.rv_water_pump
+    state: "on"
+actions:
+  - action: switch.turn_off
+    target:
+      entity_id: switch.rv_water_pump
+```
+
+## Troubleshooting
+
+- **A mapped entity is missing:** Open HAVRV's options and confirm that the
+  intended existing entity is selected in the correct system group. Only
+  sensors, binary sensors, switches, lights, and climate entities are accepted
+  for system mappings.
+- **A mapped entity is unavailable:** Check the original entity in Home
+  Assistant first. HAVRV mirrors its availability and cannot restore an
+  unavailable source.
+- **A control has no effect:** Verify the source entity is available and can be
+  controlled directly in Home Assistant. HAVRV forwards the corresponding
+  standard domain service call; it does not override source permissions or
+  capabilities.
+- **A tire reading or problem state is missing:** Check the per-tire source
+  selection and its availability. Pressure and temperature comparisons need
+  supported units when a source supplies a unit; configure only limits known
+  to be appropriate for the vehicle.
+- **A profile value is incorrect:** Profile details are entered during initial
+  setup or updated with the config entry's **Reconfigure** action. The profile
+  name cannot be changed; remove and recreate the profile if it needs a new
+  name. Removing the profile does not remove source entities.
 
 ## Development
 

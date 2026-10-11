@@ -1,10 +1,18 @@
 """Tire topology and reading helpers."""
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
+from statistics import median
 from typing import Any
 
-from homeassistant.core import Event, HomeAssistant, State, callback
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -40,6 +48,15 @@ class TirePosition:
     group: str
 
 
+@dataclass(frozen=True)
+class TireMonitorGroup:
+    """Like-for-like tire positions to compare on one axle."""
+
+    key: str
+    name: str
+    positions: tuple[TirePosition, ...]
+
+
 class HavrvTireEntity(Entity):
     """Base entity associated with a configured RV tire."""
 
@@ -68,7 +85,9 @@ class HavrvTireEntity(Entity):
         )
 
     @callback
-    def async_on_source_state_changed(self, event: Event) -> None:
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Write the tire state when one of its source sensors changes."""
         self.async_write_ha_state()
 
@@ -95,7 +114,7 @@ class HavrvTireEntity(Entity):
         return {} if state is None else state.attributes
 
 
-def tire_positions(profile: dict[str, Any]) -> list[TirePosition]:
+def tire_positions(profile: Mapping[str, Any]) -> list[TirePosition]:
     """Build stable tire positions from the configured axle and wheel layout."""
     rear_axle_count = profile.get(CONF_REAR_AXLE_COUNT)
     has_tag_axle = profile.get(CONF_TAG_AXLE_PRESENT, False)
@@ -135,6 +154,125 @@ def tire_positions(profile: dict[str, Any]) -> list[TirePosition]:
     return positions
 
 
+def tire_monitor_groups(profile: dict[str, Any], metric: str) -> list[TireMonitorGroup]:
+    """Group axle positions that are comparable for one tire measurement."""
+    if metric not in (TIRE_PRESSURE, TIRE_TEMPERATURE):
+        raise ValueError(f"Unsupported tire monitor metric: {metric}")
+
+    axles: dict[str, list[TirePosition]] = {}
+    for position in tire_positions(profile):
+        axle_key = _axle_key(position)
+        axles.setdefault(axle_key, []).append(position)
+
+    groups: list[TireMonitorGroup] = []
+    for axle_key, positions in axles.items():
+        axle_name = _axle_name(axle_key)
+        if metric == TIRE_TEMPERATURE and any(
+            position.key.endswith(("_inner", "_outer")) for position in positions
+        ):
+            for wheel in ("inner", "outer"):
+                wheel_positions = tuple(
+                    position
+                    for position in positions
+                    if position.key.endswith(f"_{wheel}")
+                )
+                if wheel_positions:
+                    groups.append(
+                        TireMonitorGroup(
+                            key=f"{axle_key}_{wheel}",
+                            name=f"{axle_name} {wheel} tires",
+                            positions=wheel_positions,
+                        )
+                    )
+        else:
+            groups.append(
+                TireMonitorGroup(
+                    key=axle_key,
+                    name=axle_name,
+                    positions=tuple(positions),
+                )
+            )
+    return groups
+
+
+def tire_monitor_readings(
+    hass: HomeAssistant,
+    entry: Any,
+    group: TireMonitorGroup,
+    metric: str,
+) -> list[tuple[TirePosition, float]]:
+    """Read comparable, normalized values for one monitor group."""
+    readings = []
+    for position in group.positions:
+        if (value := _source_value(hass, entry, position, metric)) is not None:
+            readings.append((position, value))
+    return readings
+
+
+def tire_monitor_spread(
+    hass: HomeAssistant,
+    entry: Any,
+    group: TireMonitorGroup,
+    metric: str,
+) -> float | None:
+    """Return the max-minus-min spread when at least two readings are usable."""
+    values = [value for _, value in tire_monitor_readings(hass, entry, group, metric)]
+    if len(values) < 2:
+        return None
+    return max(values) - min(values)
+
+
+def tire_monitor_outlier(
+    hass: HomeAssistant,
+    entry: Any,
+    group: TireMonitorGroup,
+    metric: str,
+) -> str | None:
+    """Return the unique modified-z-score outlier, or None without enough data."""
+    readings = tire_monitor_readings(hass, entry, group, metric)
+    if len(readings) < 3:
+        return None
+
+    values = [value for _, value in readings]
+    center = median(values)
+    deviations = [abs(value - center) for value in values]
+    mad = median(deviations)
+
+    if mad == 0:
+        candidates = [
+            position.name
+            for (position, value), deviation in zip(readings, deviations, strict=True)
+            if deviation > 0
+        ]
+    else:
+        candidates = [
+            position.name
+            for (position, _), deviation in zip(readings, deviations, strict=True)
+            if 0.6745 * deviation / mad > 3.5
+        ]
+    if len(candidates) == 1:
+        return candidates[0]
+    return "No outlier"
+
+
+def _axle_key(position: TirePosition) -> str:
+    """Return the stable axle prefix from a generated tire position."""
+    if position.key.startswith("front_"):
+        return "front"
+    if position.key.startswith("tag_axle_"):
+        return "tag_axle"
+    return "_".join(position.key.split("_")[:3])
+
+
+def _axle_name(axle_key: str) -> str:
+    """Return a human-readable name for a stable axle key."""
+    if axle_key == "front":
+        return "Front axle"
+    if axle_key == "tag_axle":
+        return "Tag axle"
+    return f"Rear axle {axle_key.removeprefix('rear_axle_')}"
+
+
 def _axle_positions(key: str, name: str, group: str, dual: bool) -> list[TirePosition]:
     """Create left/right positions, including inner and outer dual wheels."""
     tires = []
@@ -167,7 +305,8 @@ def tire_entity_key(position: TirePosition, metric: str) -> str:
 def source_entity_id(entry: Any, position: TirePosition, metric: str) -> str | None:
     """Return the configured source entity for a tire metric."""
     mappings = entry.options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
-    return mappings.get(tire_entity_key(position, metric))
+    entity_id = mappings.get(tire_entity_key(position, metric))
+    return entity_id if isinstance(entity_id, str) else None
 
 
 def configured_threshold(

@@ -6,6 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 from .const import (
@@ -121,6 +122,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     mappings = _entry_entity_mappings(entry)
+    positions = tire_positions(data)
+    _remove_stale_entities_and_devices(
+        hass,
+        entry,
+        active_categories={
+            category for category, entities in mappings.items() if entities
+        },
+        active_mapping_ids={
+            f"{entry.entry_id}_{category}_{entity_id}"
+            for category, entities in mappings.items()
+            for entity_id in entities
+        },
+        active_tire_keys={position.key for position in positions},
+    )
     platforms = {
         _DOMAIN_PLATFORMS[entity_id.split(".", maxsplit=1)[0]]
         for entities in mappings.values()
@@ -128,7 +143,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
     platforms.add(Platform.SENSOR)
-    if tire_positions(data):
+    if positions:
         platforms.add(Platform.BINARY_SENSOR)
     entry.runtime_data.platforms = list(platforms)
     await hass.config_entries.async_forward_entry_setups(entry, list(platforms))
@@ -163,3 +178,50 @@ def _entry_entity_mappings(entry: HavrvConfigEntry) -> dict[str, list[str]]:
         for category, entities in mappings.items()
         if category in SYSTEM_CATEGORIES
     }
+
+
+def _remove_stale_entities_and_devices(
+    hass: HomeAssistant,
+    entry: HavrvConfigEntry,
+    *,
+    active_categories: set[str],
+    active_mapping_ids: set[str],
+    active_tire_keys: set[str],
+) -> None:
+    """Remove registry entries and child devices no longer in the profile."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+
+    for registry_entry in er.async_entries_for_config_entry(
+        entity_registry, entry.entry_id
+    ):
+        is_stale_mapping = any(
+            registry_entry.unique_id.startswith(f"{entry.entry_id}_{category}_")
+            and registry_entry.unique_id not in active_mapping_ids
+            for category in SYSTEM_CATEGORIES
+        )
+        tire_key = registry_entry.unique_id.removeprefix(f"{entry.entry_id}_tire_")
+        is_tire_entity = tire_key != registry_entry.unique_id
+        is_stale_tire = is_tire_entity and not any(
+            tire_key.startswith(f"{key}_") for key in active_tire_keys
+        )
+        if is_stale_mapping or is_stale_tire:
+            entity_registry.async_remove(registry_entry.entity_id)
+
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        for domain, identifier in device.identifiers:
+            if domain != DOMAIN:
+                continue
+            if identifier.startswith(f"{entry.entry_id}_tire_"):
+                tire_key = identifier.removeprefix(f"{entry.entry_id}_tire_")
+                if tire_key in active_tire_keys:
+                    continue
+            elif identifier.startswith(f"{entry.entry_id}_"):
+                category = identifier.removeprefix(f"{entry.entry_id}_")
+                if category not in SYSTEM_CATEGORIES or category in active_categories:
+                    continue
+            else:
+                continue
+            if not er.async_entries_for_device(entity_registry, device.id):
+                device_registry.async_remove_device(device.id)
+            break

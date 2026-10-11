@@ -1,0 +1,51 @@
+{
+  "entity": {
+    "sensor": {
+      "coach_year": {
+        "default": "mdi:calendar"
+      },
+      "manufacturer": {
+        "default": "mdi:factory"
+      },
+      "coach_builder": {
+        "default": "mdi:bus"
+      },
+      "make": {
+        "default": "mdi:car-info"
+      },
+      "model": {
+        "default": "mdi:bus"
+      },
+      "coach_identifier": {
+        "default": "mdi:identifier"
+      },
+      "storage_zone_id": {
+        "default": "mdi:map-marker"
+      },
+      "measurement_system": {
+        "default": "mdi:ruler-square"
+      },
+      "rear_axle_count": {
+        "default": "mdi:car"
+      },
+      "main_rear_wheel_configuration": {
+        "default": "mdi:circle-multiple"
+      },
+      "tag_axle_present": {
+        "default": "mdi:car"
+      },
+      "tag_axle_wheel_configuration": {
+        "default": "mdi:circle-multiple"
+      },
+      "tire_pressure": {
+        "default": "mdi:gauge"
+      },
+      "tire_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "tire_battery": {
+        "default": "mdi:battery"
+      }
+    }
+  }
+}
