@@ -789,6 +789,12 @@ async def test_setup_creates_only_selected_tank_devices_and_optional_capacities(
         entity.unique_id == f"{entry.entry_id}_tank_gray_water_capacity"
         for entity in entities
     )
+    black_capacity = next(
+        entity
+        for entity in entities
+        if entity.unique_id == f"{entry.entry_id}_tank_black_water_capacity"
+    )
+    assert hass.states.get(black_capacity.entity_id).state == "120.0"
     assert not any(
         entity.unique_id == f"{entry.entry_id}_tank_black_water_level"
         for entity in entities
@@ -797,6 +803,7 @@ async def test_setup_creates_only_selected_tank_devices_and_optional_capacities(
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
         "Adventure RV",
+        "Black-water tank",
         "Fresh-water tank",
         "Gray-water tank",
         "Water",
