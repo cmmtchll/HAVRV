@@ -17,6 +17,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import VolumeConverter
 
 from . import HavrvConfigEntry
 from .const import (
@@ -60,7 +61,9 @@ from .tire import (
     HavrvTireEntity,
     TireMonitorGroup,
     TirePosition,
+    pressure_in_profile_units,
     source_entity_id,
+    temperature_in_profile_units,
     tire_monitor_groups,
     tire_monitor_outlier,
     tire_monitor_readings,
@@ -230,6 +233,11 @@ class HavrvTankLevelSensor(HavrvSensor):
         if parent_device_id is None:
             raise RuntimeError("RV device must be registered before platform setup")
         super().__init__(entry, "water", source_entity_id, parent_device_id)
+        self._profile_unit = (
+            "L"
+            if entry.runtime_data.measurement_system == UNIT_SYSTEM_METRIC
+            else "gal"
+        )
         self._attr_unique_id = f"{entry.entry_id}_tank_{tank}_level"
         self._attr_device_info = _tank_device_info(entry, tank, tank_name)
 
@@ -237,6 +245,31 @@ class HavrvTankLevelSensor(HavrvSensor):
     def name(self) -> str | None:
         """Use the translated level name instead of the source entity name."""
         return None
+
+    @property
+    def native_value(self) -> float | str | None:
+        """Return the level, converting volumes to the RV profile unit."""
+        value = super().native_value
+        source_unit = self.source_attributes.get("unit_of_measurement")
+        if (
+            isinstance(value, float)
+            and source_unit in VolumeConverter.VALID_UNITS
+            and self._profile_unit != source_unit
+        ):
+            return VolumeConverter.convert(value, source_unit, self._profile_unit)
+        return value
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Report volumes in the RV profile unit; keep other units unchanged."""
+        unit = super().native_unit_of_measurement
+        return self._profile_unit if unit in VolumeConverter.VALID_UNITS else unit
+
+    @property
+    def suggested_unit_of_measurement(self) -> str | None:
+        """Display volumes in the RV profile unit instead of the HA system unit."""
+        unit = self.native_unit_of_measurement
+        return unit if unit == self._profile_unit else None
 
 
 class HavrvProfileSensor(SensorEntity):
@@ -257,6 +290,7 @@ class HavrvProfileSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_profile_{description.key}"
         self._native_value = native_value
         self._attr_native_unit_of_measurement = unit
+        self._attr_suggested_unit_of_measurement = unit
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
         }
@@ -465,7 +499,7 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        """Return the configured source's numeric reading."""
+        """Return the source reading converted to the RV profile unit."""
         state = self._source_state(self._metric)
         if state is None or state.state in ("unknown", "unavailable"):
             return None
@@ -473,7 +507,15 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
             value = float(state.state)
         except ValueError:
             return None
-        return value if math.isfinite(value) else None
+        if not math.isfinite(value):
+            return None
+        unit = state.attributes.get("unit_of_measurement")
+        system = self._entry.runtime_data.measurement_system
+        if self._metric == "pressure":
+            return pressure_in_profile_units(value, unit, system)
+        if self._metric == "temperature":
+            return temperature_in_profile_units(value, unit, system)
+        return value
 
     @property
     def available(self) -> bool:
@@ -482,8 +524,20 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
 
     @property
     def native_unit_of_measurement(self) -> str | None:
-        """Return the configured source unit."""
+        """Return the RV profile unit for pressure and temperature."""
+        metric = self._entry.runtime_data.measurement_system == UNIT_SYSTEM_METRIC
+        if self._metric == "pressure":
+            return "kPa" if metric else "psi"
+        if self._metric == "temperature":
+            return "°C" if metric else "°F"
         return self._source_attributes(self._metric).get("unit_of_measurement")
+
+    @property
+    def suggested_unit_of_measurement(self) -> str | None:
+        """Display pressure and temperature in the RV profile unit."""
+        if self._metric in ("pressure", "temperature"):
+            return self.native_unit_of_measurement
+        return None
 
     @property
     def device_class(self) -> SensorDeviceClass | None:

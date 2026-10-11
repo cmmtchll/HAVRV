@@ -341,7 +341,7 @@ def tire_data_present(hass: HomeAssistant, entry: Any, position: TirePosition) -
     )
 
 
-def _pressure_in_profile_units(
+def pressure_in_profile_units(
     value: float, unit: str | None, measurement_system: str
 ) -> float | None:
     """Convert pressure to the profile's configured unit."""
@@ -373,7 +373,7 @@ def _pressure_in_profile_units(
     return None
 
 
-def _temperature_in_profile_units(
+def temperature_in_profile_units(
     value: float, unit: str | None, measurement_system: str
 ) -> float | None:
     """Convert temperature to the profile's configured unit."""
@@ -414,13 +414,13 @@ def _source_value(
     state = hass.states.get(entity_id)
     unit = state.attributes.get("unit_of_measurement") if state else None
     if metric == TIRE_PRESSURE:
-        return _pressure_in_profile_units(
+        return pressure_in_profile_units(
             value,
             unit,
             entry.runtime_data.measurement_system,
         )
     if metric == TIRE_TEMPERATURE:
-        return _temperature_in_profile_units(
+        return temperature_in_profile_units(
             value,
             unit,
             entry.runtime_data.measurement_system,

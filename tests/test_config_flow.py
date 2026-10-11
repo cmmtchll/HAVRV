@@ -181,6 +181,23 @@ def test_tank_options_store_individual_level_sources() -> None:
     }
 
 
+def test_tank_options_accept_number_and_input_number_sources() -> None:
+    """Allow numeric helper entities as tank level sources."""
+    options, error = _normalize_options(
+        {
+            "fresh_water_tank_level": "number.fresh_level",
+            "gray_water_tank_level": "input_number.gray_level",
+        },
+        _tire_profile_entry(),
+    )
+
+    assert error is None
+    assert options[CONF_TANK_ENTITY_MAPPINGS] == {
+        "fresh_water": "number.fresh_level",
+        "gray_water": "input_number.gray_level",
+    }
+
+
 @pytest.mark.parametrize(
     ("user_input", "expected_error"),
     [
