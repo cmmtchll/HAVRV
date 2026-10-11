@@ -33,6 +33,7 @@ from custom_components.havrv.const import (
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
+    CONF_VIRTUAL_DEVICES,
     DOMAIN,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
@@ -278,7 +279,6 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     )
     hass.states.async_set("binary_sensor.fresh_water_low", "off")
     hass.states.async_set("switch.water_pump", "off")
-    hass.states.async_set("sensor.patio_temperature", "22")
     hass.states.async_set(
         "light.patio",
         "off",
@@ -301,7 +301,6 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
                     "binary_sensor.fresh_water_low",
                     "switch.water_pump",
                 ],
-                "patio": ["sensor.patio_temperature"],
                 "chassis": ["light.patio"],
                 "climate": ["climate.cabin"],
             },
@@ -315,7 +314,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
 
     entity_registry = er.async_get(hass)
     mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    assert len(mapped_entities) == 8
+    assert len(mapped_entities) == 7
     mapped_entity = next(
         entity
         for entity in mapped_entities
@@ -329,7 +328,6 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
         "Adventure RV",
         "Power",
         "Water",
-        "Patio",
         "Chassis",
         "Climate",
     }
@@ -344,6 +342,74 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     )
     await hass.async_block_till_done()
     assert hass.states.get(mapped_entity.entity_id).state == "13.6"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_setup_creates_named_equipment_device_with_mirrored_entities(
+    hass: HomeAssistant,
+) -> None:
+    """Create a component device that owns its selected source proxies."""
+    hass.states.async_set(
+        "sensor.house_battery_voltage",
+        "13.4",
+        {"unit_of_measurement": "V"},
+    )
+    hass.states.async_set("sensor.house_battery_percentage", "82")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        unique_id="adventure rv",
+        data={CONF_NAME: "Adventure RV"},
+        options={
+            CONF_VIRTUAL_DEVICES: [
+                {
+                    "id": "house-battery-1",
+                    "type": "house_battery",
+                    "name": "House Battery 1",
+                    "entities": [
+                        "sensor.house_battery_voltage",
+                        "sensor.house_battery_percentage",
+                    ],
+                }
+            ]
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entities = [
+        entity
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if "_virtual_device_" in entity.unique_id
+    ]
+    assert {entity.unique_id for entity in entities} == {
+        f"{entry.entry_id}_virtual_device_house-battery-1_sensor.house_battery_voltage",
+        f"{entry.entry_id}_virtual_device_house-battery-1_sensor.house_battery_percentage",
+    }
+    assert {hass.states.get(entity.entity_id).state for entity in entities} == {
+        "13.4",
+        "82.0",
+    }
+
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    equipment = next(device for device in devices if device.name == "House Battery 1")
+    rv_device = next(device for device in devices if device.name == "Adventure RV")
+    assert equipment.model == "House Battery"
+    assert equipment.via_device_id == rv_device.id
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={"remove_virtual_device": "house-battery-1"},
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert {device.name for device in devices} == {"Adventure RV"}
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

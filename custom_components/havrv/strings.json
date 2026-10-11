@@ -29,14 +29,7 @@
           "chassis_entities": "Chassis system entities",
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
-          "other_entities": "Other RV entities",
-          "electrical_entities": "Electrical system entities",
-          "cockpit_entities": "Cockpit entities",
-          "patio_entities": "Patio entities",
-          "cellar_entities": "Cellar entities",
-          "wetbay_entities": "Wet-bay entities",
-          "indoor_climate_entities": "Indoor climate entities",
-          "outdoor_climate_entities": "Outdoor climate entities"
+          "other_entities": "Other RV entities"
         },
         "data_description": {
           "name": "A unique name for this RV profile.",
@@ -63,14 +56,7 @@
           "chassis_entities": "Select existing sensors, controls, or climate entities for the RV chassis.",
           "climate_entities": "Select existing sensors, controls, or climate entities for RV climate systems.",
           "location_entities": "Select existing sensors, controls, or climate entities for RV location.",
-          "other_entities": "Select other existing entities to include with this RV.",
-          "electrical_entities": "Select existing entities for RV electrical equipment.",
-          "cockpit_entities": "Select existing entities for the RV cockpit.",
-          "patio_entities": "Select existing entities for the RV patio.",
-          "cellar_entities": "Select existing entities for the RV cellar.",
-          "wetbay_entities": "Select existing entities for the RV wet bay.",
-          "indoor_climate_entities": "Select existing entities for indoor RV climate.",
-          "outdoor_climate_entities": "Select existing entities for outdoor RV climate."
+          "other_entities": "Select other existing entities to include with this RV."
         }
       }
     },
@@ -89,8 +75,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "Map RV system entities",
-        "description": "Choose existing entities for RV systems and each generated tire. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
+        "title": "Configure RV entities and equipment",
+        "description": "Map existing entities to RV systems or configure a named equipment device. Each equipment device becomes a separate child device and mirrors the selected source entities. Add one equipment device per save; select an existing device to remove it. Tire readings accept sensors, number entities, input number helpers, and template sensors.",
         "data": {
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
@@ -98,13 +84,10 @@
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
           "other_entities": "Other RV entities",
-          "electrical_entities": "Electrical system entities",
-          "cockpit_entities": "Cockpit entities",
-          "patio_entities": "Patio entities",
-          "cellar_entities": "Cellar entities",
-          "wetbay_entities": "Wet-bay entities",
-          "indoor_climate_entities": "Indoor climate entities",
-          "outdoor_climate_entities": "Outdoor climate entities",
+          "virtual_device_type": "Equipment device type",
+          "virtual_device_name": "Equipment device name",
+          "virtual_device_entities": "Equipment source entities",
+          "remove_virtual_device": "Remove an equipment device",
           "tire_front_left_pressure": "Front left tire pressure source",
           "tire_front_left_temperature": "Front left tire temperature source",
           "tire_front_left_battery": "Front left tire battery source",
@@ -184,7 +167,9 @@
       "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
       "invalid_tire_pressure_threshold": "Pressure limits must be non-negative, and the high limit must be greater than the low limit.",
       "invalid_tire_temperature_threshold": "The high temperature limit must be a valid non-negative number.",
-      "invalid_tire_battery_threshold": "The low battery limit must be between 0 and 100 percent."
+      "invalid_tire_battery_threshold": "The low battery limit must be between 0 and 100 percent.",
+      "invalid_virtual_device": "Choose an equipment type, a name, and one or more supported source entities.",
+      "duplicate_virtual_device": "An equipment device with this name already exists."
     }
   },
   "selector": {
@@ -205,6 +190,25 @@
       "options": {
         "single": "Single wheels",
         "dual": "Dual wheels"
+      }
+    },
+    "virtual_device_type": {
+      "options": {
+        "chassis": "Chassis",
+        "electrical": "Electrical",
+        "cockpit": "Cockpit",
+        "patio": "Patio",
+        "cellar": "Cellar",
+        "wetbay": "Wet bay",
+        "indoor_climate": "Indoor climate",
+        "outdoor_climate": "Outdoor climate",
+        "inverter": "Inverter",
+        "house_battery": "House battery",
+        "chassis_battery": "Chassis battery",
+        "generator": "Generator",
+        "slide_out": "Slide-out",
+        "leveling_jack": "Leveling jack",
+        "awning": "Awning"
       }
     }
   },

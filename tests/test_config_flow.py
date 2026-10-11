@@ -36,6 +36,7 @@ from custom_components.havrv.const import (
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
     CONF_REAR_AXLE_COUNT,
+    CONF_REMOVE_VIRTUAL_DEVICE,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
@@ -43,6 +44,10 @@ from custom_components.havrv.const import (
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
+    CONF_VIRTUAL_DEVICE_ENTITIES,
+    CONF_VIRTUAL_DEVICE_NAME,
+    CONF_VIRTUAL_DEVICE_TYPE,
+    CONF_VIRTUAL_DEVICES,
     DOMAIN,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
@@ -383,7 +388,6 @@ async def test_user_flow_stores_grouped_source_entity_mappings(
             CONF_NAME: "Adventure RV",
             "power_entities": ["sensor.house_battery_voltage"],
             "water_entities": ["binary_sensor.fresh_water_low"],
-            "outdoor_climate_entities": ["sensor.outdoor_temperature"],
         },
     )
 
@@ -391,7 +395,6 @@ async def test_user_flow_stores_grouped_source_entity_mappings(
     assert result["data"][CONF_ENTITY_MAPPINGS] == {
         "power": ["sensor.house_battery_voltage"],
         "water": ["binary_sensor.fresh_water_low"],
-        "outdoor_climate": ["sensor.outdoor_temperature"],
     }
 
 
@@ -440,6 +443,93 @@ async def test_options_flow_updates_source_entity_mappings(
         "power": ["sensor.house_battery_voltage"],
         "water": ["sensor.fresh_water_level"],
     }
+
+
+async def test_options_flow_creates_and_removes_virtual_equipment_device(
+    hass: HomeAssistant,
+) -> None:
+    """Create a named equipment device, then remove it through options."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        data={CONF_NAME: "Adventure RV"},
+        unique_id="adventure rv",
+    )
+    entry.add_to_hass(hass)
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_VIRTUAL_DEVICE_TYPE: "house_battery",
+            CONF_VIRTUAL_DEVICE_NAME: "House Battery 1",
+            CONF_VIRTUAL_DEVICE_ENTITIES: [
+                "sensor.house_battery_voltage",
+                "sensor.house_battery_percentage",
+            ],
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    configured_device = entry.options[CONF_VIRTUAL_DEVICES][0]
+    assert configured_device["type"] == "house_battery"
+    assert configured_device["name"] == "House Battery 1"
+    assert configured_device["entities"] == [
+        "sensor.house_battery_voltage",
+        "sensor.house_battery_percentage",
+    ]
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={CONF_REMOVE_VIRTUAL_DEVICE: configured_device["id"]},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_VIRTUAL_DEVICES] == []
+
+
+async def test_options_flow_validates_virtual_device_instances(
+    hass: HomeAssistant,
+) -> None:
+    """Require complete equipment mappings and unique instance names."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Adventure RV",
+        data={CONF_NAME: "Adventure RV"},
+        unique_id="adventure rv",
+    )
+    entry.add_to_hass(hass)
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={CONF_VIRTUAL_DEVICE_NAME: "House Battery 1"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_virtual_device"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_VIRTUAL_DEVICE_TYPE: "house_battery",
+            CONF_VIRTUAL_DEVICE_NAME: "House Battery 1",
+            CONF_VIRTUAL_DEVICE_ENTITIES: ["sensor.house_battery_voltage"],
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_VIRTUAL_DEVICE_TYPE: "generator",
+            CONF_VIRTUAL_DEVICE_NAME: "house battery 1",
+            CONF_VIRTUAL_DEVICE_ENTITIES: ["sensor.generator_running"],
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "duplicate_virtual_device"}
 
 
 async def test_options_flow_updates_tire_source_and_preserves_other_limits(

@@ -8,7 +8,13 @@ from homeassistant.core import Event, State, callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import CONF_ENTITY_MAPPINGS, DOMAIN, SYSTEM_CATEGORIES
+from .const import (
+    CONF_ENTITY_MAPPINGS,
+    CONF_VIRTUAL_DEVICES,
+    DOMAIN,
+    SUPPORTED_ENTITY_DOMAINS,
+    SYSTEM_CATEGORIES,
+)
 
 type EntityAddedCallback = Callable[[list[Entity]], None]
 
@@ -24,6 +30,10 @@ class HavrvSourceEntity(Entity):
         category: str,
         source_entity_id: str,
         parent_device_id: str,
+        *,
+        device_identifier: str | None = None,
+        device_name: str | None = None,
+        device_model: str | None = None,
     ) -> None:
         """Initialize a mapped entity."""
         self._entry = entry
@@ -31,10 +41,17 @@ class HavrvSourceEntity(Entity):
         self._source_entity_id = source_entity_id
         self._attr_unique_id = f"{entry.entry_id}_{category}_{source_entity_id}"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{entry.entry_id}_{category}")},
-            "name": category.replace("_", " ").title(),
+            "identifiers": {
+                (
+                    DOMAIN,
+                    device_identifier or f"{entry.entry_id}_{category}",
+                )
+            },
+            "name": device_name or category.replace("_", " ").title(),
             "via_device_id": parent_device_id,
         }
+        if device_model is not None:
+            self._attr_device_info["model"] = device_model
 
     @property
     def available(self) -> bool:
@@ -100,5 +117,20 @@ def async_add_source_entities(
         [
             entity_class(entry, category, entity_id, parent_device_id)
             for category, entity_id in source_entities(entry, domain)
+        ]
+        + [
+            entity_class(
+                entry,
+                f"virtual_device_{device['id']}",
+                entity_id,
+                parent_device_id,
+                device_identifier=f"{entry.entry_id}_virtual_device_{device['id']}",
+                device_name=device["name"],
+                device_model=device["type"].replace("_", " ").title(),
+            )
+            for device in entry.options.get(CONF_VIRTUAL_DEVICES, [])
+            for entity_id in device["entities"]
+            if entity_id.split(".", maxsplit=1)[0] == domain
+            and domain in SUPPORTED_ENTITY_DOMAINS
         ]
     )

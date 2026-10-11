@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from datetime import date
 from typing import Any
+from uuid import uuid4
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -35,6 +36,7 @@ from .const import (
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
     CONF_REAR_AXLE_COUNT,
+    CONF_REMOVE_VIRTUAL_DEVICE,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
@@ -44,6 +46,10 @@ from .const import (
     CONF_TIRE_PRESSURE_LOW,
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
+    CONF_VIRTUAL_DEVICE_ENTITIES,
+    CONF_VIRTUAL_DEVICE_NAME,
+    CONF_VIRTUAL_DEVICE_TYPE,
+    CONF_VIRTUAL_DEVICES,
     DOMAIN,
     SUPPORTED_ENTITY_DOMAINS,
     SYSTEM_CATEGORIES,
@@ -52,6 +58,7 @@ from .const import (
     TIRE_TAG,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
+    VIRTUAL_DEVICE_TYPES,
     WHEEL_CONFIGURATION_DUAL,
     WHEEL_CONFIGURATION_SINGLE,
 )
@@ -327,6 +334,31 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
     """Build source mapping and tire alert threshold options."""
     existing_options = entry.options
     fields = _entity_mapping_fields(_entry_entity_mappings(entry))
+    fields[vol.Optional(CONF_VIRTUAL_DEVICE_TYPE)] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=list(VIRTUAL_DEVICE_TYPES),
+            mode=selector.SelectSelectorMode.DROPDOWN,
+            translation_key="virtual_device_type",
+        )
+    )
+    fields[vol.Optional(CONF_VIRTUAL_DEVICE_NAME)] = selector.TextSelector()
+    fields[vol.Optional(CONF_VIRTUAL_DEVICE_ENTITIES)] = selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain=list(SUPPORTED_ENTITY_DOMAINS),
+            multiple=True,
+        )
+    )
+    configured_devices = existing_options.get(CONF_VIRTUAL_DEVICES, [])
+    if configured_devices:
+        fields[vol.Optional(CONF_REMOVE_VIRTUAL_DEVICE)] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    {"value": device["id"], "label": device["name"]}
+                    for device in configured_devices
+                ],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
     tire_mappings = existing_options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
     for position in tire_positions(entry.data):
         for metric in ("pressure", "temperature", "battery"):
@@ -480,6 +512,51 @@ def _normalize_options(
         return {}, "invalid_tire_battery_threshold"
 
     options: dict[str, Any] = {CONF_ENTITY_MAPPINGS: mappings}
+    virtual_devices = list(entry.options.get(CONF_VIRTUAL_DEVICES, []))
+    remove_device_id = user_input.get(CONF_REMOVE_VIRTUAL_DEVICE)
+    if remove_device_id is not None:
+        if not isinstance(remove_device_id, str) or not any(
+            device["id"] == remove_device_id for device in virtual_devices
+        ):
+            return {}, "invalid_virtual_device"
+        virtual_devices = [
+            device for device in virtual_devices if device["id"] != remove_device_id
+        ]
+
+    device_type = user_input.get(CONF_VIRTUAL_DEVICE_TYPE)
+    device_name = user_input.get(CONF_VIRTUAL_DEVICE_NAME)
+    device_entities = user_input.get(CONF_VIRTUAL_DEVICE_ENTITIES, [])
+    if device_type is not None or device_name is not None or device_entities:
+        if (
+            device_type not in VIRTUAL_DEVICE_TYPES
+            or not isinstance(device_name, str)
+            or not (device_name := device_name.strip())
+            or not isinstance(device_entities, list)
+            or not device_entities
+        ):
+            return {}, "invalid_virtual_device"
+        if any(not isinstance(entity_id, str) for entity_id in device_entities):
+            return {}, "invalid_virtual_device"
+        if len(device_entities) != len(set(device_entities)) or any(
+            not _is_supported_entity_id(entity_id) for entity_id in device_entities
+        ):
+            return {}, "invalid_virtual_device"
+        if any(
+            device["name"].casefold() == device_name.casefold()
+            for device in virtual_devices
+        ):
+            return {}, "duplicate_virtual_device"
+        virtual_devices.append(
+            {
+                "id": uuid4().hex,
+                "type": device_type,
+                "name": device_name,
+                "entities": device_entities,
+            }
+        )
+    if virtual_devices or CONF_VIRTUAL_DEVICES in entry.options:
+        options[CONF_VIRTUAL_DEVICES] = virtual_devices
+
     if positions:
         options[CONF_TIRE_ENTITY_MAPPINGS] = tire_mappings
         options[CONF_TIRE_PRESSURE_THRESHOLDS] = pressure_thresholds
@@ -497,6 +574,12 @@ def _is_finite_number(value: Any) -> bool:
         and not isinstance(value, bool)
         and math.isfinite(value)
     )
+
+
+def _is_supported_entity_id(entity_id: str) -> bool:
+    """Check that an entity ID belongs to a mirrored entity domain."""
+    domain, separator, object_id = entity_id.partition(".")
+    return bool(separator and object_id and domain in SUPPORTED_ENTITY_DOMAINS)
 
 
 def _normalize_entity_mappings(

@@ -23,6 +23,11 @@ CONF_TAG_AXLE_PRESENT = "tag_axle_present"
 CONF_TAG_AXLE_WHEEL_CONFIGURATION = "tag_axle_wheel_configuration"
 CONF_ENTITY_MAPPINGS = "entity_mappings"
 CONF_TIRE_ENTITY_MAPPINGS = "tire_entity_mappings"
+CONF_VIRTUAL_DEVICES = "virtual_devices"
+CONF_VIRTUAL_DEVICE_NAME = "virtual_device_name"
+CONF_VIRTUAL_DEVICE_TYPE = "virtual_device_type"
+CONF_VIRTUAL_DEVICE_ENTITIES = "virtual_device_entities"
+CONF_REMOVE_VIRTUAL_DEVICE = "remove_virtual_device"
 CONF_TIRE_PRESSURE_THRESHOLDS = "tire_pressure_thresholds"
 CONF_TIRE_TEMPERATURE_HIGH = "tire_temperature_high"
 CONF_TIRE_BATTERY_LOW = "tire_battery_low"
@@ -36,13 +41,6 @@ SYSTEM_CHASSIS = "chassis"
 SYSTEM_CLIMATE = "climate"
 SYSTEM_LOCATION = "location"
 SYSTEM_OTHER = "other"
-SYSTEM_ELECTRICAL = "electrical"
-SYSTEM_COCKPIT = "cockpit"
-SYSTEM_PATIO = "patio"
-SYSTEM_CELLAR = "cellar"
-SYSTEM_WETBAY = "wetbay"
-SYSTEM_INDOOR_CLIMATE = "indoor_climate"
-SYSTEM_OUTDOOR_CLIMATE = "outdoor_climate"
 SYSTEM_CATEGORIES = (
     SYSTEM_POWER,
     SYSTEM_WATER,
@@ -50,16 +48,26 @@ SYSTEM_CATEGORIES = (
     SYSTEM_CLIMATE,
     SYSTEM_LOCATION,
     SYSTEM_OTHER,
-    SYSTEM_ELECTRICAL,
-    SYSTEM_COCKPIT,
-    SYSTEM_PATIO,
-    SYSTEM_CELLAR,
-    SYSTEM_WETBAY,
-    SYSTEM_INDOOR_CLIMATE,
-    SYSTEM_OUTDOOR_CLIMATE,
 )
 
 SUPPORTED_ENTITY_DOMAINS = ("sensor", "binary_sensor", "switch", "light", "climate")
+VIRTUAL_DEVICE_TYPES = (
+    "chassis",
+    "electrical",
+    "cockpit",
+    "patio",
+    "cellar",
+    "wetbay",
+    "indoor_climate",
+    "outdoor_climate",
+    "inverter",
+    "house_battery",
+    "chassis_battery",
+    "generator",
+    "slide_out",
+    "leveling_jack",
+    "awning",
+)
 
 AXLE_COUNT_ONE = "one"
 AXLE_COUNT_TWO = "two"

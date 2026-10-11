@@ -6,6 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 from .const import (
@@ -29,6 +30,7 @@ from .const import (
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    CONF_VIRTUAL_DEVICES,
     DOMAIN,
     SUPPORTED_ENTITY_DOMAINS,
     SYSTEM_CATEGORIES,
@@ -120,6 +122,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
     entry.runtime_data.device_id = rv_device.id
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
+    _remove_stale_virtual_devices(hass, entry)
     mappings = _entry_entity_mappings(entry)
     platforms = {
         _DOMAIN_PLATFORMS[entity_id.split(".", maxsplit=1)[0]]
@@ -127,6 +130,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         for entity_id in entities
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
+    platforms.update(
+        _DOMAIN_PLATFORMS[entity_id.split(".", maxsplit=1)[0]]
+        for device in entry.options.get(CONF_VIRTUAL_DEVICES, [])
+        for entity_id in device["entities"]
+        if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
+    )
     platforms.add(Platform.SENSOR)
     if tire_positions(data):
         platforms.add(Platform.BINARY_SENSOR)
@@ -163,3 +172,34 @@ def _entry_entity_mappings(entry: HavrvConfigEntry) -> dict[str, list[str]]:
         for category, entities in mappings.items()
         if category in SYSTEM_CATEGORIES
     }
+
+
+def _remove_stale_virtual_devices(hass: HomeAssistant, entry: HavrvConfigEntry) -> None:
+    """Remove registry entries for equipment devices deleted from options."""
+    configured_devices = entry.options.get(CONF_VIRTUAL_DEVICES, [])
+    expected_device_ids = {
+        f"{entry.entry_id}_virtual_device_{device['id']}"
+        for device in configured_devices
+    }
+    expected_entity_ids = {
+        f"{entry.entry_id}_virtual_device_{device['id']}_{entity_id}"
+        for device in configured_devices
+        for entity_id in device["entities"]
+    }
+    entity_registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        if (
+            entity.unique_id.startswith(f"{entry.entry_id}_virtual_device_")
+            and entity.unique_id not in expected_entity_ids
+        ):
+            entity_registry.async_remove(entity.entity_id)
+
+    device_registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        if any(
+            domain == DOMAIN
+            and identifier.startswith(f"{entry.entry_id}_virtual_device_")
+            and identifier not in expected_device_ids
+            for domain, identifier in device.identifiers
+        ):
+            device_registry.async_remove_device(device.id)
