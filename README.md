@@ -108,7 +108,7 @@ on when pressure falls about 3% over up to 12 hours (at least 4 hours of
 history and 3 readings). Pressure is compensated for temperature, so a rise
 from heating while driving or a fall from shade or cooler air is not treated as
 loss; slow loss therefore requires a temperature source for the tire, and
-sudden drop falls back to raw pressure when temperature is missing. Pressure
+sudden drop falls back to raw pressure when any reading in its window lacks a temperature. Pressure
 increases never trigger either predictor. The predictors report unknown while
 history is insufficient or the source is unavailable. History is kept in
 memory only, so it restarts after a Home Assistant restart or integration
