@@ -223,9 +223,7 @@ def test_tank_options_accept_template_sensor_sources() -> None:
 def test_all_tank_level_selectors_accept_numeric_entity_domains() -> None:
     """Offer sensor and numeric helper domains for each tank level."""
     schema = _options_schema(_tire_profile_entry())
-    selectors = {
-        marker.schema: selector for marker, selector in schema.schema.items()
-    }
+    selectors = {marker.schema: selector for marker, selector in schema.schema.items()}
 
     for tank in ("fresh_water", "gray_water", "black_water"):
         assert selectors[f"{tank}_tank_level"].config["domain"] == [
