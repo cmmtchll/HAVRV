@@ -39,6 +39,7 @@ from .const import (
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
     CONF_TANK_ENTITY_MAPPINGS,
+    CONF_TANK_THRESHOLDS,
     CONF_TIRE_BATTERY_LOW,
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_HIGH,
@@ -48,7 +49,9 @@ from .const import (
     DOMAIN,
     SUPPORTED_ENTITY_DOMAINS,
     SYSTEM_CATEGORIES,
+    TANK_PROBLEM,
     TANK_TYPES,
+    TANK_WARNING,
     TIRE_AXLE,
     TIRE_FRONT,
     TIRE_TAG,
@@ -57,6 +60,7 @@ from .const import (
     WHEEL_CONFIGURATION_DUAL,
     WHEEL_CONFIGURATION_SINGLE,
 )
+from .tank import thresholds_valid
 from .tire import tire_entity_key, tire_positions
 
 _PROFILE_TEXT_FIELDS = (
@@ -341,6 +345,27 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
             selector.EntitySelectorConfig(domain="sensor")
         )
 
+    percent_selector = selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=0,
+            max=100,
+            step=1,
+            unit_of_measurement="%",
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    )
+    tank_thresholds = existing_options.get(CONF_TANK_THRESHOLDS, {})
+    for tank in TANK_TYPES:
+        configured = tank_thresholds.get(tank, {})
+        for level in (TANK_WARNING, TANK_PROBLEM):
+            field = f"{tank}_tank_{level}"
+            marker = (
+                vol.Optional(field, default=configured[level])
+                if level in configured
+                else vol.Optional(field)
+            )
+            fields[marker] = percent_selector
+
     tire_mappings = existing_options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
     for position in tire_positions(entry.data):
         for metric in ("pressure", "temperature", "battery"):
@@ -444,6 +469,26 @@ def _normalize_options(
         selected_tank_sources.add(entity_id)
         tank_mappings[tank] = entity_id
 
+    existing_tank_thresholds = entry.options.get(CONF_TANK_THRESHOLDS, {})
+    tank_thresholds: dict[str, dict[str, float]] = {}
+    for tank in TANK_TYPES:
+        existing = existing_tank_thresholds.get(tank, {})
+        warning = user_input.get(f"{tank}_tank_{TANK_WARNING}", existing.get("warning"))
+        problem = user_input.get(f"{tank}_tank_{TANK_PROBLEM}", existing.get("problem"))
+        if (warning is None) != (problem is None):
+            return {}, "incomplete_tank_threshold"
+        if warning is not None:
+            if (
+                not _is_finite_number(warning)
+                or not _is_finite_number(problem)
+                or not thresholds_valid(tank, warning, problem)
+            ):
+                return {}, "invalid_tank_threshold"
+            tank_thresholds[tank] = {
+                TANK_WARNING: float(warning),
+                TANK_PROBLEM: float(problem),
+            }
+
     positions = tire_positions(entry.data)
     existing_tire_mappings = entry.options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
     tire_mappings: dict[str, str] = {}
@@ -515,6 +560,7 @@ def _normalize_options(
     options: dict[str, Any] = {
         CONF_ENTITY_MAPPINGS: mappings,
         CONF_TANK_ENTITY_MAPPINGS: tank_mappings,
+        CONF_TANK_THRESHOLDS: tank_thresholds,
     }
     if positions:
         options[CONF_TIRE_ENTITY_MAPPINGS] = tire_mappings

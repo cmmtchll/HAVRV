@@ -211,6 +211,53 @@ def test_tank_options_reject_invalid_level_mappings(
     assert error == expected_error
 
 
+def test_tank_thresholds_are_stored_per_tank() -> None:
+    """Store warning and problem levels with the direction-aware tank type."""
+    options, error = _normalize_options(
+        {
+            "fresh_water_tank_warning": 30,
+            "fresh_water_tank_problem": 10,
+            "gray_water_tank_warning": 70,
+            "gray_water_tank_problem": 90,
+        },
+        _tire_profile_entry(),
+    )
+
+    assert error is None
+    assert options["tank_thresholds"] == {
+        "fresh_water": {"warning": 30.0, "problem": 10.0},
+        "gray_water": {"warning": 70.0, "problem": 90.0},
+    }
+
+
+@pytest.mark.parametrize(
+    ("user_input", "expected_error"),
+    [
+        ({"fresh_water_tank_warning": 30}, "incomplete_tank_threshold"),
+        (
+            {"fresh_water_tank_warning": 10, "fresh_water_tank_problem": 30},
+            "invalid_tank_threshold",
+        ),
+        (
+            {"black_water_tank_warning": 90, "black_water_tank_problem": 70},
+            "invalid_tank_threshold",
+        ),
+        (
+            {"gray_water_tank_warning": "x", "gray_water_tank_problem": 90},
+            "invalid_tank_threshold",
+        ),
+    ],
+)
+def test_tank_thresholds_reject_invalid_values(
+    user_input: dict, expected_error: str
+) -> None:
+    """Reject incomplete, wrong-direction, or non-numeric tank thresholds."""
+    options, error = _normalize_options(user_input, _tire_profile_entry())
+
+    assert options == {}
+    assert error == expected_error
+
+
 @pytest.mark.parametrize(
     "entity_id",
     [

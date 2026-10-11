@@ -2,6 +2,7 @@
 
 import math
 from collections.abc import Callable
+from datetime import datetime
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -9,8 +10,11 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.const import PERCENTAGE
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
 from . import HavrvConfigEntry
 from .const import (
@@ -34,14 +38,20 @@ from .const import (
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
     CONF_TANK_ENTITY_MAPPINGS,
+    CONF_TANK_THRESHOLDS,
     DOMAIN,
     TANK_BLACK_WATER,
+    TANK_EMPTY_PERCENT,
     TANK_FRESH_WATER,
+    TANK_FULL_PERCENT,
     TANK_GRAY_WATER,
+    TANK_PROBLEM,
     TANK_TYPES,
+    TANK_WARNING,
     UNIT_SYSTEM_METRIC,
 )
 from .entity import HavrvSourceEntity, async_add_source_entities
+from .tank import STATUS_OPTIONS, tank_percent, tank_status
 from .tire import HavrvTireEntity, TirePosition, tire_positions
 
 PARALLEL_UPDATES = 0
@@ -179,9 +189,10 @@ class HavrvSensor(HavrvSourceEntity, SensorEntity):
         if state is None or not self.available:
             return None
         try:
-            return float(state.state)
+            value = float(state.state)
         except ValueError:
             return state.state
+        return value if math.isfinite(value) else None
 
     @property
     def native_unit_of_measurement(self) -> str | None:
@@ -295,6 +306,147 @@ class HavrvTankCapacitySensor(HavrvProfileSensor):
         )
         self._attr_unique_id = f"{entry.entry_id}_tank_{tank}_capacity"
         self._attr_device_info = _tank_device_info(entry, tank, tank_name)
+
+
+class HavrvTankDerivedSensor(HavrvSourceEntity, SensorEntity):
+    """Base for values derived from a tank-level source."""
+
+    entity_description: SensorEntityDescription
+
+    def __init__(
+        self,
+        entry: HavrvConfigEntry,
+        tank: str,
+        tank_name: str,
+        capacity_key: str,
+        source_entity_id: str,
+        description: SensorEntityDescription,
+    ) -> None:
+        """Initialize a derived tank sensor."""
+        parent_device_id = entry.runtime_data.device_id
+        if parent_device_id is None:
+            raise RuntimeError("RV device must be registered before platform setup")
+        super().__init__(entry, "water", source_entity_id, parent_device_id)
+        self.entity_description = description
+        self._tank = tank
+        self._capacity = entry.data.get(capacity_key)
+        self._capacity_unit = _profile_sensor_unit(entry, capacity_key)
+        self._attr_unique_id = f"{entry.entry_id}_tank_{tank}_{description.key}"
+        self._attr_device_info = _tank_device_info(entry, tank, tank_name)
+
+    @property
+    def available(self) -> bool:
+        """Return whether a fill percentage can be derived."""
+        return self._percent() is not None
+
+    def _percent(self) -> float | None:
+        """Return the fill percentage derived from the source, if possible."""
+        state = self._source_state
+        if state is None:
+            return None
+        try:
+            value = float(state.state)
+        except ValueError:
+            return None
+        if not math.isfinite(value):
+            return None
+        return tank_percent(
+            value,
+            state.attributes.get("unit_of_measurement"),
+            self._capacity,
+            self._capacity_unit,
+        )
+
+
+class HavrvTankPercentageSensor(HavrvTankDerivedSensor):
+    """Expose a tank's fill percentage."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the fill percentage."""
+        return self._percent()
+
+
+class HavrvTankStatusSensor(HavrvTankDerivedSensor):
+    """Expose ok/warning/problem from user-configured thresholds."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(STATUS_OPTIONS)
+
+    def __init__(
+        self,
+        entry: HavrvConfigEntry,
+        tank: str,
+        tank_name: str,
+        capacity_key: str,
+        source_entity_id: str,
+        description: SensorEntityDescription,
+        warning: float,
+        problem: float,
+    ) -> None:
+        """Initialize a tank status sensor."""
+        super().__init__(
+            entry, tank, tank_name, capacity_key, source_entity_id, description
+        )
+        self._warning = warning
+        self._problem = problem
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the status for the current fill percentage."""
+        return tank_status(self._tank, self._percent(), self._warning, self._problem)
+
+
+class HavrvTankHistorySensor(HavrvTankDerivedSensor, RestoreEntity):
+    """Record when a tank was last filled or emptied."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    _last_percent: float | None = None
+    _last_event: datetime | None = None
+
+    @property
+    def available(self) -> bool:
+        """Stay available so the last event is kept while the source is down."""
+        return True
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the time of the last detected event."""
+        return self._last_event
+
+    def _observe(self) -> None:
+        """Detect a fill or empty transition between consecutive readings."""
+        percent = self._percent()
+        if percent is None:
+            return
+        previous = self._last_percent
+        self._last_percent = percent
+        if previous is None:
+            return
+        if self._tank == TANK_FRESH_WATER:
+            event = previous < TANK_FULL_PERCENT <= percent
+        else:
+            event = previous > TANK_EMPTY_PERCENT >= percent
+        if event:
+            self._last_event = dt_util.utcnow()
+
+    @callback
+    def async_on_source_state_changed(self, event: Event) -> None:
+        """Track the transition, then write state."""
+        self._observe()
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last event and seed the baseline reading."""
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            self._last_event = dt_util.parse_datetime(last_state.state)
+        self._last_percent = self._percent()
 
 
 class HavrvTireSensor(HavrvTireEntity, SensorEntity):
@@ -413,6 +565,34 @@ def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
             entities.append(
                 HavrvTankCapacitySensor(entry, tank, name, capacity_key, capacity)
             )
+
+        def derived(key: str, **kwargs: object) -> SensorEntityDescription:
+            return SensorEntityDescription(
+                key=key, name=key.replace("_", " ").capitalize(), **kwargs
+            )
+
+        args = (entry, tank, name, capacity_key, source_entity_id)
+        entities.append(
+            HavrvTankPercentageSensor(
+                *args, derived("percentage", translation_key="tank_percentage")
+            )
+        )
+        thresholds = entry.options.get(CONF_TANK_THRESHOLDS, {}).get(tank)
+        if thresholds is not None:
+            entities.append(
+                HavrvTankStatusSensor(
+                    *args,
+                    derived("status", translation_key="tank_status"),
+                    thresholds[TANK_WARNING],
+                    thresholds[TANK_PROBLEM],
+                )
+            )
+        history_key = "last_filled" if tank == TANK_FRESH_WATER else "last_emptied"
+        entities.append(
+            HavrvTankHistorySensor(
+                *args, derived(history_key, translation_key=f"tank_{history_key}")
+            )
+        )
     return entities
 
 

@@ -82,9 +82,18 @@ a separate tank device beneath the RV device with a live **Level** sensor; a
 configured tank capacity is also exposed as a **Capacity** sensor on that tank
 device. Tank selections are optional, and HAVRV does not infer tank type from
 source entity IDs or names. The original system-mapped entities and profile
-capacity sensors remain unchanged. Fuel tank levels are not part of this first
-version; a fuel capacity may still be stored as profile data. Tank alert
-thresholds and last-emptied/last-filled history are not implemented.
+capacity sensors remain unchanged. When a capacity is configured, the tank
+device also exposes a **Percentage** sensor (level divided by capacity).
+
+Optionally set a warning and a problem percentage for a tank in the options;
+both must be set together. Fresh water alerts when the level falls (problem
+below warning), while gray and black water alert when it rises (problem above
+warning). A tank with thresholds gets a **Status** sensor (`ok`, `warning`,
+`problem`). Each tank also has **Last filled** (fresh water) or **Last emptied**
+(gray/black) timestamps, detected when the level crosses fixed 95% / 5%
+boundaries; the value is restored after a restart, and the first reading after
+startup never creates an event. Fuel tank levels are not implemented; a fuel
+capacity may still be stored as profile data.
 
 When the rear axle count is configured, HAVRV generates tire devices for the
 front axle and configured rear axle assemblies. Single wheels are named by
