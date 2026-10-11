@@ -24,11 +24,12 @@ python -m pip install -e ".[test]"
 
 ## Checks
 
-Run these before opening a pull request:
+Run these before pushing code or opening/updating a pull request:
 
 ```console
 ruff check .
 ruff format --check .
+mypy
 pytest
 python -m coverage report --include=custom_components/havrv/config_flow.py --fail-under=100
 python scripts/quality_scale_audit.py
@@ -47,9 +48,44 @@ lifecycle behavior as applicable.
 
 ## Pull requests
 
+- On creation and every branch update, confirm that the `Validate` workflow runs
+  for the latest head SHA. Push and pull-request events already trigger it; use
+  its manual dispatch for the branch if no run was triggered.
+- Inspect all results and failure logs, including quality-scale checks, lint,
+  HACS, and Home Assistant validation (hassfest). An older successful run does
+  not validate a new commit. Fix failures before reporting completion.
+- Report blocked local checks and CI runs requiring approval (`action_required`),
+  skipped, pending, cancelled, or unavailable as unverified, not passing.
+  Never bypass approvals or weaken validation. Retry only diagnosed transient
+  failures; a retry runs the original commit, not a newly pushed fix.
 - Describe the user-visible behavior and any configuration or migration impact.
 - Include tests and update documentation for behavior changes.
 - Keep entity IDs stable and use Home Assistant registries and translation
   patterns rather than hard-coded presentation strings.
 - Do not claim a quality-scale tier until every rule for that tier and all
   lower tiers is met.
+
+## Integration behavior contract
+
+Follow the [mapping and configuration contract](AGENTS.md#mapping-and-configuration-contract)
+for new and changed features:
+
+- Preserve passthrough readings and supported controls, layering validation,
+  problem detection, and derived insights on top without fabricating source data.
+- Accept `sensor`, `number`, and `input_number` in numeric source selectors and
+  submitted-value validation, including generic passthrough. Template sensors
+  and numbers use those domains, not a separate `template` domain. Non-numeric
+  selectors retain their appropriate domain restrictions.
+- Provide documented defaults in both forms and runtime for operational options
+  and thresholds; preserve overrides and legacy entries. Do not guess RV
+  specifications or manufacturer-specific safety limits.
+- Use the profile's selected measurement system consistently for unit-bearing
+  readings, limits, and derived values, with appropriate Home Assistant unit
+  metadata. Preserve explicit per-entity user overrides.
+- Test source-domain support, missing defaults, overrides, unit mismatches, and
+  invalid/unavailable sources and lifecycle behavior as applicable.
+- Update the README and linked setup, feature, and troubleshooting guides for
+  user-visible changes, and keep quality-scale rationales and evidence current.
+
+These are contributor requirements, not a claim that every existing feature
+already satisfies them; user guides describe currently implemented behavior.
