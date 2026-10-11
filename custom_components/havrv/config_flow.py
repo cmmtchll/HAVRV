@@ -84,7 +84,7 @@ _TIRE_ENTITY_DOMAINS = ("sensor", "number", "input_number")
 class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for HAVRV."""
 
-    VERSION = 2
+    VERSION = 3
 
     @staticmethod
     def async_get_options_flow(
@@ -218,9 +218,6 @@ def _profile_schema(*, default_measurement_system: str) -> vol.Schema:
                 )
             ),
             vol.Optional(CONF_MAIN_REAR_WHEEL_CONFIGURATION): wheel_selector,
-            vol.Optional(
-                CONF_TAG_AXLE_PRESENT, default=False
-            ): selector.BooleanSelector(),
             vol.Optional(CONF_TAG_AXLE_WHEEL_CONFIGURATION): wheel_selector,
         }
     )
@@ -280,7 +277,8 @@ def _normalize_profile(
             AXLE_COUNT_THREE: 3,
         }[rear_axle_count]
 
-    tag_axle_present = user_input.get(CONF_TAG_AXLE_PRESENT, False)
+    rear_axle_count = data.get(CONF_REAR_AXLE_COUNT)
+    tag_axle_present = rear_axle_count is not None and rear_axle_count > 1
     data[CONF_TAG_AXLE_PRESENT] = tag_axle_present
 
     tag_wheel_configuration = user_input.get(CONF_TAG_AXLE_WHEEL_CONFIGURATION)

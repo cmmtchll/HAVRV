@@ -295,7 +295,6 @@ async def test_user_flow_stores_coach_profile_and_specifications(
         CONF_BLACK_WATER_TANK_CAPACITY: 80,
         CONF_REAR_AXLE_COUNT: "two",
         CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
-        CONF_TAG_AXLE_PRESENT: True,
         CONF_TAG_AXLE_WHEEL_CONFIGURATION: "single",
     }
 
@@ -341,13 +340,36 @@ async def test_user_flow_accepts_three_rear_axles_including_tag(
             CONF_NAME: "Adventure RV",
             CONF_REAR_AXLE_COUNT: "three",
             CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
-            CONF_TAG_AXLE_PRESENT: True,
             CONF_TAG_AXLE_WHEEL_CONFIGURATION: "single",
         },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_REAR_AXLE_COUNT] == 3
+    assert result["data"][CONF_TAG_AXLE_PRESENT] is True
+    positions = tire_positions(result["data"])
+    assert any(position.key == "rear_axle_2_left_inner" for position in positions)
+    assert any(position.key == "tag_axle_left" for position in positions)
+
+
+async def test_user_flow_derives_no_tag_for_one_rear_axle(
+    hass: HomeAssistant,
+) -> None:
+    """A single configured rear axle creates no tag-axle positions."""
+    form = await _init_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_NAME: "Adventure RV",
+            CONF_REAR_AXLE_COUNT: "one",
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_TAG_AXLE_PRESENT] is False
+    assert CONF_TAG_AXLE_WHEEL_CONFIGURATION not in result["data"]
+    assert all(position.group != "tag" for position in tire_positions(result["data"]))
 
 
 async def test_user_flow_stores_grouped_source_entity_mappings(
@@ -560,7 +582,7 @@ async def test_user_flow_requires_tag_wheel_configuration(
     form = await _init_user_flow(hass)
     result = await hass.config_entries.flow.async_configure(
         form["flow_id"],
-        user_input={CONF_NAME: "Adventure RV", CONF_TAG_AXLE_PRESENT: True},
+        user_input={CONF_NAME: "Adventure RV", CONF_REAR_AXLE_COUNT: "two"},
     )
 
     assert result["type"] is FlowResultType.FORM
@@ -576,7 +598,8 @@ async def test_user_flow_rejects_tag_wheels_when_no_tag_axle(
         form["flow_id"],
         user_input={
             CONF_NAME: "Adventure RV",
-            CONF_TAG_AXLE_PRESENT: False,
+            CONF_REAR_AXLE_COUNT: "one",
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
             CONF_TAG_AXLE_WHEEL_CONFIGURATION: "dual",
         },
     )
@@ -594,11 +617,17 @@ async def test_user_flow_accepts_tag_axle_with_wheel_configuration(
         form["flow_id"],
         user_input={
             CONF_NAME: "Adventure RV",
-            CONF_TAG_AXLE_PRESENT: True,
+            CONF_REAR_AXLE_COUNT: "two",
+            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
             CONF_TAG_AXLE_WHEEL_CONFIGURATION: "dual",
         },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_TAG_AXLE_PRESENT] is True
+    assert result["data"][CONF_REAR_AXLE_COUNT] == 2
     assert result["data"][CONF_TAG_AXLE_WHEEL_CONFIGURATION] == "dual"
+    positions = tire_positions(result["data"])
+    assert any(position.key == "rear_axle_1_left_inner" for position in positions)
+    assert any(position.key == "tag_axle_left_inner" for position in positions)
+    assert not any(position.key.startswith("rear_axle_2_") for position in positions)
