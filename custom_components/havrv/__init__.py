@@ -158,9 +158,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
     if positions:
         platforms.add(Platform.BINARY_SENSOR)
     entry.runtime_data.platforms = [Platform.SELECT, *platforms]
-    # Restore the operation mode before mode-aware entities write their state.
-    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SELECT])
-    await hass.config_entries.async_forward_entry_setups(entry, list(platforms))
+    await hass.config_entries.async_forward_entry_setups(
+        entry, entry.runtime_data.platforms
+    )
     return True
 
 

@@ -61,8 +61,8 @@ async def _select(hass: HomeAssistant, entity_id: str, option: str) -> None:
     await hass.async_block_till_done()
 
 
-async def test_operations_device_mode_drives_tank_alerts(hass: HomeAssistant) -> None:
-    """The mode select lives on its own device and adjusts tank status."""
+async def test_operations_device_mode_select(hass: HomeAssistant) -> None:
+    """The mode select lives on its own device and leaves problems unchanged."""
     hass.states.async_set("sensor.fresh", "10", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.gray", "90", {"unit_of_measurement": "%"})
     entry = _entry()
@@ -92,11 +92,12 @@ async def test_operations_device_mode_drives_tank_alerts(hass: HomeAssistant) ->
 
     await _select(hass, mode, "storage")
     assert hass.states.get(mode).state == "storage"
-    assert hass.states.get(fresh).state == "ok"
+    assert entry.runtime_data.operation_mode == "storage"
+    assert hass.states.get(fresh).state == "problem"
     assert hass.states.get(gray).state == "problem"
 
     await _select(hass, mode, "driving")
-    assert hass.states.get(fresh).state == "problem"
+    assert hass.states.get(mode).state == "driving"
 
     with pytest.raises(ServiceValidationError):
         await _select(hass, mode, "parked")
@@ -106,10 +107,8 @@ async def test_operations_device_mode_drives_tank_alerts(hass: HomeAssistant) ->
     assert entry.state is ConfigEntryState.NOT_LOADED
 
 
-async def test_operation_mode_restored_before_tank_status(
-    hass: HomeAssistant,
-) -> None:
-    """A restored mode applies to tank status from the first state written."""
+async def test_operation_mode_restored(hass: HomeAssistant) -> None:
+    """The last selected mode survives a restart and reload."""
     hass.states.async_set("sensor.fresh", "10", {"unit_of_measurement": "%"})
     entry = _entry()
     registry = er.async_get(hass)
@@ -127,12 +126,11 @@ async def test_operation_mode_restored_before_tank_status(
     fresh = _entity_id(hass, entry, "tank_fresh_water_status")
     assert hass.states.get(mode_entry.entity_id).state == "storage"
     assert entry.runtime_data.operation_mode == "storage"
-    assert hass.states.get(fresh).state == "ok"
+    assert hass.states.get(fresh).state == "problem"
 
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get(mode_entry.entity_id).state == "storage"
-    assert hass.states.get(fresh).state == "ok"
 
 
 async def test_unknown_restored_mode_is_ignored(hass: HomeAssistant) -> None:

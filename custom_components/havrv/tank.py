@@ -6,7 +6,6 @@ from .const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
     CONF_FRESH_WATER_TANK_CAPACITY,
     CONF_GRAY_WATER_TANK_CAPACITY,
-    FRESH_WATER_LOW_ACCEPTED_MODES,
     TANK_BLACK_WATER,
     TANK_FRESH_WATER,
     TANK_GRAY_WATER,
@@ -44,22 +43,12 @@ def tank_percent(
 
 
 def tank_status(
-    tank: str,
-    percent: float | None,
-    warning: float,
-    problem: float,
-    operation_mode: str | None = None,
+    tank: str, percent: float | None, warning: float, problem: float
 ) -> str | None:
-    """Return ok/warning/problem; fresh water is bad when low, waste when high.
-
-    A low fresh-water level is expected, and reported as ok, in operation
-    modes such as storage.
-    """
+    """Return ok/warning/problem; fresh water is bad when low, waste when high."""
     if percent is None:
         return None
     if tank == TANK_FRESH_WATER:
-        if operation_mode in FRESH_WATER_LOW_ACCEPTED_MODES:
-            return STATUS_OK
         if percent <= problem:
             return TANK_PROBLEM
         if percent <= warning:

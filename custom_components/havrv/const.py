@@ -51,9 +51,6 @@ OPERATION_MODES = (
     OPERATION_MODE_CAMPSITE_MINIMAL,
     OPERATION_MODE_MAINTENANCE,
 )
-# Operation modes in which a low fresh-water level is expected, not a problem.
-FRESH_WATER_LOW_ACCEPTED_MODES = (OPERATION_MODE_STORAGE,)
-SIGNAL_OPERATION_MODE_CHANGED = f"{DOMAIN}_operation_mode_changed_{{}}"
 
 UNIT_SYSTEM_METRIC = "metric"
 UNIT_SYSTEM_US_CUSTOMARY = "us_customary"

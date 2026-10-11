@@ -34,8 +34,7 @@ choose existing entities, and configure optional tank and tire monitoring.
   entities, with percentage/status readings, configured-limit checks, and
   comparative tire analysis.
 - Adds an Operations device with an operation-mode selector (Storage,
-  Driving, Campsite full service, Campsite minimal, or Maintenance) that
-  adjusts which readings count as problems.
+  Driving, Campsite full service, Campsite minimal, or Maintenance).
 
 Entity IDs and system layouts differ between RVs. HAVRV does not assume a
 particular manufacturer, fixed entity set, or source naming convention.

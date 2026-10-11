@@ -47,14 +47,6 @@ def test_tank_status_direction() -> None:
     assert tank_status("gray_water", 99, 80, 95) == "problem"
 
 
-def test_tank_status_operation_mode() -> None:
-    """Low fresh water is expected in storage; waste limits still apply."""
-    assert tank_status("fresh_water", 5, 20, 10, "storage") == "ok"
-    assert tank_status("fresh_water", 5, 20, 10, "driving") == "problem"
-    assert tank_status("fresh_water", None, 20, 10, "storage") is None
-    assert tank_status("gray_water", 99, 80, 95, "storage") == "problem"
-
-
 def test_thresholds_valid() -> None:
     """Validate range and ordering."""
     assert thresholds_valid("fresh_water", 20, 10)

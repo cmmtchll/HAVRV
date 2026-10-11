@@ -2,8 +2,7 @@
 
 ## Unreleased
 
-- Add an Operations device with a restorable operation-mode selector; Storage
-  mode treats a low fresh-water level as expected.
+- Add an Operations device with a restorable operation-mode selector.
 - Add consistent, field-specific icons to RV profile sensors.
 - Expose saved RV profile specifications as sensors on the RV device.
 - Add RV and system devices, configurable source-entity mappings, mirrored
