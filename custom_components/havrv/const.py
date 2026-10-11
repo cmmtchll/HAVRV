@@ -17,6 +17,8 @@ CONF_FUEL_TANK_CAPACITY = "fuel_tank_capacity"
 CONF_FRESH_WATER_TANK_CAPACITY = "fresh_water_tank_capacity"
 CONF_GRAY_WATER_TANK_CAPACITY = "gray_water_tank_capacity"
 CONF_BLACK_WATER_TANK_CAPACITY = "black_water_tank_capacity"
+CONF_TANK_ENTITY_MAPPINGS = "tank_entity_mappings"
+CONF_TANK_THRESHOLDS = "tank_thresholds"
 CONF_REAR_AXLE_COUNT = "rear_axle_count"
 CONF_MAIN_REAR_WHEEL_CONFIGURATION = "main_rear_wheel_configuration"
 CONF_TAG_AXLE_PRESENT = "tag_axle_present"
@@ -26,6 +28,16 @@ CONF_TIRE_ENTITY_MAPPINGS = "tire_entity_mappings"
 CONF_TIRE_PRESSURE_THRESHOLDS = "tire_pressure_thresholds"
 CONF_TIRE_TEMPERATURE_HIGH = "tire_temperature_high"
 CONF_TIRE_BATTERY_LOW = "tire_battery_low"
+
+TANK_FRESH_WATER = "fresh_water"
+TANK_GRAY_WATER = "gray_water"
+TANK_BLACK_WATER = "black_water"
+TANK_TYPES = (TANK_FRESH_WATER, TANK_GRAY_WATER, TANK_BLACK_WATER)
+TANK_WARNING = "warning"
+TANK_PROBLEM = "problem"
+# Percent levels used to recognize a tank having been emptied or filled.
+TANK_EMPTY_PERCENT = 5.0
+TANK_FULL_PERCENT = 95.0
 
 UNIT_SYSTEM_METRIC = "metric"
 UNIT_SYSTEM_US_CUSTOMARY = "us_customary"

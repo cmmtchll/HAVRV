@@ -26,6 +26,15 @@
           "tag_axle_wheel_configuration": "Tag axle wheels",
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
+          "fresh_water_tank_level": "Fresh-water tank level sensor",
+          "gray_water_tank_level": "Gray-water tank level sensor",
+          "black_water_tank_level": "Black-water tank level sensor",
+          "fresh_water_tank_warning": "Fresh-water tank warning level",
+          "fresh_water_tank_problem": "Fresh-water tank problem level",
+          "gray_water_tank_warning": "Gray-water tank warning level",
+          "gray_water_tank_problem": "Gray-water tank problem level",
+          "black_water_tank_warning": "Black-water tank warning level",
+          "black_water_tank_problem": "Black-water tank problem level",
           "chassis_entities": "Chassis system entities",
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
@@ -53,6 +62,15 @@
           "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one.",
           "power_entities": "Select existing sensors, controls, or climate entities for the RV power system.",
           "water_entities": "Select existing sensors, controls, or climate entities for the RV water system.",
+          "fresh_water_tank_level": "Select the existing sensor for the fresh-water tank level. Leave blank when the tank or sensor is not present.",
+          "gray_water_tank_level": "Select the existing sensor for the gray-water tank level. Leave blank when the tank or sensor is not present.",
+          "black_water_tank_level": "Select the existing sensor for the black-water tank level. Leave blank when the tank or sensor is not present.",
+          "fresh_water_tank_warning": "Percent full that raises a warning when the tank is low. Set together with the problem level, or leave both blank.",
+          "fresh_water_tank_problem": "Percent full that raises a problem when the tank is low. Must be below the warning level.",
+          "gray_water_tank_warning": "Percent full that raises a warning when the tank is high. Set together with the problem level, or leave both blank.",
+          "gray_water_tank_problem": "Percent full that raises a problem when the tank is high. Must be above the warning level.",
+          "black_water_tank_warning": "Percent full that raises a warning when the tank is high. Set together with the problem level, or leave both blank.",
+          "black_water_tank_problem": "Percent full that raises a problem when the tank is high. Must be above the warning level.",
           "chassis_entities": "Select existing sensors, controls, or climate entities for the RV chassis.",
           "climate_entities": "Select existing sensors, controls, or climate entities for RV climate systems.",
           "location_entities": "Select existing sensors, controls, or climate entities for RV location.",
@@ -121,7 +139,7 @@
     "step": {
       "init": {
         "title": "Map RV system entities",
-        "description": "Choose existing entities for RV systems and each generated tire. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
+        "description": "Choose existing entities for RV systems, optional water-tank level sensors, and each generated tire. Tank devices are created only for selected sensors. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
         "data": {
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
@@ -208,7 +226,9 @@
       "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
       "invalid_tire_pressure_threshold": "Pressure limits must be non-negative, and the high limit must be greater than the low limit.",
       "invalid_tire_temperature_threshold": "The high temperature limit must be a valid non-negative number.",
-      "invalid_tire_battery_threshold": "The low battery limit must be between 0 and 100 percent."
+      "invalid_tire_battery_threshold": "The low battery limit must be between 0 and 100 percent.",
+      "incomplete_tank_threshold": "Enter both warning and problem levels for a tank, or leave both blank.",
+      "invalid_tank_threshold": "Levels must be percentages from 0 to 100. Fresh water must have the problem level below the warning level; waste tanks must have it above."
     }
   },
   "selector": {
@@ -293,6 +313,29 @@
       },
       "tire_pressure": {
         "name": "Pressure"
+      },
+      "tank_level": {
+        "name": "Level"
+      },
+      "tank_capacity": {
+        "name": "Capacity"
+      },
+      "tank_percentage": {
+        "name": "Percentage"
+      },
+      "tank_status": {
+        "name": "Status",
+        "state": {
+          "ok": "OK",
+          "warning": "Warning",
+          "problem": "Problem"
+        }
+      },
+      "tank_last_filled": {
+        "name": "Last filled"
+      },
+      "tank_last_emptied": {
+        "name": "Last emptied"
       },
       "tire_temperature": {
         "name": "Temperature"
