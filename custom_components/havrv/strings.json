@@ -271,6 +271,12 @@
       },
       "tire_problem": {
         "name": "Tire problem"
+      },
+      "tire_pressure_sudden_drop": {
+        "name": "Sudden pressure drop"
+      },
+      "tire_pressure_slow_loss": {
+        "name": "Slow pressure loss"
       }
     }
   }
