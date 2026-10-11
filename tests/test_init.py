@@ -418,6 +418,7 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
         "Tire RV",
+        "All Tire Monitor",
         "Front Left Tire",
         "Front Right Tire",
         "Rear Axle 1 Left Tire",
