@@ -400,6 +400,7 @@ async def test_setup_creates_named_equipment_device_with_mirrored_entities(
     rv_device = next(device for device in devices if device.name == "Adventure RV")
     assert equipment.model == "House Battery"
     assert equipment.via_device_id == rv_device.id
+    assert {entity.device_id for entity in entities} == {equipment.id}
 
     form = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
@@ -410,6 +411,11 @@ async def test_setup_creates_named_equipment_device_with_mirrored_entities(
     await hass.async_block_till_done()
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {"Adventure RV"}
+    assert not [
+        entity
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if "_virtual_device_" in entity.unique_id
+    ]
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
