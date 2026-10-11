@@ -54,6 +54,15 @@ controls operate their selected source entities. Configure the integration
 later to change the mapping. Remove the HAVRV config entry to remove its
 devices and exposed entities; the source entities are not removed.
 
+In the integration options, you can optionally select a binary sensor whose
+`on` state explicitly means that shore power is connected. HAVRV exposes this
+as a stable **Shore power connected** status on the power-system device. An
+`off` state means disconnected; it is not treated as a problem because shore
+power may not be expected. A missing, unavailable, or invalid source is
+unavailable rather than healthy. This status does not infer voltage, service
+capacity, generator operation, or an RV operating mode, and it does not send
+alerts or control equipment.
+
 The profile can include the coach year, chassis manufacturer and make, coach
 builder/converter and model, coach identifier, and a Home Assistant zone for
 the RV's usual storage location. It can also hold overall height, length, and

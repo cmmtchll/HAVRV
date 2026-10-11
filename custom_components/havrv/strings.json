@@ -76,14 +76,15 @@
     "step": {
       "init": {
         "title": "Map RV system entities",
-        "description": "Choose existing entities for RV systems and each generated tire. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
+        "description": "Choose existing entities for RV systems and each generated tire. Optionally select a binary sensor whose on state means shore power is connected. Tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
         "data": {
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
           "chassis_entities": "Chassis system entities",
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
-              "other_entities": "Other RV entities",
+          "other_entities": "Other RV entities",
+          "shore_power_connected_entity": "Shore-power connected source",
           "tire_front_left_pressure": "Front left tire pressure source",
           "tire_front_left_temperature": "Front left tire temperature source",
           "tire_front_left_battery": "Front left tire battery source",
@@ -144,7 +145,7 @@
           "tire_tag_axle_right_outer_pressure": "Tag axle right outer tire pressure source",
           "tire_tag_axle_right_outer_temperature": "Tag axle right outer tire temperature source",
           "tire_tag_axle_right_outer_battery": "Tag axle right outer tire battery source",
-              "tire_front_pressure_low": "Front tire low-pressure limit",
+          "tire_front_pressure_low": "Front tire low-pressure limit",
           "tire_front_pressure_high": "Front tire high-pressure limit",
           "tire_axle_pressure_low": "Rear axle low-pressure limit",
           "tire_axle_pressure_high": "Rear axle high-pressure limit",
@@ -152,6 +153,9 @@
           "tire_tag_pressure_high": "Tag axle high-pressure limit",
           "tire_temperature_high": "High tire-temperature limit",
           "tire_battery_low": "Low tire-battery limit"
+        },
+        "data_description": {
+          "shore_power_connected_entity": "Select a binary sensor whose on state explicitly means that shore power is connected. Off is only a connection status, not a problem; an unavailable or invalid source is unavailable."
         }
       }
     },
@@ -159,6 +163,7 @@
       "invalid_entity_mapping": "Choose valid source entities.",
       "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system.",
       "invalid_tire_entity_mapping": "Choose a sensor, number entity, or input number helper for each tire reading.",
+      "invalid_shore_power_entity": "Choose a binary sensor that explicitly reports whether shore power is connected.",
       "duplicate_tire_entity_mapping": "A tire source entity can only be assigned once.",
       "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
       "invalid_tire_pressure_threshold": "Pressure limits must be non-negative, and the high limit must be greater than the low limit.",
@@ -257,6 +262,9 @@
       }
     },
     "binary_sensor": {
+      "shore_power_connected": {
+        "name": "Shore power connected"
+      },
       "tire_pressure_problem": {
         "name": "Pressure problem"
       },

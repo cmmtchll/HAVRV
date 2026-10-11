@@ -13,7 +13,11 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.util import dt as dt_util
 
 from . import HavrvConfigEntry
-from .const import TIRE_SLOW_LOSS, TIRE_SUDDEN_DROP
+from .const import (
+    CONF_SHORE_POWER_CONNECTED_ENTITY,
+    TIRE_SLOW_LOSS,
+    TIRE_SUDDEN_DROP,
+)
 from .entity import HavrvSourceEntity, async_add_source_entities
 from .tire import (
     HavrvTireEntity,
@@ -55,6 +59,38 @@ class HavrvBinarySensor(HavrvSourceEntity, BinarySensorEntity):
         """Return the source sensor device class."""
         device_class = self.source_attributes.get("device_class")
         return None if device_class is None else BinarySensorDeviceClass(device_class)
+
+
+class HavrvShorePowerConnectedBinarySensor(HavrvSourceEntity, BinarySensorEntity):
+    """Expose an explicitly mapped shore-power connection status."""
+
+    entity_description = BinarySensorEntityDescription(
+        key="shore_power_connected",
+        translation_key="shore_power_connected",
+        icon="mdi:power-plug",
+    )
+
+    def __init__(self, entry: HavrvConfigEntry, source_entity_id: str) -> None:
+        """Initialize the stable shore-power status entity."""
+        parent_device_id = entry.runtime_data.device_id
+        if parent_device_id is None:
+            raise RuntimeError("RV device must be registered before platform setup")
+        super().__init__(entry, "power", source_entity_id, parent_device_id)
+        self._attr_unique_id = f"{entry.entry_id}_shore_power_connected"
+
+    @property
+    def available(self) -> bool:
+        """Return whether the source has a recognized binary state."""
+        state = self._source_state
+        return state is not None and state.state in ("on", "off")
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the explicitly mapped source reports connected."""
+        state = self._source_state
+        if state is None or not self.available:
+            return None
+        return state.state == "on"
 
 
 class HavrvTireBinarySensor(HavrvTireEntity, BinarySensorEntity):
@@ -177,6 +213,10 @@ async def async_setup_entry(
     async_add_source_entities(
         entry, "binary_sensor", HavrvBinarySensor, async_add_entities
     )
+    if shore_power_entity_id := entry.options.get(CONF_SHORE_POWER_CONNECTED_ENTITY):
+        async_add_entities(
+            [HavrvShorePowerConnectedBinarySensor(entry, shore_power_entity_id)]
+        )
     async_add_entities(
         [
             HavrvTireBinarySensor(entry, position, problem)
