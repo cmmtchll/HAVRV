@@ -141,7 +141,9 @@
           "charging": "Charging status source",
           "location": "Dashboard placement",
           "nominal_voltage": "Bank nominal voltage (V DC)",
-          "nominal_capacity": "Bank nominal capacity (Ah)"
+          "nominal_capacity": "Bank nominal capacity (Ah)",
+          "warning": "Warning status source",
+          "problem": "Problem status source"
         },
         "data_description": {
           "voltage": "Sensor, number or input number. Compatible units convert to V; unitless sources are interpreted as V.",
@@ -150,7 +152,9 @@
           "charging": "An explicit binary sensor, switch or input boolean reporting whether this bank is charging. Independent of Enabled and of source availability.",
           "nominal_voltage": "12, 24 or 48 V DC. Defaults to 24 V; confirm your actual bank specification.",
           "nominal_capacity": "Total capacity of this complete bank in ampere-hours. No assumed capacity or battery-series/parallel calculation.",
-          "location": "Not shown by default. Shore power appears outside the RV on the selected side."
+          "location": "Not shown by default. Shore power appears outside the RV on the selected side.",
+          "warning": "Optional read-only binary sensor, switch or input boolean. On gives the box an amber status dot and tint. No voltage/current thresholds are inferred.",
+          "problem": "Optional read-only binary sensor, switch or input boolean. On gives the box a red status dot and tint, taking precedence over Warning and Enabled."
         }
       }
     },
@@ -266,7 +270,9 @@
           "charging": "Charging status source",
           "location": "Dashboard placement",
           "nominal_voltage": "Bank nominal voltage (V DC)",
-          "nominal_capacity": "Bank nominal capacity (Ah)"
+          "nominal_capacity": "Bank nominal capacity (Ah)",
+          "warning": "Warning status source",
+          "problem": "Problem status source"
         },
         "data_description": {
           "voltage": "Sensor, number or input number. Compatible units convert to V; unitless sources are interpreted as V.",
@@ -275,7 +281,9 @@
           "charging": "An explicit binary sensor, switch or input boolean reporting whether this bank is charging. Independent of Enabled and of source availability.",
           "nominal_voltage": "12, 24 or 48 V DC. Defaults to 24 V; confirm your actual bank specification.",
           "nominal_capacity": "Total capacity of this complete bank in ampere-hours. No assumed capacity or battery-series/parallel calculation.",
-          "location": "Not shown by default. Shore power appears outside the RV on the selected side."
+          "location": "Not shown by default. Shore power appears outside the RV on the selected side.",
+          "warning": "Optional read-only binary sensor, switch or input boolean. On gives the box an amber status dot and tint. No voltage/current thresholds are inferred.",
+          "problem": "Optional read-only binary sensor, switch or input boolean. On gives the box a red status dot and tint, taking precedence over Warning and Enabled."
         }
       }
     },
@@ -575,6 +583,12 @@
       },
       "power_charging": {
         "name": "Charging"
+      },
+      "power_warning": {
+        "name": "Warning"
+      },
+      "power_problem": {
+        "name": "Problem"
       }
     },
     "select": {

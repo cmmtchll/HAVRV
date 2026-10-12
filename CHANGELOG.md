@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.3.2
+
+- Keep tire pressure and temperature on the same line for both single and dual
+  wheels, with independent no-data handling and compact unit fitting.
+- Stress-test colocated R-Rear equipment in both orientations, improve interior
+  slot/readout packing, and add rendered crowded-placement examples.
+- Move electrical readouts into individual location-based boxes beside the RV,
+  avoiding tire labels and other sources, including colocated battery banks.
+- Add optional read-only Warning and Problem source mappings for every power
+  device. Tire-style status dots and translucent tints are green/gray for
+  Enabled on/off, amber/red for explicit warning/problem, and dashed with a
+  hollow dot for unknown status; no thresholds are inferred. Match tire-label
+  fonts, font sizes, and reduced-motion-aware alert outlines.
+- Add distinct battery, generator, inverter and external shore-plug graphics
+  linked to their readouts. Apply tire-style status colors and avoid overlapping
+  graphics, including dense colocated banks.
+- Enlarge equipment graphics to a tire-comparable footprint, replace crossing
+  callout lines with matching equipment tags, remove Enabled Yes/No rows, and
+  consolidate electrical/tire/tank status keys into one common legend.
+- Include placed electrical alerts in the header summary and add an electrical
+  legend. Refresh setup/dashboard guides and both rendered dashboard images.
+
 ## 0.3.1
 
 - Invalidate cached dashboard JavaScript using its content revision, including

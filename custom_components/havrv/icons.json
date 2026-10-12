@@ -103,6 +103,12 @@
       },
       "power_charging": {
         "default": "mdi:battery-charging"
+      },
+      "power_warning": {
+        "default": "mdi:alert"
+      },
+      "power_problem": {
+        "default": "mdi:alert-circle"
       }
     }
   }

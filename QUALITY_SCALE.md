@@ -19,9 +19,12 @@ implemented integration behavior, not just repository configuration.
   the options flow.
 - Independent house/chassis battery-bank devices (one each by default) and
   logical Inverter, Generator, and Shore Power devices, with declared
-  read-only voltage/current/Enabled mappings and optional bank Charging,
+  read-only voltage/current/Enabled mappings, optional Warning/Problem and bank Charging,
   nominal bank specifications, and optional dashboard placement. No charging
   path, active supply, state of charge, or power-flow topology is inferred.
+- Individually placed, collision-aware electrical readout boxes with colors
+  from explicit Warning/Problem/Enabled mappings and distinct unavailable status,
+  plus colored equipment graphics on the coach and an external shore plug.
 - Editable dimensions, tank capacities, and tank/tire limits exposed as number
   entities in Configuration on the main RV device, with other profile values
   exposed as read-only diagnostic sensors. Settings persist in the same

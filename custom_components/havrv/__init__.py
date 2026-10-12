@@ -41,7 +41,7 @@ from .const import (
     UNIT_SYSTEM_US_CUSTOMARY,
 )
 from .dashboard import async_register_frontend
-from .power import power_sources
+from .power import POWER_BINARY_METRICS, power_sources
 from .tank import TANK_DEFINITIONS
 from .tire import tire_positions
 
@@ -178,7 +178,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
     if positions or any(
         settings.get(metric)
         for settings in entry.options.get(CONF_POWER_SOURCES, {}).values()
-        for metric in ("enabled", "charging")
+        for metric in POWER_BINARY_METRICS
     ):
         platforms.add(Platform.BINARY_SENSOR)
     entry.runtime_data.platforms = [Platform.SELECT, Platform.NUMBER, *platforms]
@@ -246,7 +246,7 @@ def _remove_stale_entities_and_devices(
             ),
             *(
                 metric
-                for metric in ("voltage", "current", "enabled", "charging")
+                for metric in ("voltage", "current", *POWER_BINARY_METRICS)
                 if settings.get(metric)
             ),
         )

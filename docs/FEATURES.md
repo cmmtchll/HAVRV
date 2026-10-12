@@ -82,6 +82,8 @@ bank is a complete independent unit; HAVRV does not assume its internal wiring.
 | Current | A declared current reading, converted to A; source sign is preserved |
 | Enabled | Read-only on/off status from its explicitly mapped source |
 | Charging (banks only) | Read-only status reporting whether that particular bank is charging |
+| Warning | Optional read-only mapped advisory status; on gives the source box an amber dot/tint |
+| Problem | Optional read-only mapped problem status; on gives a red dot/tint, taking precedence over Warning |
 | Nominal voltage (banks only) | Configured specification: 12, 24 (default), or 48 V DC |
 | Nominal capacity (banks only) | Optional configured total capacity in Ah; no default |
 | Dashboard placement | Diagnostic metadata for optional overview placement |
@@ -112,8 +114,23 @@ These states are informational, not generator start/stop controls or safety
 interlocks.
 
 Placement is optional, with six interior regions and an external left/right
-shore connection. Colocated sources share a diagram marker and retain
-separate readouts. No physical location is guessed.
+shore connection. Each source has its own readout box beside the selected
+region, with matching equipment tags instead of crossing callout lines. Colocated sources use separate
+collision-free slots rather than a shared marker or bottom tiles.
+No physical location is guessed. Green/gray dots and subtle box tints indicate Enabled on/off;
+explicit Warning/Problem override that color, and unavailable mapped statuses
+show a dashed no-data box with a hollow dot unless a known alert is active.
+Box transparency and typography match the tire labels; hover or focus the
+status dot for its label, or select it for the mapped entity's details.
+Each source also has a battery, generator, inverter or shore-plug graphic,
+associated with its box by matching tags. Banks and AC equipment are on
+the coach; the shore plug is outside. Like tire shapes, equipment graphics
+are green when Enabled is on, gray when off, amber/red for Warning/Problem,
+and dashed/unfilled for unknown. They do not infer wiring or supply priority.
+Graphics normally have a tire-comparable 44-unit footprint. The overview omits
+Enabled Yes/No rows and uses one common legend for electrical, tires and tanks.
+HAVRV applies no electrical alert thresholds; [dashboard colors](DASHBOARD.md#electrical-box-colors)
+come only from the declared binary sources.
 
 ## Water-tank entities
 
@@ -221,9 +238,14 @@ HAVRV serves an RV overview card (`custom:havrv-rv-card`) and dashboard and
 view strategies (`custom:havrv`) from the integration. The card draws the RV
 from above, using the configured axle count, single or dual wheels, tag axle,
 and water tanks. It shows tire pressure and temperature and tank fill levels,
-colored by the HAVRV problem, trend, and tank status entities. The generated
+colored by the HAVRV problem, trend, and tank status entities. The
+card keeps pressure and temperature on one line for each single or dual tire,
+including independent missing-data indicators. Crowded electrical placements
+use extra nonoverlapping interior slots and outward readout lanes; see the
+[R-Rear stress examples](DASHBOARD.md#placement-stress-example). The generated
 dashboard adds sections for coach details, tanks, tire analysis, and each
-system device. See the [dashboard guide](DASHBOARD.md).
+system and power-source device. Optional electrical graphics and readout boxes
+use selected regions and mapped statuses. See the [dashboard guide](DASHBOARD.md).
 
 ## Automations
 

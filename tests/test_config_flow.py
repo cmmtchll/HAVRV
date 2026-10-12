@@ -897,6 +897,12 @@ def test_invalid_battery_bank_count(count: object) -> None:
         ({"voltage": "switch.voltage"}, "invalid_power_entity_mapping"),
         ({"enabled": "sensor.enabled"}, "invalid_power_entity_mapping"),
         ({"charging": "number.charging"}, "invalid_power_entity_mapping"),
+        ({"warning": "sensor.warning"}, "invalid_power_entity_mapping"),
+        ({"problem": "number.problem"}, "invalid_power_entity_mapping"),
+        (
+            {"warning": "binary_sensor.shared", "problem": "binary_sensor.shared"},
+            "duplicate_power_entity_mapping",
+        ),
         (
             {"current": "sensor.shared", "voltage": "sensor.shared"},
             "duplicate_power_entity_mapping",
@@ -961,6 +967,8 @@ async def test_setup_configures_independent_banks_and_readonly_sources(
             "current": "number.house_current",
             "enabled": "switch.house_enabled",
             "charging": "input_boolean.house_charging",
+            "warning": "binary_sensor.house_warning",
+            "problem": "switch.house_problem",
             "nominal_voltage": "48",
             "nominal_capacity": 400,
             "location": "left_rear",
@@ -981,6 +989,8 @@ async def test_setup_configures_independent_banks_and_readonly_sources(
     assert settings["house_bank_1"]["nominal_voltage"] == 48
     assert settings["house_bank_1"]["nominal_capacity"] == 400
     assert settings["house_bank_1"]["charging"] == "input_boolean.house_charging"
+    assert settings["house_bank_1"]["warning"] == "binary_sensor.house_warning"
+    assert settings["house_bank_1"]["problem"] == "switch.house_problem"
     assert settings["house_bank_2"] == {"nominal_voltage": 24, "location": "not_shown"}
     assert settings["shore_power"] == {"location": "not_shown"}
 
@@ -1021,6 +1031,8 @@ async def test_options_edit_power_settings_and_preserve_other_options(
                 "house_bank_1": {
                     "voltage": "sensor.old",
                     "charging": "binary_sensor.charging",
+                    "warning": "binary_sensor.warning",
+                    "problem": "input_boolean.problem",
                     "nominal_voltage": 12,
                     "nominal_capacity": 200,
                     "location": "left_mid",
@@ -1043,6 +1055,8 @@ async def test_options_edit_power_settings_and_preserve_other_options(
     fields = {key.schema: key for key in result["data_schema"].schema}
     assert fields["nominal_capacity"].description["suggested_value"] == 200
     assert fields["charging"].description["suggested_value"] == "binary_sensor.charging"
+    assert fields["warning"].description["suggested_value"] == "binary_sensor.warning"
+    assert fields["problem"].description["suggested_value"] == "input_boolean.problem"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"nominal_capacity": 0}
     )
@@ -1082,3 +1096,26 @@ def test_shore_placement_is_external_and_ignores_battery_fields() -> None:
     assert _normalize_power_source(
         {"location": "right", "charging": "binary_sensor.unused"}, shore
     ) == ({"location": "right"}, None)
+
+
+@pytest.mark.parametrize("domain", ["binary_sensor", "switch", "input_boolean"])
+@pytest.mark.parametrize(
+    "key", ["house_bank_1", "chassis_bank_1", "inverter", "generator", "shore_power"]
+)
+def test_power_alert_selectors_and_validation_match(domain: str, key: str) -> None:
+    """Every bank and AC source accepts the same read-only alert domains."""
+    source = PowerSource(key, key, "bank" in key)
+    schema = _power_source_schema(source, {})
+    fields = {field.schema: selector for field, selector in schema.schema.items()}
+    for metric in ("warning", "problem"):
+        assert fields[metric].config["domain"] == [
+            "binary_sensor",
+            "switch",
+            "input_boolean",
+        ]
+    settings, error = _normalize_power_source(
+        {"warning": f"{domain}.warning", "problem": f"{domain}.problem"}, source
+    )
+    assert error is None
+    assert settings["warning"] == f"{domain}.warning"
+    assert settings["problem"] == f"{domain}.problem"

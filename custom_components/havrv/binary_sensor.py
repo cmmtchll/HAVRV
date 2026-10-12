@@ -21,7 +21,13 @@ from homeassistant.util import dt as dt_util
 from . import HavrvConfigEntry
 from .const import TIRE_SLOW_LOSS, TIRE_SUDDEN_DROP
 from .entity import HavrvSourceEntity, async_add_source_entities
-from .power import HavrvPowerSourceEntity, PowerSource, power_settings, power_sources
+from .power import (
+    POWER_BINARY_METRICS,
+    HavrvPowerSourceEntity,
+    PowerSource,
+    power_settings,
+    power_sources,
+)
 from .tire import (
     HavrvTireEntity,
     TirePosition,
@@ -120,7 +126,7 @@ class HavrvTireBinarySensor(HavrvTireEntity, BinarySensorEntity):
 
 
 class HavrvPowerBinarySensor(HavrvPowerSourceEntity, BinarySensorEntity):
-    """Mirror Enabled or Charging without inferring activity or forwarding actions."""
+    """Mirror declared electrical statuses without inference or forwarding actions."""
 
     def __init__(
         self, entry: HavrvConfigEntry, source: PowerSource, metric: str
@@ -128,7 +134,13 @@ class HavrvPowerBinarySensor(HavrvPowerSourceEntity, BinarySensorEntity):
         """Initialize one explicitly configured read-only status."""
         super().__init__(entry, source, metric)
         self.entity_description = BinarySensorEntityDescription(
-            key=metric, translation_key=f"power_{metric}"
+            key=metric,
+            translation_key=f"power_{metric}",
+            device_class=(
+                BinarySensorDeviceClass.PROBLEM
+                if metric in ("warning", "problem")
+                else None
+            ),
         )
 
     @property
@@ -213,8 +225,8 @@ async def async_setup_entry(
         [
             HavrvPowerBinarySensor(entry, source, metric)
             for source in power_sources(entry.data)
-            for metric in ("enabled", "charging")
-            if (source.battery or metric == "enabled")
+            for metric in POWER_BINARY_METRICS
+            if (source.battery or metric != "charging")
             and power_settings(entry, source).get(metric) is not None
         ]
     )
