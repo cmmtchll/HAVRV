@@ -7,7 +7,7 @@ systems.
 
 > **Project status:** Early foundation. HAVRV supports RV profiles, system
 entity mappings, optional tank-level monitoring, and configurable tire
-monitoring. Notifications, integration-specific triggers and conditions, and
+monitoring, and an RV overview dashboard. Notifications, integration-specific triggers and conditions, and
 physical-device discovery are not implemented.
 
 ## Get started
@@ -19,6 +19,7 @@ choose existing entities, and configure optional tank and tire monitoring.
 | --- | --- |
 | Install and configure HAVRV | [Setup guide](docs/SETUP.md) |
 | Understand entities, tire/tank behavior, and limitations | [Feature guide](docs/FEATURES.md) |
+| Show the RV, tires, and tanks on a dashboard | [Dashboard guide](docs/DASHBOARD.md) |
 | Diagnose a setup or entity problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Contribute or run checks | [Contributing](CONTRIBUTING.md) |
 | See the quality-scale roadmap | [Quality scale](QUALITY_SCALE.md) |
@@ -35,6 +36,11 @@ choose existing entities, and configure optional tank and tire monitoring.
   comparative tire analysis.
 - Adds an Operations device with an operation-mode selector (Storage,
   Driving, Campsite full service, Campsite minimal, or Maintenance).
+- Includes an RV overview card and a generated RV dashboard. They draw the
+  configured axles, single or dual wheels, and water tanks with live readings
+  and status colors.
+
+![HAVRV RV overview card](docs/images/dashboard-horizontal.png)
 
 Entity IDs and system layouts differ between RVs. HAVRV does not assume a
 particular manufacturer, fixed entity set, or source naming convention.

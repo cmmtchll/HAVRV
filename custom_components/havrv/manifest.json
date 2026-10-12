@@ -1,6 +1,7 @@
 {
   "domain": "havrv",
   "name": "HAVRV",
+  "after_dependencies": ["frontend", "http"],
   "codeowners": ["@cmmtchll"],
   "config_flow": true,
   "documentation": "https://github.com/cmmtchll/HAVRV/blob/main/README.md",

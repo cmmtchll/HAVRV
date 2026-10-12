@@ -125,6 +125,13 @@ For a missing or unavailable reading, check the original source entity in Home
 Assistant first. The [troubleshooting guide](TROUBLESHOOTING.md) covers common
 setup issues.
 
+## 7. Optionally add the RV dashboard
+
+HAVRV includes an RV overview card and a dashboard that draws your configured
+axles, wheels, and tanks. After installing or updating HAVRV, restart Home
+Assistant and refresh your browser. Then follow the
+[dashboard guide](DASHBOARD.md) to add the dashboard or the card.
+
 ## Change or remove a profile
 
 - Use the config entry's **Reconfigure** action to update saved coach details.

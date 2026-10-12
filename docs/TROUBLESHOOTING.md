@@ -70,6 +70,21 @@ Confirm their values and selected unit system against a reliable source, such
 as coach documentation or vehicle labels. Home Assistant may display
 measurements in its globally selected unit system.
 
+## The RV card or dashboard is missing or wrong
+
+- If **HAVRV RV overview** is not offered when adding a card, or a dashboard
+  shows "Custom element doesn't exist", restart Home Assistant after installing
+  or updating HAVRV. Then refresh the browser, clearing its cache if needed.
+  On the companion app, use **Settings → Companion app → Debugging → Reset
+  frontend cache**.
+- If the card reports that no RV profile was found, add a HAVRV profile, or set
+  `device_id` to a HAVRV device.
+- If an axle or wheel is missing, check the axle layout and wheel
+  configuration in the RV profile. If a tank is missing, configure a capacity
+  or source entity for it.
+- A gray wheel or tank has no pressure or percentage reading. Check its source
+  entity, as described in the sections above.
+
 ## You need to change or remove a source mapping
 
 Use the integration's **Options** to change system mappings, tank selections,
