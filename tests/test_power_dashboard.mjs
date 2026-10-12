@@ -78,6 +78,14 @@ test("registry discovery uses stable identities and watches every mapped role", 
   assert.doesNotMatch(readings, />GEN:/);
 });
 
+test("the visual card editor exposes the power toggle with a readable label", () => {
+  const form = HavrvRvCard.getConfigForm();
+  const grid = form.schema.find((field) => field.type === "grid");
+  const toggle = grid.schema.find((field) => field.name === "show_power");
+  assert.deepEqual(toggle.selector, { boolean: {} });
+  assert.equal(form.computeLabel(toggle), "Show placed power sources");
+});
+
 test("colocated banks share an interior marker and retain separate readouts", () => {
   const { hass, rv } = fixture();
   const model = buildModel(hass, rv);
