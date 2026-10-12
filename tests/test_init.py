@@ -43,6 +43,14 @@ from custom_components.havrv.const import (
     UNIT_SYSTEM_US_CUSTOMARY,
 )
 
+DEFAULT_POWER_DEVICE_NAMES = {
+    "House Batteries Bank 1",
+    "Chassis Batteries Bank 1",
+    "Inverter",
+    "Generator",
+    "Shore Power",
+}
+
 
 async def test_setup_and_unload_name_only_profile(hass: HomeAssistant) -> None:
     """A profile with only its name remains set-up and unloadable."""
@@ -344,7 +352,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
 
     entity_registry = er.async_get(hass)
     mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    assert len(mapped_entities) == 21
+    assert len(mapped_entities) == 28
     mapped_entity = next(
         entity
         for entity in mapped_entities
@@ -355,6 +363,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
     device_registry = dr.async_get(hass)
     devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
     assert {device.name for device in devices} == {
+        *DEFAULT_POWER_DEVICE_NAMES,
         "Adventure RV",
         "Operations",
         "Power",
@@ -402,7 +411,11 @@ async def test_removed_system_mapping_removes_its_stale_device(
     await hass.async_block_till_done()
 
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
-    assert {device.name for device in devices} == {"Adventure RV", "Operations"}
+    assert {device.name for device in devices} == {
+        *DEFAULT_POWER_DEVICE_NAMES,
+        "Adventure RV",
+        "Operations",
+    }
     assert not any(
         entity.unique_id.endswith("sensor.house_battery_voltage")
         for entity in er.async_entries_for_config_entry(
@@ -452,6 +465,7 @@ async def test_reconfigure_removes_obsolete_tire_devices(
 
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
+        *DEFAULT_POWER_DEVICE_NAMES,
         "Adventure RV",
         "Operations",
         "All Tire Monitor",
@@ -542,6 +556,7 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
 
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
+        *DEFAULT_POWER_DEVICE_NAMES,
         "Tire RV",
         "Operations",
         "All Tire Monitor",
@@ -735,7 +750,7 @@ async def test_options_reload_adds_platform_to_existing_entry(
         for device in dr.async_entries_for_config_entry(
             dr.async_get(hass), entry.entry_id
         )
-    } == {"Adventure RV", "Operations", "Power"}
+    } == {*DEFAULT_POWER_DEVICE_NAMES, "Adventure RV", "Operations", "Power"}
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -828,6 +843,7 @@ async def test_setup_creates_complete_tank_devices_without_sources(
 
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert {device.name for device in devices} == {
+        *DEFAULT_POWER_DEVICE_NAMES,
         "Adventure RV",
         "Black-water tank",
         "Fresh-water tank",

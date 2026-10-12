@@ -28,6 +28,22 @@ CONF_TIRE_ENTITY_MAPPINGS = "tire_entity_mappings"
 CONF_TIRE_PRESSURE_THRESHOLDS = "tire_pressure_thresholds"
 CONF_TIRE_TEMPERATURE_HIGH = "tire_temperature_high"
 CONF_TIRE_BATTERY_LOW = "tire_battery_low"
+CONF_HOUSE_BATTERY_BANK_COUNT = "house_battery_bank_count"
+CONF_CHASSIS_BATTERY_BANK_COUNT = "chassis_battery_bank_count"
+CONF_POWER_SOURCES = "power_sources"
+CONF_CONFIGURE_POWER_SOURCES = "configure_power_sources"
+DEFAULT_BATTERY_BANK_COUNT = 1
+DEFAULT_BATTERY_NOMINAL_VOLTAGE = 24
+POWER_LOCATIONS = (
+    "not_shown",
+    "left_front",
+    "left_mid",
+    "left_rear",
+    "right_front",
+    "right_mid",
+    "right_rear",
+)
+SHORE_LOCATIONS = ("not_shown", "left", "right")
 
 TANK_FRESH_WATER = "fresh_water"
 TANK_GRAY_WATER = "gray_water"

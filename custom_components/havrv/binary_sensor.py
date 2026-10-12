@@ -21,6 +21,7 @@ from homeassistant.util import dt as dt_util
 from . import HavrvConfigEntry
 from .const import TIRE_SLOW_LOSS, TIRE_SUDDEN_DROP
 from .entity import HavrvSourceEntity, async_add_source_entities
+from .power import HavrvPowerSourceEntity, PowerSource, power_settings, power_sources
 from .tire import (
     HavrvTireEntity,
     TirePosition,
@@ -118,6 +119,33 @@ class HavrvTireBinarySensor(HavrvTireEntity, BinarySensorEntity):
         return tire_problem(self.hass, self._entry, self._position, self._problem)
 
 
+class HavrvPowerBinarySensor(HavrvPowerSourceEntity, BinarySensorEntity):
+    """Mirror Enabled or Charging without inferring activity or forwarding actions."""
+
+    def __init__(
+        self, entry: HavrvConfigEntry, source: PowerSource, metric: str
+    ) -> None:
+        """Initialize one explicitly configured read-only status."""
+        super().__init__(entry, source, metric)
+        self.entity_description = BinarySensorEntityDescription(
+            key=metric, translation_key=f"power_{metric}"
+        )
+
+    @property
+    def available(self) -> bool:
+        """Only definite on/off source states are usable."""
+        state = self._source_state
+        return state is not None and state.state in ("on", "off")
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the declared source state, including independent charging."""
+        state = self._source_state
+        if not self.available or state is None:
+            return None
+        return state.state == "on"
+
+
 class HavrvTirePressureTrendBinarySensor(HavrvTireEntity, BinarySensorEntity):
     """Predict tire pressure loss from the recent in-memory pressure history."""
 
@@ -180,6 +208,15 @@ async def async_setup_entry(
     """Set up mapped binary sensor entities."""
     async_add_source_entities(
         entry, "binary_sensor", HavrvBinarySensor, async_add_entities
+    )
+    async_add_entities(
+        [
+            HavrvPowerBinarySensor(entry, source, metric)
+            for source in power_sources(entry.data)
+            for metric in ("enabled", "charging")
+            if (source.battery or metric == "enabled")
+            and power_settings(entry, source).get(metric) is not None
+        ]
     )
     async_add_entities(
         [

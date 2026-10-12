@@ -10,7 +10,7 @@ rules:
     comment: HACS-compatible icon asset is present at custom_components/havrv/brand/icon.png.
   common-modules:
     status: done
-    comment: Shared source-entity behavior is centralized in custom_components/havrv/entity.py.
+    comment: Shared source-entity behavior is centralized in custom_components/havrv/entity.py; independent power-source identities and defaults are shared through custom_components/havrv/power.py.
   config-flow-test-coverage:
     status: done
     comment: CI enforces 100% config-flow module coverage with tests/test_config_flow.py.
@@ -73,7 +73,7 @@ rules:
     comment: README.md documents installation methods and prerequisites; no integration-specific install parameters are required.
   entity-unavailable:
     status: done
-    comment: Mapped entities become unavailable when sources are absent or unavailable and are tested in tests/test_entities.py.
+    comment: Mapped entities become unavailable when sources are absent or unavailable, tested in tests/test_entities.py; power readings also reject nonfinite/incompatible units and undefined binary states, tested in tests/test_power.py.
   integration-owner:
     status: done
     comment: An active code owner is declared in custom_components/havrv/manifest.json.
@@ -91,7 +91,7 @@ rules:
     comment: CI enforces at least 96% coverage for custom_components/havrv in pyproject.toml.
   devices:
     status: done
-    comment: RV and mapped-system devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py; the Operations device is created in custom_components/havrv/select.py and tested in tests/test_operations.py.
+    comment: RV, mapped-system, and independent power-source devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py and tests/test_power.py; the Operations device is created in custom_components/havrv/select.py and tested in tests/test_operations.py.
   diagnostics:
     status: done
     comment: Diagnostics export redacted entry and entity data in custom_components/havrv/diagnostics.py, tested in tests/test_diagnostics.py.
@@ -145,13 +145,13 @@ rules:
     comment: HAVRV-owned profile and operation-mode icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py.
   reconfiguration-flow:
     status: done
-    comment: The reconfigure flow updates profile details while retaining identity and mappings in custom_components/havrv/config_flow.py, tested in tests/test_config_flow.py.
+    comment: The reconfigure flow updates profile details while retaining identity and active mappings in custom_components/havrv/config_flow.py; reducing bank counts removes obsolete bank settings, tested in tests/test_config_flow.py and tests/test_power.py.
   repair-issues:
     status: exempt
     comment: There are no remote device, service, or credential conditions that require user-intervention repair issues.
   stale-devices:
     status: done
-    comment: Stale mapped entities and empty system or tire child devices are removed during setup in custom_components/havrv/__init__.py, tested in tests/test_init.py.
+    comment: Stale mapped entities and empty system, tire, or power-source child devices are removed during setup in custom_components/havrv/__init__.py, tested in tests/test_init.py and tests/test_power.py.
   async-dependency:
     status: exempt
     comment: HAVRV declares no external runtime dependencies.

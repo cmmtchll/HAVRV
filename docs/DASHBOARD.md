@@ -14,6 +14,14 @@ The layout follows the RV profile:
 - An optional tag axle, drawn behind the drive axles.
 - Dual positions show outer (**O**) and inner (**I**) readings on one label.
 - Only the fresh, gray, and black water tanks that you configured are drawn.
+- Optionally placed house/chassis banks, Inverter and Generator are marked in
+  their selected left/right front/mid/rear regions. Shore Power is outside the
+  RV on the selected side. **HB1/CB1** identify bank 1, **INV** the logical
+  inverter, **GEN** the generator, and **S** the external shore connection.
+  Sources in the same region share a numbered marker showing the count of
+  colocated devices, to avoid overlapping banks. Hover for source names/readings.
+  Individual readouts beneath the drawing show mapped voltage, current,
+  Enabled and bank Charging; selecting a reading opens its details.
 - Wide cards draw the RV horizontally, with the front on the right. Cards
   narrower than about 560 pixels, such as on phones, draw it vertically with
   the front at the top.
@@ -68,6 +76,14 @@ The dashboard creates one view for each RV profile. Each view contains:
 - **Tanks**: fill percentage and the last filled or emptied time for each tank.
 - **Tire analysis**: All Tire Monitor comparisons, when tires are configured.
 - One section for each system device with mapped entities.
+- Individual power-source sections, including configured nominal bank
+  specifications and read-only statuses. Sources without physical placement
+  still appear here. Set `show_power: false` on the strategy to omit these
+  sections and overview power markers/readouts.
+
+Power sources have no advisory OK/alert colors. Enabled is not active supply,
+and Charging is shown only from an explicit bank source. Neither status changes
+the tire/tank alert summary or creates power-flow arrows.
 
 The dashboard updates itself when you change the RV profile, add tanks, or map
 entities. To customize it, open the dashboard's three-dot menu and choose
@@ -103,6 +119,7 @@ In dashboard edit mode, select **Add card** and search for
 | `layout` | `auto` | `auto`, `horizontal`, or `vertical` |
 | `show_header` | `true` | Show the name, operation mode, and status summary |
 | `show_legend` | `true` | Show the status color legend |
+| `show_power` | `true` | Show placed power-source markers and individual readouts |
 
 ```yaml
 type: custom:havrv-rv-card
@@ -119,6 +136,9 @@ identifiers name each tire position and tank, and entity translation keys
 identify each reading, so renamed entity IDs and devices still work. Entities
 you hide are left out of the generated dashboard sections, but tire and tank
 readings stay on the card.
+Power-source identities encode the bank/device, while a diagnostic placement
+sensor supplies its region. No source entity names or RV-specific wiring are
+assumed.
 
 The tire problem and trend states are advisory. Follow the vehicle and tire
 manufacturers' guidance.

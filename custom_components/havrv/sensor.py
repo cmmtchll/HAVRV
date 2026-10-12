@@ -17,7 +17,11 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
-from homeassistant.util.unit_conversion import VolumeConverter
+from homeassistant.util.unit_conversion import (
+    ElectricCurrentConverter,
+    ElectricPotentialConverter,
+    VolumeConverter,
+)
 
 from . import HavrvConfigEntry
 from .const import (
@@ -37,6 +41,8 @@ from .const import (
     CONF_TANK_THRESHOLDS,
     DEFAULT_TANK_THRESHOLDS,
     DOMAIN,
+    POWER_LOCATIONS,
+    SHORE_LOCATIONS,
     TANK_EMPTY_PERCENT,
     TANK_FRESH_WATER,
     TANK_FULL_PERCENT,
@@ -48,6 +54,13 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .entity import HavrvSourceEntity, async_add_source_entities
+from .power import (
+    HavrvPowerSourceEntity,
+    PowerSource,
+    power_device_info,
+    power_settings,
+    power_sources,
+)
 from .tank import STATUS_OPTIONS, TANK_DEFINITIONS, tank_percent, tank_status
 from .tire import (
     HavrvTireEntity,
@@ -257,6 +270,103 @@ class HavrvProfileSensor(SensorEntity):
     def native_value(self) -> str | int | float | bool:
         """Return the configured profile value."""
         return self._native_value
+
+
+class HavrvPowerSensor(HavrvPowerSourceEntity, SensorEntity):
+    """Expose a declared electrical reading in volts or amperes."""
+
+    def __init__(
+        self, entry: HavrvConfigEntry, source: PowerSource, metric: str
+    ) -> None:
+        """Initialize a stable, read-only bank or AC output reading."""
+        super().__init__(entry, source, metric)
+        self._converter = (
+            ElectricPotentialConverter
+            if metric == "voltage"
+            else ElectricCurrentConverter
+        )
+        unit = "V" if metric == "voltage" else "A"
+        self.entity_description = SensorEntityDescription(
+            key=metric,
+            translation_key=f"power_{metric}",
+            device_class=(
+                SensorDeviceClass.VOLTAGE
+                if metric == "voltage"
+                else SensorDeviceClass.CURRENT
+            ),
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement=unit,
+            suggested_unit_of_measurement=unit,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Reject unavailable, nonnumeric, nonfinite, or incompatible readings."""
+        return self.native_value is not None
+
+    @property
+    def native_value(self) -> float | None:
+        """Convert compatible source units; unitless helpers use declared V/A."""
+        state = self._source_state
+        if state is None:
+            return None
+        try:
+            value = float(state.state)
+        except ValueError:
+            return None
+        if not math.isfinite(value):
+            return None
+        unit = self.entity_description.native_unit_of_measurement
+        source_unit = state.attributes.get("unit_of_measurement") or unit
+        if (
+            not isinstance(source_unit, str)
+            or source_unit not in self._converter.VALID_UNITS
+            or unit is None
+        ):
+            return None
+        converted = self._converter.convert(value, source_unit, unit)
+        return converted if math.isfinite(converted) else None
+
+
+class HavrvPowerSpecificationSensor(HavrvProfileSensor):
+    """Expose declared specifications and dashboard placement, never readings."""
+
+    def __init__(
+        self,
+        entry: HavrvConfigEntry,
+        source: PowerSource,
+        metric: str,
+        value: str | int | float,
+    ) -> None:
+        """Initialize a diagnostic value on its independent source device."""
+        unit = {"nominal_voltage": "V", "nominal_capacity": "Ah"}.get(metric)
+        super().__init__(
+            entry,
+            SensorEntityDescription(
+                key=metric,
+                translation_key=f"power_{metric}",
+                device_class=(
+                    SensorDeviceClass.ENUM
+                    if metric == "location"
+                    else SensorDeviceClass.VOLTAGE
+                    if metric == "nominal_voltage"
+                    else None
+                ),
+                options=(
+                    list(
+                        SHORE_LOCATIONS
+                        if source.key == "shore_power"
+                        else POWER_LOCATIONS
+                    )
+                    if metric == "location"
+                    else None
+                ),
+            ),
+            value,
+            unit,
+        )
+        self._attr_unique_id = f"{entry.entry_id}_source_{source.key}_{metric}"
+        self._attr_device_info = power_device_info(entry, source)
 
 
 class HavrvTankCapacitySensor(HavrvProfileSensor):
@@ -772,6 +882,20 @@ async def async_setup_entry(
     async_add_source_entities(entry, "sensor", HavrvSensor, async_add_entities)
     async_add_entities(list(_profile_sensors(entry)))
     async_add_entities(_tank_entities(entry))
+    power_entities: list[Entity] = []
+    for source in power_sources(entry.data):
+        settings = power_settings(entry, source)
+        power_entities.extend(
+            HavrvPowerSensor(entry, source, metric)
+            for metric in ("voltage", "current")
+            if settings.get(metric) is not None
+        )
+        power_entities.extend(
+            HavrvPowerSpecificationSensor(entry, source, metric, settings[metric])
+            for metric in ("location", "nominal_voltage", "nominal_capacity")
+            if settings.get(metric) is not None
+        )
+    async_add_entities(power_entities)
     async_add_entities(
         [
             HavrvTireSensor(entry, position, metric)

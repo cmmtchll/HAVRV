@@ -46,6 +46,13 @@ control RV hardware directly.
 5. If known, enter the number of rear axle assemblies and wheel arrangements.
    The axle count includes a tag axle: one means one main rear axle; two means
    one main axle plus a tag axle; three means two main axles plus a tag axle.
+6. Enter the number of independent house and chassis battery banks. Each
+   defaults to **1**; use **0** if absent. This counts complete banks, not
+   individual batteries in series or parallel.
+7. Leave **Configure power sources now** selected to configure each bank,
+   Inverter, Generator, and Shore Power on the following screens. Unknown
+   sources and capacities may remain blank. You can also skip these screens
+   and configure them later in **Options**.
 
 The profile can store coach year, chassis manufacturer and make, builder or
 converter and model, coach identifier, overall dimensions, fuel and
@@ -56,6 +63,38 @@ system, independent of Home Assistant's global unit defaults.
 
 Older saved profiles that predate the current axle model are not migrated.
 Remove and add those profiles again to use the current setup.
+
+### Power-source configuration
+
+Each bank is independent. Select **12**, **24** (default), or **48 V DC** as its
+nominal voltage, and enter the complete bank's nominal capacity in **Ah** if
+known. The 24 V default is a configuration starting point, not a detected
+specification. Capacity has no default. No battery-series/parallel calculation
+or remaining-energy estimate is made.
+
+Select optional **Voltage** and **Current** sources from `sensor`, `number`,
+or `input_number`. Template-backed sensors and numbers appear in their actual
+domains. Bank readings describe DC; the logical inverter's readings describe
+AC output, and generator/shore readings describe AC supply. Choose an
+aggregate source appropriate to your installation; HAVRV does not sum
+multiple physical inverters or AC legs.
+
+**Enabled** and bank **Charging** accept `binary_sensor`, `switch`, or
+`input_boolean` sources reporting `on`/`off`. Both are read-only, even when
+the source is a switch. Charging requires its own explicit mapping.
+
+Choose **L-Front**, **L-Mid**, **L-Rear**, **R-Front**, **R-Mid**, or **R-Rear**
+to place a device on the RV overview; left/right are viewed facing forward.
+Shore Power accepts **L** or **R** and is drawn outside the vehicle. Placement
+defaults to **Not shown**; sources can still appear in dashboard device sections.
+
+To edit these settings, select **Edit power-source mappings, specifications and
+placement** in **Options**. All wizard screens must be submitted before changes
+are saved; cancelling preserves previous settings. Use **Reconfigure** to change
+bank counts. Reducing a count removes the highest-numbered banks, their HAVRV
+entities, and their saved source configuration. Original source entities are
+never removed. Current version-3 profiles without these settings gain one
+bank of each kind, 24 V nominal defaults, and no invented readings or placement.
 
 ## 3. Map existing system entities
 
@@ -149,6 +188,8 @@ Assistant and refresh your browser. Then follow the
 - Use **Options** to change system mappings, tank selections and thresholds,
   tire sources, and tire limits. Changes to mappings, tire sources, or tire
   limits reload the entry.
+- Power-source settings also reload the entry. Clearing a source removes its
+  HAVRV reading, while remapping a bank's source keeps the HAVRV entity identity.
 - Remove the HAVRV config entry to remove its devices and exposed entities.
   Source entities and their integrations are not removed.
 

@@ -20,13 +20,16 @@ from .const import (
     AXLE_COUNT_THREE,
     AXLE_COUNT_TWO,
     CONF_BLACK_WATER_TANK_CAPACITY,
+    CONF_CHASSIS_BATTERY_BANK_COUNT,
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
+    CONF_CONFIGURE_POWER_SOURCES,
     CONF_ENTITY_MAPPINGS,
     CONF_FRESH_WATER_TANK_CAPACITY,
     CONF_FUEL_TANK_CAPACITY,
     CONF_GRAY_WATER_TANK_CAPACITY,
+    CONF_HOUSE_BATTERY_BANK_COUNT,
     CONF_MAIN_REAR_WHEEL_CONFIGURATION,
     CONF_MAKE,
     CONF_MANUFACTURER,
@@ -35,6 +38,7 @@ from .const import (
     CONF_OVERALL_HEIGHT,
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
+    CONF_POWER_SOURCES,
     CONF_REAR_AXLE_COUNT,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
@@ -47,11 +51,15 @@ from .const import (
     CONF_TIRE_PRESSURE_LOW,
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
+    DEFAULT_BATTERY_BANK_COUNT,
+    DEFAULT_BATTERY_NOMINAL_VOLTAGE,
     DEFAULT_TANK_THRESHOLDS,
     DEFAULT_TIRE_BATTERY_LOW,
     DEFAULT_TIRE_PRESSURE,
     DEFAULT_TIRE_TEMPERATURE_HIGH,
     DOMAIN,
+    POWER_LOCATIONS,
+    SHORE_LOCATIONS,
     SUPPORTED_ENTITY_DOMAINS,
     SYSTEM_CATEGORIES,
     TANK_PROBLEM,
@@ -64,6 +72,13 @@ from .const import (
     UNIT_SYSTEM_US_CUSTOMARY,
     WHEEL_CONFIGURATION_DUAL,
     WHEEL_CONFIGURATION_SINGLE,
+)
+from .power import (
+    BINARY_POWER_DOMAINS,
+    NUMERIC_POWER_DOMAINS,
+    PowerSource,
+    power_settings,
+    power_sources,
 )
 from .tank import thresholds_valid
 from .tire import tire_entity_key, tire_positions
@@ -124,6 +139,11 @@ class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     await self.async_set_unique_id(name.casefold())
                     self._abort_if_unique_id_configured()
+                    if user_input.get(CONF_CONFIGURE_POWER_SOURCES, False):
+                        self._profile = profile
+                        self._power_index = 0
+                        self._power_settings: dict[str, Any] = {}
+                        return await self.async_step_power_source()
                     return self.async_create_entry(title=name, data=profile)
 
         return self.async_show_form(
@@ -131,6 +151,35 @@ class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_profile_schema(
                 default_measurement_system=_default_measurement_system(self.hass)
             ),  # type: ignore[arg-type]
+            errors=errors,
+        )
+
+    async def async_step_power_source(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure each independent bank and AC source during setup."""
+        sources = power_sources(self._profile)
+        source = sources[self._power_index]
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            settings, error = _normalize_power_source(user_input, source)
+            if error:
+                errors["base"] = error
+            else:
+                self._power_settings[source.key] = settings
+                self._power_index += 1
+                if self._power_index == len(sources):
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title=self._profile[CONF_NAME],
+                        data=self._profile,
+                        options={CONF_POWER_SOURCES: self._power_settings},
+                    )
+                return await self.async_step_power_source()
+        return self.async_show_form(
+            step_id="power_source",
+            data_schema=_power_source_schema(source, user_input or {}),  # type: ignore[arg-type]
+            description_placeholders={"source": source.name},
             errors=errors,
         )
 
@@ -156,9 +205,18 @@ class HavrvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     for key, value in profile.items()
                     if key not in (CONF_NAME, CONF_ENTITY_MAPPINGS)
                 }
+                options = dict(entry.options)
+                if CONF_POWER_SOURCES in options:
+                    active_sources = {source.key for source in power_sources(profile)}
+                    options[CONF_POWER_SOURCES] = {
+                        key: settings
+                        for key, settings in options[CONF_POWER_SOURCES].items()
+                        if key in active_sources
+                    }
                 return self.async_update_reload_and_abort(
                     entry,
                     data_updates=profile_updates,
+                    options=options,
                     reason="reconfigure_successful",
                 )
 
@@ -188,6 +246,11 @@ class HavrvOptionsFlow(config_entries.OptionsFlow):
             if error:
                 errors["base"] = error
             else:
+                if user_input.get(CONF_CONFIGURE_POWER_SOURCES, False):
+                    self._pending_options = options
+                    self._power_index = 0
+                    self._power_settings: dict[str, Any] = {}
+                    return await self.async_step_power_source()
                 return self.async_create_entry(
                     title="",
                     data=options,
@@ -199,6 +262,41 @@ class HavrvOptionsFlow(config_entries.OptionsFlow):
                 self.config_entry,
                 default_measurement_system=_default_measurement_system(self.hass),
             ),  # type: ignore[arg-type]
+            errors=errors,
+        )
+
+    async def async_step_power_source(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit bank specifications, placements, and read-only mappings."""
+        sources = power_sources(self.config_entry.data)
+        source = sources[self._power_index]
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            settings, error = _normalize_power_source(user_input, source)
+            if error:
+                errors["base"] = error
+            else:
+                self._power_settings[source.key] = settings
+                self._power_index += 1
+                if self._power_index == len(sources):
+                    return self.async_create_entry(
+                        title="",
+                        data={
+                            **self._pending_options,
+                            CONF_POWER_SOURCES: self._power_settings,
+                        },
+                    )
+                return await self.async_step_power_source()
+        return self.async_show_form(
+            step_id="power_source",
+            data_schema=_power_source_schema(
+                source,
+                user_input
+                if user_input is not None
+                else power_settings(self.config_entry, source),
+            ),  # type: ignore[arg-type]
+            description_placeholders={"source": source.name},
             errors=errors,
         )
 
@@ -253,6 +351,20 @@ def _profile_schema(
     schema: dict[vol.Marker, Any] = {}
     if include_name:
         schema[vol.Required(CONF_NAME, default="My RV")] = selector.TextSelector()
+    for field in (CONF_HOUSE_BATTERY_BANK_COUNT, CONF_CHASSIS_BATTERY_BANK_COUNT):
+        schema[
+            vol.Optional(
+                field, default=marker_defaults.get(field, DEFAULT_BATTERY_BANK_COUNT)
+            )
+        ] = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, step=1, mode=selector.NumberSelectorMode.BOX
+            )
+        )
+    if include_mappings:
+        schema[vol.Optional(CONF_CONFIGURE_POWER_SOURCES, default=True)] = (
+            selector.BooleanSelector()
+        )
     schema[marker(CONF_COACH_YEAR)] = selector.NumberSelector(
         selector.NumberSelectorConfig(
             step=1,
@@ -301,6 +413,11 @@ def _normalize_profile(
     """Validate and normalize submitted RV profile values."""
     name = user_input[CONF_NAME].strip()
     data: dict[str, Any] = {CONF_NAME: name}
+    for field in (CONF_HOUSE_BATTERY_BANK_COUNT, CONF_CHASSIS_BATTERY_BANK_COUNT):
+        count = user_input.get(field, DEFAULT_BATTERY_BANK_COUNT)
+        if not _is_finite_number(count) or count < 0 or not float(count).is_integer():
+            return data, "invalid_battery_bank_count"
+        data[field] = int(count)
 
     mappings, mapping_error = _normalize_entity_mappings(user_input)
     if mapping_error:
@@ -402,6 +519,9 @@ def _options_schema(
     """Build source mapping and alert threshold options."""
     existing_options = entry.options
     fields = _entity_mapping_fields(_entry_entity_mappings(entry))
+    fields[vol.Optional(CONF_CONFIGURE_POWER_SOURCES, default=False)] = (
+        selector.BooleanSelector()
+    )
     tank_mappings = existing_options.get(CONF_TANK_ENTITY_MAPPINGS, {})
     for tank in TANK_TYPES:
         field = f"{tank}_tank_level"
@@ -631,6 +751,8 @@ def _normalize_options(
         CONF_TANK_ENTITY_MAPPINGS: tank_mappings,
         CONF_TANK_THRESHOLDS: tank_thresholds,
     }
+    if CONF_POWER_SOURCES in entry.options:
+        options[CONF_POWER_SOURCES] = entry.options[CONF_POWER_SOURCES]
     if positions:
         options[CONF_TIRE_ENTITY_MAPPINGS] = tire_mappings
         options[CONF_TIRE_PRESSURE_THRESHOLDS] = pressure_thresholds
@@ -638,6 +760,104 @@ def _normalize_options(
             options[CONF_TIRE_TEMPERATURE_HIGH] = float(temperature_high)
         options[CONF_TIRE_BATTERY_LOW] = float(battery_low)
     return options, None
+
+
+def _power_source_schema(
+    source: PowerSource, settings: Mapping[str, Any]
+) -> vol.Schema:
+    """Build one source form with the same defaults used at runtime."""
+    fields: dict[vol.Marker, Any] = {}
+    for metric, domains in (
+        ("voltage", NUMERIC_POWER_DOMAINS),
+        ("current", NUMERIC_POWER_DOMAINS),
+        ("enabled", BINARY_POWER_DOMAINS),
+        *([("charging", BINARY_POWER_DOMAINS)] if source.battery else []),
+    ):
+        marker = vol.Optional(
+            metric, description={"suggested_value": settings.get(metric)}
+        )
+        fields[marker] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=list(domains))
+        )
+    locations = SHORE_LOCATIONS if source.key == "shore_power" else POWER_LOCATIONS
+    fields[vol.Optional("location", default=settings.get("location", "not_shown"))] = (
+        selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=list(locations),
+                mode=selector.SelectSelectorMode.DROPDOWN,
+                translation_key="power_location",
+            )
+        )
+    )
+    if source.battery:
+        fields[
+            vol.Optional(
+                "nominal_voltage",
+                default=str(
+                    settings.get("nominal_voltage", DEFAULT_BATTERY_NOMINAL_VOLTAGE)
+                ),
+            )
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=["12", "24", "48"],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+        marker = vol.Optional(
+            "nominal_capacity",
+            description={"suggested_value": settings.get("nominal_capacity")},
+        )
+        fields[marker] = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                step=0.1,
+                unit_of_measurement="Ah",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        )
+    return vol.Schema(fields)
+
+
+def _normalize_power_source(
+    user_input: Mapping[str, Any], source: PowerSource
+) -> tuple[dict[str, Any], str | None]:
+    """Validate optional read-only mappings without guessing source states."""
+    settings: dict[str, Any] = {}
+    selected: set[str] = set()
+    for metric, domains in (
+        ("voltage", NUMERIC_POWER_DOMAINS),
+        ("current", NUMERIC_POWER_DOMAINS),
+        ("enabled", BINARY_POWER_DOMAINS),
+        *([("charging", BINARY_POWER_DOMAINS)] if source.battery else []),
+    ):
+        entity_id = user_input.get(metric)
+        if entity_id is None:
+            continue
+        if not isinstance(entity_id, str):
+            return {}, "invalid_power_entity_mapping"
+        domain, separator, object_id = entity_id.partition(".")
+        if not separator or not object_id or domain not in domains:
+            return {}, "invalid_power_entity_mapping"
+        if entity_id in selected:
+            return {}, "duplicate_power_entity_mapping"
+        selected.add(entity_id)
+        settings[metric] = entity_id
+    location = user_input.get("location", "not_shown")
+    locations = SHORE_LOCATIONS if source.key == "shore_power" else POWER_LOCATIONS
+    if location not in locations:
+        return {}, "invalid_power_location"
+    settings["location"] = location
+    if source.battery:
+        voltage = user_input.get("nominal_voltage", DEFAULT_BATTERY_NOMINAL_VOLTAGE)
+        if voltage not in (12, 24, 48, "12", "24", "48"):
+            return {}, "invalid_nominal_voltage"
+        settings["nominal_voltage"] = int(voltage)
+        capacity = user_input.get("nominal_capacity")
+        if capacity is not None:
+            if not _is_finite_number(capacity) or capacity <= 0:
+                return {}, "invalid_nominal_capacity"
+            settings["nominal_capacity"] = float(capacity)
+    return settings, None
 
 
 def _is_finite_number(value: Any) -> bool:

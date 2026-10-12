@@ -69,6 +69,52 @@ On upgrade, main-device dimension and fuel-capacity sensors are replaced by
 with editable capacity numbers on the main RV device. Read-only diagnostic
 profile sensor IDs are unchanged. Source selections remain in **Options**.
 
+## Power-source devices
+
+Each RV has independently numbered **House Batteries** and **Chassis Batteries**
+bank devices, plus a logical **Inverter**, **Generator**, and **Shore Power**.
+Bank counts default to one each and can be changed in **Reconfigure**. Each
+bank is a complete independent unit; HAVRV does not assume its internal wiring.
+
+| Entity | Meaning |
+| --- | --- |
+| Voltage | A declared DC-bank or AC-output/supply reading, converted to V |
+| Current | A declared current reading, converted to A; source sign is preserved |
+| Enabled | Read-only on/off status from its explicitly mapped source |
+| Charging (banks only) | Read-only status reporting whether that particular bank is charging |
+| Nominal voltage (banks only) | Configured specification: 12, 24 (default), or 48 V DC |
+| Nominal capacity (banks only) | Optional configured total capacity in Ah; no default |
+| Dashboard placement | Diagnostic metadata for optional overview placement |
+
+Live entities are created only for explicitly selected mappings. Missing,
+unavailable, nonfinite or nonnumeric electrical readings are unavailable.
+Recognized compatible electrical units are converted; incompatible units are
+unavailable. Unitless helpers are interpreted as V or A according to the
+declared mapping. Both profile measurement systems use V/A/Ah. Explicit
+per-entity display-unit overrides remain respected.
+
+House banks typically supply domestic DC loads and the inverter; chassis banks
+serve engine starting and vehicle systems. An inverter converts battery DC
+to AC for its supported circuits, while generator and shore supply AC.
+Chargers/converters and alternator interfaces may charge batteries when power
+is available, subject to installed equipment, control logic, and loads.
+The [EcoFlow electrical-system overview](https://www.ecoflow.com/us/blog/rv-power-systems-setup-guide)
+provides general background; actual vehicle documentation and component labels
+take precedence.
+
+**Enabled is not proof of supplying power, and source availability is not proof
+of charging.** HAVRV does not infer Charging from current sign, nominal voltage,
+engine operation, shore connection, or generator state. It does not assume a
+transfer-switch topology, decide which source is active, calculate state of
+charge, or draw inferred power-flow arrows. The logical inverter mapping
+does not automatically aggregate multiple physical units or circuits.
+These states are informational, not generator start/stop controls or safety
+interlocks.
+
+Placement is optional, with six interior regions and an external left/right
+shore connection. Colocated sources share a diagram marker and retain
+separate readouts. No physical location is guessed.
+
 ## Water-tank entities
 
 Fresh-, gray-, and black-water level mappings are optional and selected

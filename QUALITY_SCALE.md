@@ -17,6 +17,11 @@ implemented integration behavior, not just repository configuration.
   action-forwarding switches, lights, and climate controls. Existing entries
   without mappings remain supported; entity configuration is editable through
   the options flow.
+- Independent house/chassis battery-bank devices (one each by default) and
+  logical Inverter, Generator, and Shore Power devices, with declared
+  read-only voltage/current/Enabled mappings and optional bank Charging,
+  nominal bank specifications, and optional dashboard placement. No charging
+  path, active supply, state of charge, or power-flow topology is inferred.
 - Editable dimensions, tank capacities, and tank/tire limits exposed as number
   entities in Configuration on the main RV device, with other profile values
   exposed as read-only diagnostic sensors. Settings persist in the same
@@ -38,8 +43,8 @@ lights, and climate entities; automatic discovery, alerts, and triggers are
 not implemented.
 
 Profile setup currently excludes vehicle weight ratings, tire size/load-range
-and inflation details, wheelbase/tow rating, and powertrain, generator,
-electrical-service, and propane data. These remain potential future profile
+and inflation details, wheelbase/tow rating, and powertrain, generator ratings,
+electrical-service ratings, and propane data. These remain potential future profile
 fields and are not used in calculations or alerts.
 
 ## Quality-scale audit and CI

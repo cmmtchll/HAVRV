@@ -101,7 +101,11 @@ def test_dashboard_translation_keys_exist() -> None:
         (FRONTEND_DIRECTORY.parent / "strings.json").read_text(encoding="utf-8")
     )
     defined = {key for platform in strings["entity"].values() for key in platform}
-    used = _js_object_keys("TIRE_ROLES") | _js_object_keys("TANK_ROLES")
+    used = (
+        _js_object_keys("TIRE_ROLES")
+        | _js_object_keys("TANK_ROLES")
+        | _js_object_keys("POWER_ROLES")
+    )
     used |= set(
         re.findall(r'(\w+): "(?:year|manufacturer|make|model)"', DASHBOARD_SOURCE)
     )

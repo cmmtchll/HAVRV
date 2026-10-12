@@ -28,6 +28,7 @@ from .const import (
     CONF_OVERALL_HEIGHT,
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
+    CONF_POWER_SOURCES,
     CONF_REAR_AXLE_COUNT,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
@@ -40,6 +41,7 @@ from .const import (
     UNIT_SYSTEM_US_CUSTOMARY,
 )
 from .dashboard import async_register_frontend
+from .power import power_sources
 from .tank import TANK_DEFINITIONS
 from .tire import tire_positions
 
@@ -133,6 +135,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         model=entry.runtime_data.model or "RV",
     )
     entry.runtime_data.device_id = rv_device.id
+    for source in power_sources(data):
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_source_{source.key}")},
+            name=source.name,
+            via_device_id=rv_device.id,
+        )
     tank_mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
     for tank, (tank_name, capacity_key) in TANK_DEFINITIONS.items():
         if data.get(capacity_key) is not None or tank in tank_mappings:
@@ -166,7 +175,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
     platforms.add(Platform.SENSOR)
-    if positions:
+    if positions or any(
+        settings.get(metric)
+        for settings in entry.options.get(CONF_POWER_SOURCES, {}).values()
+        for metric in ("enabled", "charging")
+    ):
         platforms.add(Platform.BINARY_SENSOR)
     entry.runtime_data.platforms = [Platform.SELECT, Platform.NUMBER, *platforms]
     await hass.config_entries.async_forward_entry_setups(
@@ -216,6 +229,28 @@ def _remove_stale_entities_and_devices(
     """Remove registry entries and child devices no longer in the profile."""
     entity_registry = er.async_get(hass)
     device_registry = dr.async_get(hass)
+    active_power_sources = {
+        source.key: entry.options.get(CONF_POWER_SOURCES, {}).get(source.key, {})
+        for source in power_sources(entry.data)
+    }
+    active_power_ids = {
+        f"{entry.entry_id}_source_{key}_{metric}"
+        for key, settings in active_power_sources.items()
+        for metric in (
+            "location",
+            "nominal_voltage",
+            *(
+                ["nominal_capacity"]
+                if settings.get("nominal_capacity") is not None
+                else []
+            ),
+            *(
+                metric
+                for metric in ("voltage", "current", "enabled", "charging")
+                if settings.get(metric)
+            ),
+        )
+    }
 
     for registry_entry in er.async_entries_for_config_entry(
         entity_registry, entry.entry_id
@@ -224,6 +259,10 @@ def _remove_stale_entities_and_devices(
             registry_entry.unique_id.startswith(f"{entry.entry_id}_{category}_")
             and registry_entry.unique_id not in active_mapping_ids
             for category in SYSTEM_CATEGORIES
+        )
+        is_stale_power = (
+            registry_entry.unique_id.startswith(f"{entry.entry_id}_source_")
+            and registry_entry.unique_id not in active_power_ids
         )
         tire_key = registry_entry.unique_id.removeprefix(f"{entry.entry_id}_tire_")
         is_tire_entity = tire_key != registry_entry.unique_id
@@ -269,6 +308,7 @@ def _remove_stale_entities_and_devices(
         )
         if (
             is_stale_mapping
+            or is_stale_power
             or is_stale_tire
             or is_moved_capacity
             or is_replaced_specification
@@ -280,7 +320,13 @@ def _remove_stale_entities_and_devices(
         for domain, identifier in device.identifiers:
             if domain != DOMAIN:
                 continue
-            if identifier.startswith(f"{entry.entry_id}_tire_"):
+            if identifier.startswith(f"{entry.entry_id}_source_"):
+                if (
+                    identifier.removeprefix(f"{entry.entry_id}_source_")
+                    in active_power_sources
+                ):
+                    continue
+            elif identifier.startswith(f"{entry.entry_id}_tire_"):
                 tire_key = identifier.removeprefix(f"{entry.entry_id}_tire_")
                 if tire_key in active_tire_keys:
                     continue

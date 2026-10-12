@@ -32,6 +32,23 @@ const TANK_ROLES = {
   tank_last_filled: "history",
   tank_last_emptied: "history",
 };
+const POWER_ROLES = {
+  power_voltage: "voltage",
+  power_current: "current",
+  power_enabled: "enabled",
+  power_charging: "charging",
+  power_location: "location",
+};
+const POWER_LOCATION_LABELS = {
+  left_front: "L-Front",
+  left_mid: "L-Mid",
+  left_rear: "L-Rear",
+  right_front: "R-Front",
+  right_mid: "R-Mid",
+  right_rear: "R-Rear",
+  left: "L (outside)",
+  right: "R (outside)",
+};
 const TANK_ORDER = ["fresh_water", "gray_water", "black_water"];
 const MODE_ICONS = {
   storage: "mdi:garage-variant",
@@ -72,6 +89,7 @@ const STR = {
     device_id: "RV profile",
     layout: "Layout",
     show_header: "Show header",
+    show_power: "Show placed power sources",
     auto: "Automatic",
     horizontal: "Horizontal",
     vertical: "Vertical",
@@ -163,6 +181,7 @@ export function buildModel(hass, rv) {
     operationMode: undefined,
     monitorEntities: [],
     systems: [],
+    powerSources: [],
   };
   const axles = new Map();
   for (const device of Object.values(hass.devices || {})) {
@@ -201,6 +220,14 @@ export function buildModel(hass, rv) {
         name: device.name_by_user || STR.tankLabels[type] || deviceName(device),
         ...entityRoles(entries, TANK_ROLES),
       });
+    } else if (part.startsWith("source_")) {
+      const key = part.slice("source_".length);
+      model.powerSources.push({
+        key,
+        name: deviceName(device),
+        entities: visible(device.id),
+        ...entityRoles(entries, POWER_ROLES),
+      });
     } else if (part === "operations") {
       model.operationMode = entityRoles(entries, { operation_mode: "mode" }).mode;
     } else {
@@ -224,6 +251,7 @@ export function buildModel(hass, rv) {
   };
   model.tanks.sort((a, b) => tankRank(a.type) - tankRank(b.type));
   model.systems.sort((a, b) => a.name.localeCompare(b.name));
+  model.powerSources.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
   model.watched = [
     ...Object.values(model.profile),
     model.operationMode,
@@ -233,6 +261,9 @@ export function buildModel(hass, rv) {
       ),
     ),
     ...model.tanks.flatMap((tank) => [tank.percentage, tank.status, tank.level]),
+    ...model.powerSources.flatMap((source) =>
+      Object.values(POWER_ROLES).map((role) => source[role]),
+    ),
   ].filter(Boolean);
   return model;
 }
@@ -274,6 +305,21 @@ function formatState(hass, entityId) {
   return typeof hass.formatEntityState === "function"
     ? hass.formatEntityState(state)
     : state.state;
+}
+
+/** Report only declared measurements and definite binary statuses. */
+export function powerState(hass, source) {
+  const binary = (entity) => {
+    const value = stateOf(hass, entity)?.state;
+    return value === "on" ? true : value === "off" ? false : undefined;
+  };
+  return {
+    voltage: numeric(hass, source.voltage, 1),
+    current: numeric(hass, source.current, 1),
+    enabled: binary(source.enabled),
+    charging: binary(source.charging),
+    location: stateOf(hass, source.location)?.state,
+  };
 }
 
 const LEVEL_RANK = { ok: 0, offline: 1, watch: 2, alert: 3 };
@@ -630,7 +676,7 @@ function tankLabels(model, span, states, geometry, vertical) {
 }
 
 /** Render the plan-view SVG for the configured axles, wheels, and tanks. */
-export function renderVehicle(hass, model, orientation, uid) {
+export function renderVehicle(hass, model, orientation, uid, showPower = true) {
   const geometry = ORIENTATIONS[orientation];
   const vertical = orientation === "vertical";
   const { axles, rearFront } = placeAxles(model);
@@ -669,7 +715,64 @@ export function renderVehicle(hass, model, orientation, uid) {
       </g>
       ${tankLabels(model, span, states, geometry, vertical).join("")}
       ${chips.join("")}
+      ${showPower ? powerMarkers(hass, model, geometry) : ""}
     </svg>`;
+}
+
+const powerTag = (source) =>
+  source.key.startsWith("house_bank_") ? `HB${source.key.slice(11)}`
+    : source.key.startsWith("chassis_bank_") ? `CB${source.key.slice(13)}`
+      : ({ inverter: "INV", generator: "GEN", shore_power: "SHORE" })[source.key] || source.name;
+
+/** Group colocated devices instead of overlapping an arbitrary number of banks. */
+export function powerMarkers(hass, model, geometry) {
+  const groups = new Map();
+  for (const source of model.powerSources || []) {
+    const state = powerState(hass, source);
+    if (!POWER_LOCATION_LABELS[state.location]) continue;
+    if (!groups.has(state.location)) groups.set(state.location, []);
+    groups.get(state.location).push(source);
+  }
+  return [...groups].map(([location, sources]) => {
+    const outside = location === "left" || location === "right";
+    const side = location.startsWith("left") ? -1 : 1;
+    const u = location.endsWith("front") ? 680 : location.endsWith("rear") ? 110 : 430;
+    const [x, y] = geometry.map(u, side * (outside ? 153 : 80));
+    const label = sources.length > 1 ? String(sources.length)
+      : outside ? "S" : powerTag(sources[0]);
+    const descriptions = sources.map((source) => {
+      const state = powerState(hass, source);
+      return `${source.name}: ${state.voltage ? `${state.voltage.text} ${state.voltage.unit}` : "No voltage data"}; ${state.current ? `${state.current.text} ${state.current.unit}` : "No current data"}`;
+    }).join("\n");
+    return `<g class="power-marker">
+      <title>${escapeHtml(descriptions)}</title>
+      <circle cx="${x}" cy="${y}" r="8"></circle>
+      <text x="${x}" y="${y + 2}" text-anchor="middle">${escapeHtml(truncate(label, 3))}</text>
+    </g>`;
+  }).join("");
+}
+
+/** Show each placed source separately, including colocated independent banks. */
+export function renderPowerReadings(hass, model) {
+  const reading = (source, metric, value) => {
+    const entity = source[metric];
+    if (!entity) return "";
+    const label = metric === "voltage" ? "Voltage" : metric === "current" ? "Current"
+      : metric === "enabled" ? "Enabled" : "Charging";
+    const text = metric === "voltage" || metric === "current"
+      ? value ? `${value.text} ${value.unit}` : "No data"
+      : value === true ? "Yes" : value === false ? "No" : "No data";
+    return `<span data-entity="${escapeHtml(entity)}" tabindex="0" role="button">${label}: ${escapeHtml(text)}</span>`;
+  };
+  return (model.powerSources || []).map((source) => {
+    const state = powerState(hass, source);
+    if (!POWER_LOCATION_LABELS[state.location]) return "";
+    return `<div class="power-reading">
+      <strong>${escapeHtml(powerTag(source))}: ${escapeHtml(source.name)}</strong>
+      <small>${POWER_LOCATION_LABELS[state.location]}</small>
+      ${["voltage", "current", "enabled", "charging"].map((metric) => reading(source, metric, state[metric])).join("")}
+    </div>`;
+  }).join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -787,6 +890,13 @@ const STYLES = `
     font-size: 0.75em; color: var(--hv-muted); }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
   .legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--lvl); display: inline-block; }
+  .power-marker circle { fill: var(--hv-card); stroke: var(--primary-color, #03a9f4); }
+  .power-marker text { font-size: 6px; font-weight: 600; }
+  .power-readings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+  .power-reading { display: flex; flex-direction: column; gap: 3px; padding: 8px;
+    border: 1px solid var(--hv-line); border-radius: 8px; font-size: 0.85em; color: var(--hv-text); }
+  .power-reading small { color: var(--hv-muted); }
+  .power-reading [data-entity]:focus-visible { outline: 2px solid var(--primary-color); }
 `;
 
 let instanceCounter = 0;
@@ -841,6 +951,7 @@ export class HavrvRvCard extends HTMLElement {
           schema: [
             { name: "show_header", selector: { boolean: {} } },
             { name: "show_legend", selector: { boolean: {} } },
+            { name: "show_power", selector: { boolean: {} } },
           ],
         },
       ],
@@ -858,7 +969,7 @@ export class HavrvRvCard extends HTMLElement {
     if (config.layout && !LAYOUTS.includes(config.layout)) {
       throw new Error(`layout must be one of: ${LAYOUTS.join(", ")}`);
     }
-    this._config = { layout: "auto", show_header: true, show_legend: true, ...config };
+    this._config = { layout: "auto", show_header: true, show_legend: true, show_power: true, ...config };
     this._renderKey = undefined;
     this._update();
   }
@@ -919,6 +1030,7 @@ export class HavrvRvCard extends HTMLElement {
         name: model.name,
         axles: model.axles,
         tanks: model.tanks,
+        powerSources: model.powerSources,
         mode: model.operationMode,
       },
       model?.watched.map((id) => {
@@ -1000,13 +1112,14 @@ export class HavrvRvCard extends HTMLElement {
     ]
       .map(([level, label]) => `<span class="${level}"><i></i>${label}</span>`)
       .join("");
-    const svg = renderVehicle(this._hass, model, orientation, this._uid).replace(
+    const svg = renderVehicle(this._hass, model, orientation, this._uid, this._config.show_power).replace(
       'class="vehicle"',
       `class="vehicle ${orientation}"`,
     );
     return `<div class="wrap">
       ${this._config.show_header ? this._renderHeader(model) : ""}
       ${svg}
+      ${this._config.show_power ? `<div class="power-readings">${renderPowerReadings(this._hass, model)}</div>` : ""}
       ${model.axles.length ? "" : `<div class="message">${escapeHtml(STR.noTires)}</div>`}
       ${this._config.show_legend ? `<div class="legend">${legend}</div>` : ""}
     </div>`;
@@ -1026,13 +1139,13 @@ const halfTile = (entity, extra = {}) => ({
 });
 
 /** Build a sections view for one RV from its registry layout. */
-export function rvView(hass, rv) {
+export function rvView(hass, rv, config = {}) {
   const model = buildModel(hass, rv);
   const sections = [
     {
       type: "grid",
       column_span: 4,
-      cards: [{ type: `custom:${CARD_TYPE}`, device_id: rv.id }],
+      cards: [{ type: `custom:${CARD_TYPE}`, device_id: rv.id, show_power: config.show_power ?? true }],
     },
   ];
   const coach = [heading(STR.coach, "mdi:rv-truck")];
@@ -1077,6 +1190,16 @@ export function rvView(hass, rv) {
       cards: [heading(system.name), ...system.entities.map((entity) => halfTile(entity))],
     });
   }
+  if (config.show_power !== false) {
+    for (const source of model.powerSources) {
+      if (!source.entities.length) continue;
+      sections.push({
+        type: "grid",
+        cards: [heading(source.name, source.key.startsWith("house_bank_") || source.key.startsWith("chassis_bank_") ? "mdi:battery" : "mdi:flash"),
+          { type: "entities", entities: source.entities, state_color: false }],
+      });
+    }
+  }
   return { type: "sections", max_columns: 4, sections };
 }
 
@@ -1093,7 +1216,7 @@ const slugify = (text, fallback) =>
     .replace(/^-+|-+$/g, "") || fallback;
 
 export class HavrvDashboardStrategy extends HTMLElement {
-  static async generate(_config, hass) {
+  static async generate(config, hass) {
     const rvs = findRvDevices(hass);
     if (!rvs.length) {
       return { title: "RV", views: [{ ...emptyView(), title: "RV", path: "rv" }] };
@@ -1105,7 +1228,7 @@ export class HavrvDashboardStrategy extends HTMLElement {
         let path = slugify(deviceName(rv), `rv-${i + 1}`);
         if (used.has(path)) path = `${path}-${i + 1}`;
         used.add(path);
-        return { ...rvView(hass, rv), title: deviceName(rv) || "RV", path, icon: "mdi:rv-truck" };
+        return { ...rvView(hass, rv, config), title: deviceName(rv) || "RV", path, icon: "mdi:rv-truck" };
       }),
     };
   }
@@ -1114,7 +1237,7 @@ export class HavrvDashboardStrategy extends HTMLElement {
 export class HavrvViewStrategy extends HTMLElement {
   static async generate(config, hass) {
     const rv = resolveRvDevice(hass, config?.device_id);
-    return rv ? rvView(hass, rv) : emptyView();
+    return rv ? rvView(hass, rv, config) : emptyView();
   }
 }
 

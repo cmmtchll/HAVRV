@@ -7,6 +7,7 @@ useful, and consistent with Home Assistant's async integration patterns.
 
 - Python `>=3.14.2,<3.15`, matching Home Assistant Core `2026.10.0`.
 - Git.
+- Node.js 20 or later for dashboard tests (already available on CI runners).
 
 ## Set up a development environment
 
@@ -31,6 +32,7 @@ ruff check .
 ruff format --check .
 mypy
 pytest
+node --test tests/test_power_dashboard.mjs
 python -m coverage report --include=custom_components/havrv/config_flow.py --fail-under=100
 python scripts/quality_scale_audit.py
 ```
