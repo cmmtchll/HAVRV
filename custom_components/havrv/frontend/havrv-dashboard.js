@@ -533,14 +533,11 @@ function tireChip(axle, side, sign, states, geometry) {
     const pressure = state.pressure
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
       : `<tspan class="mid muted">—</tspan>`;
-    // Rows are narrow: show the pressure trend as a glyph, color a hot
-    // temperature, and move the battery flag to the chip header.
-    const temperature = temperatureText(state.temperature, true);
-    const right = state.pressure
-      ? [
-          state.dropping ? `<tspan class="trend ${state.level}">▼</tspan>` : "",
-          temperature ? `<tspan class="${state.hot ? "hot" : ""}">${escapeHtml(temperature)}</tspan>` : "",
-        ].filter(Boolean).join(" ")
+    // Rows are narrow: keep the full temperature, color a hot temperature,
+    // and show trend and battery flags in the chip header.
+    const temperature = temperatureText(state.temperature, false);
+    const right = state.pressure && temperature
+      ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperature)}</tspan>`
       : "";
     return `<g class="row" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
@@ -551,12 +548,16 @@ function tireChip(axle, side, sign, states, geometry) {
       <text class="small row-right" x="${x + width - 9}" y="${rowY}" text-anchor="end">${right}</text>
     </g>`;
   });
-  if (tireStates.some((state) => state.lowBattery)) {
+  const headerFlags = [
+    tireStates.some((state) => state.dropping) && `<tspan class="trend">▼</tspan>`,
+    tireStates.some((state) => state.lowBattery) && "BAT",
+  ].filter(Boolean);
+  if (headerFlags.length) {
     parts.push(
-      `<text class="flag watch" x="${x + width - 20}" y="${y + 13}" text-anchor="end">BAT</text>`,
+      `<text class="flag ${level}" x="${x + width - 20}" y="${y + 13}" text-anchor="end">${headerFlags.join(" ")}</text>`,
     );
   }
-  return `<g class="chip ${level}">${parts.join("")}${rows.join("")}</g>`;
+  return `<g class="chip dual ${level}">${parts.join("")}${rows.join("")}</g>`;
 }
 
 function ghostChip(axle, sign, geometry) {
@@ -753,7 +754,8 @@ const STYLES = `
   .flag { fill: var(--lvl); font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; }
   .wheel { fill: var(--lvl); font-size: 9.5px; font-weight: 700; }
   .trend { fill: var(--lvl); font-size: 8.5px; }
-  .hot { fill: var(--hv-alert); font-weight: 700; }
+  .hot { fill: var(--hv-alert); }
+  .row-right { font-size: 10px; }
   .dot { fill: var(--lvl); }
   .hit { fill: transparent; }
   .tank-shell { fill: color-mix(in srgb, var(--tank) 10%, var(--hv-card)); }
@@ -885,13 +887,16 @@ export class HavrvRvCard extends HTMLElement {
         if (Math.abs(width - this._width) < 1) return;
         this._width = width;
         this._update();
+        this._scheduleFit();
       });
     }
     this._resizeObserver?.observe(this);
+    this._scheduleFit();
   }
 
   disconnectedCallback() {
     this._resizeObserver?.disconnect();
+    cancelAnimationFrame(this._fitFrame);
   }
 
   _resolveOrientation() {
@@ -927,20 +932,36 @@ export class HavrvRvCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card>${
       model ? this._renderModel(model, orientation) : `<div class="wrap"><div class="message">${escapeHtml(STR.noProfile)}</div></div>`
     }</ha-card>`;
-    this._fitRows();
+    this._scheduleFit();
   }
 
-  /** Drop the pressure unit from dual rows whose text would collide. */
+  /**
+   * Keep dual-chip rows from colliding: drop the chip's pressure units first,
+   * then shorten temperatures to the compact form only if still needed.
+   */
   _fitRows() {
-    for (const row of this.shadowRoot.querySelectorAll(".row")) {
-      const pressure = row.querySelector(".row-pressure");
-      const right = row.querySelector(".row-right");
-      if (!pressure?.getBBox || !right?.textContent) continue;
-      const box = pressure.getBBox();
-      if (box.width && box.x + box.width + 3 > right.getBBox().x) {
-        pressure.querySelector(".unit")?.remove();
-      }
+    if (!this.isConnected) return;
+    const rowsCollide = (chip) =>
+      [...chip.querySelectorAll(".row")].some((row) => {
+        const pressure = row.querySelector(".row-pressure");
+        const right = row.querySelector(".row-right");
+        if (!pressure?.getBBox || !right?.textContent) return false;
+        const box = pressure.getBBox();
+        return box.width > 0 && box.x + box.width + 4 > right.getBBox().x;
+      });
+    for (const chip of this.shadowRoot.querySelectorAll(".chip.dual")) {
+      if (!rowsCollide(chip)) continue;
+      chip.querySelectorAll(".row-pressure .unit").forEach((unit) => unit.remove());
+      if (!rowsCollide(chip)) continue;
+      chip.querySelectorAll(".row-right [data-compact]").forEach((text) => {
+        text.textContent = text.dataset.compact;
+      });
     }
+  }
+
+  _scheduleFit() {
+    cancelAnimationFrame(this._fitFrame);
+    this._fitFrame = requestAnimationFrame(() => this._fitRows());
   }
 
   _renderHeader(model) {

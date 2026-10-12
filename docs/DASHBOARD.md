@@ -39,8 +39,9 @@ its own limits.
 A wheel with a pressure reading but no temperature or battery source is still
 shown as green. Tire labels also show **▼** for a pressure-loss trend, **HOT**
 for a temperature problem, and **BAT** for a low sensor battery. On dual-wheel
-labels, a temperature problem colors that wheel's temperature red, and **BAT**
-appears beside the label's title.
+labels, **▼** and **BAT** appear beside the label's title, and a temperature
+problem colors that wheel's temperature red. If a dual-wheel label is too
+narrow for its readings, the pressure unit is left out for that label.
 
 The header shows the RV name, its year, manufacturer, and model, the operation
 mode, and counts of alerts, items to watch, and readings with no data.
