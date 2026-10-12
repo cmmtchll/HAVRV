@@ -7,6 +7,9 @@ control RV hardware directly.
 
 ## Before you start
 
+- For 0.3.1 updates, restart Home Assistant and refresh the browser after
+  installing. Remove old manually added HAVRV dashboard Resources; the
+  integration supplies the frontend automatically.
 - Make sure Home Assistant is running and the integrations that provide your
   RV-related entities have been set up.
 - Identify the sensors, binary sensors, switches, lights, and climate entities
@@ -170,7 +173,8 @@ setup issues.
 ## 7. Optionally add the RV dashboard
 
 HAVRV includes an RV overview card and a dashboard that draws your configured
-axles, wheels, and tanks. After installing or updating HAVRV, restart Home
+axles, wheels, tanks, and optionally placed electrical sources. After installing
+or updating HAVRV, restart Home
 Assistant and refresh your browser. Then follow the
 [dashboard guide](DASHBOARD.md) to add the dashboard or the card.
 

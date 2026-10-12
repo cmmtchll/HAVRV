@@ -10,6 +10,11 @@ entity mappings, optional tank-level monitoring, and configurable tire
 monitoring, and an RV overview dashboard. Notifications, integration-specific triggers and conditions, and
 physical-device discovery are not implemented.
 
+**0.3.1:** The bundled dashboard includes electrical placement and readouts.
+Update HAVRV, restart Home Assistant, and refresh the browser. Remove old
+manually installed HAVRV dashboard Resources; no separate frontend installation
+is needed. See [dashboard upgrade troubleshooting](docs/TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).
+
 ## Get started
 
 Follow the [setup guide](docs/SETUP.md) to install HAVRV, add an RV profile,
@@ -19,7 +24,7 @@ choose existing entities, and configure optional tank and tire monitoring.
 | --- | --- |
 | Install and configure HAVRV | [Setup guide](docs/SETUP.md) |
 | Understand entities, tire/tank behavior, and limitations | [Feature guide](docs/FEATURES.md) |
-| Show the RV, tires, and tanks on a dashboard | [Dashboard guide](docs/DASHBOARD.md) |
+| Show the RV, tires, tanks, and electrical sources | [Dashboard guide](docs/DASHBOARD.md) |
 | Diagnose a setup or entity problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Contribute or run checks | [Contributing](CONTRIBUTING.md) |
 | See the quality-scale roadmap | [Quality scale](QUALITY_SCALE.md) |

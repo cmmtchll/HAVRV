@@ -4,7 +4,10 @@ HAVRV includes an RV overview card and a dashboard generated from your RV
 profile. Both are installed with the integration. You do not need a separate
 HACS frontend download or a Lovelace resource.
 
-![HAVRV RV overview card](images/dashboard-horizontal.png)
+![Horizontal HAVRV overview with tires, tanks, placed battery banks and AC sources](images/dashboard-horizontal.png)
+
+These rendered examples use synthetic source readings, not a particular RV's
+specifications or wiring. Enabled and Charging are independently mapped.
 
 The card draws your RV from above. It shows every configured wheel with its
 pressure and temperature, and every configured water tank with its fill level.
@@ -27,6 +30,29 @@ The layout follows the RV profile:
   the front at the top.
 
 <img src="images/dashboard-vertical.png" alt="Vertical HAVRV card in a dark theme" width="320">
+
+## Configure electrical placement on an existing RV
+
+1. Open **Settings → Devices & services → HAVRV** and the RV entry's
+   **Configure/Options** action.
+2. Select **Edit power-source mappings, specifications and placement** on
+   the initial options form, then submit.
+3. Set **Dashboard placement** on each bank, Inverter, Generator, and Shore
+   Power screen. Choose one of the six interior regions; shore uses left/right
+   outside. Left/right are viewed facing forward.
+4. Submit every screen to save. Cancelling the wizard leaves prior settings
+   unchanged. **Reconfigure** changes bank counts, not placement.
+
+Placement defaults to **Not shown**. The overview only draws placed sources;
+the generated dashboard can still include unplaced source-device sections.
+Colocated devices share a numbered marker and retain individual readouts below
+the drawing. You do not enter physical positions in dashboard YAML.
+
+The card's visual editor has **Show placed power sources** alongside
+**Show header** and **Show legend**. If that toggle is absent, the browser has
+an older module: update/restart HAVRV, remove any old manually added HAVRV
+dashboard resource, and reset the browser/app cache. See the
+[troubleshooting steps](TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).
 
 Readings use the units shown by the HAVRV entities, so they follow your RV
 profile's measurement system and any unit you set on an entity. Select a wheel,
@@ -65,6 +91,7 @@ mode, and counts of alerts, items to watch, and readings with no data.
    ```yaml
    strategy:
      type: custom:havrv
+     show_power: true
    ```
 
 5. Save and close the editor.
@@ -103,6 +130,7 @@ views:
     strategy:
       type: custom:havrv
       device_id: 0123456789abcdef0123456789abcdef
+      show_power: true
 ```
 
 To find a device ID, open the device in **Settings → Devices & services**. The
@@ -125,9 +153,15 @@ In dashboard edit mode, select **Add card** and search for
 type: custom:havrv-rv-card
 device_id: 0123456789abcdef0123456789abcdef
 layout: auto
+show_power: true
 ```
 
 In a sections view, the card spans the full width of its section.
+`show_power` defaults to `true`; it enables placed markers and readouts on the
+card, and also electrical-device sections when used on a strategy. There is
+no separate electrical strategy. If you previously selected **Take control**,
+your static dashboard does not automatically gain new generated sections; add
+the current card or a strategy view without replacing other views.
 
 ## How the layout is found
 

@@ -2,6 +2,7 @@
 
 import json
 import re
+from hashlib import sha256
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -71,8 +72,44 @@ async def test_frontend_registration_serves_versioned_module(
     add_url.assert_called_once()
     url = add_url.call_args.args[1]
     assert re.fullmatch(
-        rf"{FRONTEND_URL_PATH}/{re.escape(DASHBOARD_MODULE)}\?v=\d+\.\d+\.\d+", url
+        rf"{FRONTEND_URL_PATH}/{re.escape(DASHBOARD_MODULE)}"
+        rf"\?v=\d+\.\d+\.\d+&rev=[a-f0-9]{{12}}",
+        url,
     )
+    revision = sha256((FRONTEND_DIRECTORY / DASHBOARD_MODULE).read_bytes()).hexdigest()[
+        :12
+    ]
+    assert url.endswith(f"&rev={revision}")
+
+
+async def test_frontend_revision_changes_without_version_change(
+    hass: HomeAssistant,
+) -> None:
+    """A frontend-only update invalidates cached JavaScript at the same version."""
+    hass.http = Mock(async_register_static_paths=AsyncMock())
+    hass.config.components.add("frontend")
+    with (
+        patch("custom_components.havrv.dashboard.add_extra_js_url") as add_url,
+        patch(
+            "custom_components.havrv.dashboard.Path.read_bytes",
+            side_effect=[b"old module", b"new module"],
+        ),
+    ):
+        assert await async_register_frontend(hass)
+        assert await async_register_frontend(hass)
+    first, second = [call.args[1] for call in add_url.call_args_list]
+    assert first.split("&rev=")[0] == second.split("&rev=")[0]
+    assert first != second
+
+
+def test_legacy_resource_loads_canonical_module() -> None:
+    """Manual resources cannot register a stale duplicate card implementation."""
+    loader = (FRONTEND_DIRECTORY.parents[2] / DASHBOARD_MODULE).read_text(
+        encoding="utf-8"
+    )
+    assert "/havrv_frontend/havrv-dashboard.js?compat=" in loader
+    assert "customElements.define" not in loader
+    assert "class HavrvRvCard" not in loader
 
 
 async def test_component_setup_registers_frontend(hass: HomeAssistant) -> None:

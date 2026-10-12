@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from hashlib import sha256
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
@@ -26,10 +27,15 @@ async def async_register_frontend(hass: HomeAssistant) -> bool:
         return False
 
     integration = await async_get_integration(hass, DOMAIN)
+    module = FRONTEND_DIRECTORY / DASHBOARD_MODULE
+    content = await hass.async_add_executor_job(module.read_bytes)
+    revision = sha256(content).hexdigest()[:12]
     await hass.http.async_register_static_paths(
         [StaticPathConfig(FRONTEND_URL_PATH, str(FRONTEND_DIRECTORY), True)]
     )
     add_extra_js_url(
-        hass, f"{FRONTEND_URL_PATH}/{DASHBOARD_MODULE}?v={integration.version}"
+        hass,
+        f"{FRONTEND_URL_PATH}/{DASHBOARD_MODULE}"
+        f"?v={integration.version}&rev={revision}",
     )
     return True

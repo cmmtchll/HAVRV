@@ -124,6 +124,30 @@ old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
 - A gray wheel or tank has no pressure or percentage reading. Check its source
   entity, as described in the sections above.
 
+### The power toggle or placed electrical devices are missing
+
+The current card editor includes **Show placed power sources** alongside
+**Show header** and **Show legend**. If only the latter two appear, the browser
+is running an older dashboard module, even if backend power configuration works.
+
+Update the integration and restart Home Assistant, then reload the browser or
+reset the companion app's frontend cache. In **Settings → Dashboards →
+Resources** (advanced mode), remove any old manually added HAVRV JavaScript
+resource such as `/local/havrv-dashboard.js` or a HACS frontend copy. HAVRV
+automatically loads its bundled card; an older manual resource can register
+the card first and prevent the updated implementation from taking effect.
+Deleting a resource does not delete your dashboard YAML or RV configuration.
+
+The integration's module URL includes a content revision so frontend-only
+updates invalidate cached code even when the integration version is unchanged.
+The repository-root JavaScript is a compatibility loader, not a second card.
+
+With the current editor visible, confirm `show_power: true`, the selected
+RV's device ID, and each device's saved **Dashboard placement**. Complete all
+power-source options screens to save. Colocated devices share a numbered
+marker but have separate readouts; **Not shown** omits a source from the
+overview, not its generated device section.
+
 ## You need to change or remove a source mapping
 
 Use the integration's **Options** to change system mappings, tank selections,

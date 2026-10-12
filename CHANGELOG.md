@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.3.1
+
+- Invalidate cached dashboard JavaScript using its content revision, including
+  frontend-only updates at the same integration version.
+- Replace the stale repository-root card with a compatibility loader for the
+  integration's canonical module. Old manually copied frontend resources
+  should be removed from dashboard Resources.
+- Document electrical placement, the Show placed power sources toggle,
+  dashboard/view/card YAML, and upgrade troubleshooting. Refresh the horizontal
+  and vertical dashboard images with independent banks and electrical readings.
+
+## 0.3.0
+
+- Add independent house/chassis battery banks and logical Inverter, Generator,
+  and Shore Power devices. Bank counts default to one each, nominal voltage
+  defaults to 24 V DC (12/24/48 selectable), and capacity is optional in Ah.
+- Add declared read-only voltage/current/Enabled mappings and independent
+  bank Charging mappings, with optional dashboard placement and source sections.
+  Do not infer charging, active supply, or electrical wiring.
+
 - Add editable dimensions, capacities, and tank/tire limits to Configuration on
   the main RV device, sharing saved values and validation with the forms.
   Move other profile details to read-only Diagnostics. Main-device dimension
