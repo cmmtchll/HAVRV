@@ -520,26 +520,44 @@ function tireChip(axle, side, sign, states, geometry) {
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
     )}">${parts.join("")}</g>`;
   }
-  const rows = tires.map((tire, i) => {
+  // Stack dual rows in the same order as the wheels they describe: a chip
+  // below the coach lists the inner wheel first, nearest the body.
+  const rowOrder = geometry === ORIENTATIONS.horizontal && sign > 0
+    ? tires.map((_, i) => tires.length - 1 - i)
+    : tires.map((_, i) => i);
+  const rows = rowOrder.map((i, rowIndex) => {
+    const tire = tires[i];
     const state = tireStates[i];
-    const rowY = y + 32 + i * 20;
+    const rowY = y + 32 + rowIndex * 20;
     const entity = tire.pressure || tire.temperature || "";
     const pressure = state.pressure
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
       : `<tspan class="mid muted">—</tspan>`;
-    const right = state.pressure
-      ? [flagText(state), temperatureText(state.temperature, true)].filter(Boolean).join(" ")
+    // Rows are narrow: keep the full temperature, color a hot temperature,
+    // and show trend and battery flags in the chip header.
+    const temperature = temperatureText(state.temperature, false);
+    const right = state.pressure && temperature
+      ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperature)}</tspan>`
       : "";
     return `<g class="row" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
     )}">
       <rect class="hit" x="${x}" y="${rowY - 15}" width="${width}" height="20"></rect>
       <text class="wheel ${state.level}" x="${x + 9}" y="${rowY}">${tire.wheel === "inner" ? STR.inner : STR.outer}</text>
-      <text x="${x + 22}" y="${rowY}">${pressure}</text>
-      <text class="small" x="${x + width - 9}" y="${rowY}" text-anchor="end">${escapeHtml(right)}</text>
+      <text class="row-pressure" x="${x + 22}" y="${rowY}">${pressure}</text>
+      <text class="small row-right" x="${x + width - 9}" y="${rowY}" text-anchor="end">${right}</text>
     </g>`;
   });
-  return `<g class="chip ${level}">${parts.join("")}${rows.join("")}</g>`;
+  const headerFlags = [
+    tireStates.some((state) => state.dropping) && `<tspan class="trend">▼</tspan>`,
+    tireStates.some((state) => state.lowBattery) && "BAT",
+  ].filter(Boolean);
+  if (headerFlags.length) {
+    parts.push(
+      `<text class="flag ${level}" x="${x + width - 20}" y="${y + 13}" text-anchor="end">${headerFlags.join(" ")}</text>`,
+    );
+  }
+  return `<g class="chip dual ${level}">${parts.join("")}${rows.join("")}</g>`;
 }
 
 function ghostChip(axle, sign, geometry) {
@@ -735,6 +753,9 @@ const STYLES = `
   .muted { fill: var(--hv-muted); }
   .flag { fill: var(--lvl); font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; }
   .wheel { fill: var(--lvl); font-size: 9.5px; font-weight: 700; }
+  .trend { fill: var(--lvl); font-size: 8.5px; }
+  .hot { fill: var(--hv-alert); }
+  .row-right { font-size: 10px; }
   .dot { fill: var(--lvl); }
   .hit { fill: transparent; }
   .tank-shell { fill: color-mix(in srgb, var(--tank) 10%, var(--hv-card)); }
@@ -866,13 +887,16 @@ export class HavrvRvCard extends HTMLElement {
         if (Math.abs(width - this._width) < 1) return;
         this._width = width;
         this._update();
+        this._scheduleFit();
       });
     }
     this._resizeObserver?.observe(this);
+    this._scheduleFit();
   }
 
   disconnectedCallback() {
     this._resizeObserver?.disconnect();
+    cancelAnimationFrame(this._fitFrame);
   }
 
   _resolveOrientation() {
@@ -908,6 +932,36 @@ export class HavrvRvCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card>${
       model ? this._renderModel(model, orientation) : `<div class="wrap"><div class="message">${escapeHtml(STR.noProfile)}</div></div>`
     }</ha-card>`;
+    this._scheduleFit();
+  }
+
+  /**
+   * Keep dual-chip rows from colliding: drop the chip's pressure units first,
+   * then shorten temperatures to the compact form only if still needed.
+   */
+  _fitRows() {
+    if (!this.isConnected) return;
+    const rowsCollide = (chip) =>
+      [...chip.querySelectorAll(".row")].some((row) => {
+        const pressure = row.querySelector(".row-pressure");
+        const right = row.querySelector(".row-right");
+        if (!pressure?.getBBox || !right?.textContent) return false;
+        const box = pressure.getBBox();
+        return box.width > 0 && box.x + box.width + 4 > right.getBBox().x;
+      });
+    for (const chip of this.shadowRoot.querySelectorAll(".chip.dual")) {
+      if (!rowsCollide(chip)) continue;
+      chip.querySelectorAll(".row-pressure .unit").forEach((unit) => unit.remove());
+      if (!rowsCollide(chip)) continue;
+      chip.querySelectorAll(".row-right [data-compact]").forEach((text) => {
+        text.textContent = text.dataset.compact;
+      });
+    }
+  }
+
+  _scheduleFit() {
+    cancelAnimationFrame(this._fitFrame);
+    this._fitFrame = requestAnimationFrame(() => this._fitRows());
   }
 
   _renderHeader(model) {
