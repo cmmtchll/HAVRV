@@ -17,17 +17,23 @@ from custom_components.havrv.config_flow import (
 from custom_components.havrv.config_flow import (
     _normalize_entity_mappings,
     _normalize_options,
+    _normalize_power_source,
+    _normalize_profile,
     _options_schema,
+    _power_source_schema,
 )
 from custom_components.havrv.const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
+    CONF_CHASSIS_BATTERY_BANK_COUNT,
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
+    CONF_CONFIGURE_POWER_SOURCES,
     CONF_ENTITY_MAPPINGS,
     CONF_FRESH_WATER_TANK_CAPACITY,
     CONF_FUEL_TANK_CAPACITY,
     CONF_GRAY_WATER_TANK_CAPACITY,
+    CONF_HOUSE_BATTERY_BANK_COUNT,
     CONF_MAIN_REAR_WHEEL_CONFIGURATION,
     CONF_MAKE,
     CONF_MANUFACTURER,
@@ -36,6 +42,7 @@ from custom_components.havrv.const import (
     CONF_OVERALL_HEIGHT,
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
+    CONF_POWER_SOURCES,
     CONF_REAR_AXLE_COUNT,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
@@ -49,6 +56,7 @@ from custom_components.havrv.const import (
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
 )
+from custom_components.havrv.power import PowerSource
 from custom_components.havrv.tire import tire_positions
 
 
@@ -58,6 +66,16 @@ async def _init_user_flow(hass: HomeAssistant) -> dict:
         DOMAIN,
         context={"source": config_entries.SOURCE_USER},
     )
+
+
+async def _finish_power_flow(hass: HomeAssistant, result: dict) -> dict:
+    """Accept empty optional mappings in the default power-source setup."""
+    while result.get("step_id") == "power_source":
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={}
+        )
+        assert not result.get("errors"), result
+    return result
 
 
 def _default_measurement_system(hass: HomeAssistant) -> str:
@@ -389,13 +407,16 @@ async def test_user_flow_creates_profile_with_optional_fields_blank(
     assert form["type"] is FlowResultType.FORM
 
     result = await hass.config_entries.flow.async_configure(
-        form["flow_id"], user_input={CONF_NAME: "Adventure RV"}
+        form["flow_id"],
+        user_input={CONF_NAME: "Adventure RV", CONF_CONFIGURE_POWER_SOURCES: False},
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Adventure RV"
     assert result["data"] == {
         CONF_NAME: "Adventure RV",
+        CONF_HOUSE_BATTERY_BANK_COUNT: 1,
+        CONF_CHASSIS_BATTERY_BANK_COUNT: 1,
         CONF_ENTITY_MAPPINGS: {},
         CONF_MEASUREMENT_SYSTEM: _default_measurement_system(hass),
         CONF_TAG_AXLE_PRESENT: False,
@@ -413,6 +434,7 @@ async def test_user_flow_defaults_to_home_assistant_us_customary_units(
     result = await hass.config_entries.flow.async_configure(
         form["flow_id"], user_input={CONF_NAME: "Adventure RV"}
     )
+    result = await _finish_power_flow(hass, result)
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MEASUREMENT_SYSTEM] == UNIT_SYSTEM_US_CUSTOMARY
@@ -448,11 +470,14 @@ async def test_user_flow_stores_coach_profile_and_specifications(
     result = await hass.config_entries.flow.async_configure(
         form["flow_id"], user_input=input_data
     )
+    result = await _finish_power_flow(hass, result)
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Liberty"
     assert result["data"] == {
         CONF_NAME: "Liberty",
+        CONF_HOUSE_BATTERY_BANK_COUNT: 1,
+        CONF_CHASSIS_BATTERY_BANK_COUNT: 1,
         CONF_ENTITY_MAPPINGS: {},
         CONF_COACH_YEAR: 2003,
         CONF_MANUFACTURER: "Prevost",
@@ -491,6 +516,7 @@ async def test_user_flow_accepts_three_rear_axles_including_tag(
         },
     )
 
+    result = await _finish_power_flow(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_REAR_AXLE_COUNT] == 3
     assert result["data"][CONF_TAG_AXLE_PRESENT] is True
@@ -513,6 +539,7 @@ async def test_user_flow_derives_no_tag_for_one_rear_axle(
         },
     )
 
+    result = await _finish_power_flow(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_TAG_AXLE_PRESENT] is False
     assert CONF_TAG_AXLE_WHEEL_CONFIGURATION not in result["data"]
@@ -533,6 +560,7 @@ async def test_user_flow_stores_grouped_source_entity_mappings(
         },
     )
 
+    result = await _finish_power_flow(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_ENTITY_MAPPINGS] == {
         "power": ["sensor.house_battery_voltage"],
@@ -839,6 +867,7 @@ async def test_user_flow_accepts_tag_axle_with_wheel_configuration(
         },
     )
 
+    result = await _finish_power_flow(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_TAG_AXLE_PRESENT] is True
     assert result["data"][CONF_REAR_AXLE_COUNT] == 2
@@ -847,3 +876,209 @@ async def test_user_flow_accepts_tag_axle_with_wheel_configuration(
     assert any(position.key == "rear_axle_1_left_inner" for position in positions)
     assert any(position.key == "tag_axle_left_inner" for position in positions)
     assert not any(position.key.startswith("rear_axle_2_") for position in positions)
+
+
+@pytest.mark.parametrize("count", [-1, 1.5, True, float("nan"), float("inf"), "2"])
+def test_invalid_battery_bank_count(count: object) -> None:
+    """Bank counts must be finite, non-negative integers."""
+    _, error = _normalize_profile(
+        {CONF_NAME: "RV", CONF_HOUSE_BATTERY_BANK_COUNT: count},
+        default_measurement_system=UNIT_SYSTEM_METRIC,
+    )
+    assert error == "invalid_battery_bank_count"
+
+
+@pytest.mark.parametrize(
+    ("settings", "error"),
+    [
+        ({"voltage": 12}, "invalid_power_entity_mapping"),
+        ({"voltage": "sensor"}, "invalid_power_entity_mapping"),
+        ({"voltage": "sensor."}, "invalid_power_entity_mapping"),
+        ({"voltage": "switch.voltage"}, "invalid_power_entity_mapping"),
+        ({"enabled": "sensor.enabled"}, "invalid_power_entity_mapping"),
+        ({"charging": "number.charging"}, "invalid_power_entity_mapping"),
+        (
+            {"current": "sensor.shared", "voltage": "sensor.shared"},
+            "duplicate_power_entity_mapping",
+        ),
+        ({"location": "front"}, "invalid_power_location"),
+        ({"nominal_voltage": 36}, "invalid_nominal_voltage"),
+        ({"nominal_capacity": 0}, "invalid_nominal_capacity"),
+        ({"nominal_capacity": float("nan")}, "invalid_nominal_capacity"),
+    ],
+)
+def test_power_source_validation(settings: dict, error: str) -> None:
+    """Reject incompatible domains, invalid specifications and duplicate roles."""
+    result, actual_error = _normalize_power_source(
+        settings, PowerSource("house_bank_1", "House", True)
+    )
+    assert result == {}
+    assert actual_error == error
+
+
+@pytest.mark.parametrize("domain", ["sensor", "number", "input_number"])
+def test_power_numeric_selector_and_validation_match(domain: str) -> None:
+    """Sensor, helper and template-result numeric domains work in every form."""
+    bank = PowerSource("house_bank_1", "House", True)
+    schema = _power_source_schema(bank, {})
+    fields = {key.schema: value for key, value in schema.schema.items()}
+    assert fields["voltage"].config["domain"] == ["sensor", "number", "input_number"]
+    assert fields["enabled"].config["domain"] == [
+        "binary_sensor",
+        "switch",
+        "input_boolean",
+    ]
+    settings, error = _normalize_power_source(
+        {"voltage": f"{domain}.template_voltage", "current": f"{domain}.current"},
+        bank,
+    )
+    assert error is None
+    assert settings["voltage"] == f"{domain}.template_voltage"
+    assert settings["nominal_voltage"] == 24
+    assert settings["location"] == "not_shown"
+    assert "nominal_capacity" not in settings
+
+
+async def test_setup_configures_independent_banks_and_readonly_sources(
+    hass: HomeAssistant,
+) -> None:
+    """Complete the setup wizard with independent banks and explicit charging."""
+    form = await _init_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_NAME: "Power RV",
+            CONF_HOUSE_BATTERY_BANK_COUNT: 2,
+            CONF_CHASSIS_BATTERY_BANK_COUNT: 0,
+        },
+    )
+    assert result["step_id"] == "power_source"
+    assert result["description_placeholders"] == {"source": "House Batteries Bank 1"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "voltage": "input_number.house_voltage",
+            "current": "number.house_current",
+            "enabled": "switch.house_enabled",
+            "charging": "input_boolean.house_charging",
+            "nominal_voltage": "48",
+            "nominal_capacity": 400,
+            "location": "left_rear",
+        },
+    )
+    assert result["description_placeholders"] == {"source": "House Batteries Bank 2"}
+    result = await _finish_power_flow(hass, result)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    entry = result["result"]
+    settings = entry.options[CONF_POWER_SOURCES]
+    assert list(settings) == [
+        "house_bank_1",
+        "house_bank_2",
+        "inverter",
+        "generator",
+        "shore_power",
+    ]
+    assert settings["house_bank_1"]["nominal_voltage"] == 48
+    assert settings["house_bank_1"]["nominal_capacity"] == 400
+    assert settings["house_bank_1"]["charging"] == "input_boolean.house_charging"
+    assert settings["house_bank_2"] == {"nominal_voltage": 24, "location": "not_shown"}
+    assert settings["shore_power"] == {"location": "not_shown"}
+
+
+async def test_power_setup_invalid_capacity_preserves_input(
+    hass: HomeAssistant,
+) -> None:
+    """Invalid capacity stays on the same bank and retains valid submitted fields."""
+    form = await _init_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        form["flow_id"], user_input={CONF_NAME: "Power RV"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"voltage": "sensor.voltage", "nominal_capacity": 0},
+    )
+    assert result["errors"] == {"base": "invalid_nominal_capacity"}
+    assert result["description_placeholders"]["source"] == "House Batteries Bank 1"
+    fields = {key.schema: key for key in result["data_schema"].schema}
+    assert fields["voltage"].description["suggested_value"] == "sensor.voltage"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"nominal_capacity": 200}
+    )
+    await _finish_power_flow(hass, result)
+
+
+async def test_options_edit_power_settings_and_preserve_other_options(
+    hass: HomeAssistant,
+) -> None:
+    """Edit defaults and remove mappings without saving any partial wizard state."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Power RV",
+        version=3,
+        data={CONF_NAME: "Power RV"},
+        options={
+            CONF_POWER_SOURCES: {
+                "house_bank_1": {
+                    "voltage": "sensor.old",
+                    "charging": "binary_sensor.charging",
+                    "nominal_voltage": 12,
+                    "nominal_capacity": 200,
+                    "location": "left_mid",
+                }
+            }
+        },
+    )
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_CONFIGURE_POWER_SOURCES: True,
+            "power_entities": ["sensor.generic"],
+        },
+    )
+    assert result["step_id"] == "power_source"
+    defaults = result["data_schema"]({})
+    assert defaults["nominal_voltage"] == "12"
+    fields = {key.schema: key for key in result["data_schema"].schema}
+    assert fields["nominal_capacity"].description["suggested_value"] == 200
+    assert fields["charging"].description["suggested_value"] == "binary_sensor.charging"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"nominal_capacity": 0}
+    )
+    assert result["errors"] == {"base": "invalid_nominal_capacity"}
+    assert entry.options[CONF_POWER_SOURCES]["house_bank_1"]["voltage"] == "sensor.old"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "nominal_voltage": "24",
+            "location": "not_shown",
+        },
+    )
+    while result.get("step_id") == "power_source":
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={}
+        )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_ENTITY_MAPPINGS] == {"power": ["sensor.generic"]}
+    assert entry.options[CONF_POWER_SOURCES]["house_bank_1"] == {
+        "nominal_voltage": 24,
+        "location": "not_shown",
+    }
+    assert (
+        _normalize_options({}, entry)[0][CONF_POWER_SOURCES]
+        == (entry.options[CONF_POWER_SOURCES])
+    )
+
+
+def test_shore_placement_is_external_and_ignores_battery_fields() -> None:
+    """Shore has side placement only and no Charging or nominal bank settings."""
+    shore = PowerSource("shore_power", "Shore Power")
+    schema = _power_source_schema(shore, {})
+    assert "charging" not in {key.schema for key in schema.schema}
+    assert _normalize_power_source({"location": "left_front"}, shore)[1] == (
+        "invalid_power_location"
+    )
+    assert _normalize_power_source(
+        {"location": "right", "charging": "binary_sensor.unused"}, shore
+    ) == ({"location": "right"}, None)

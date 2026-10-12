@@ -23,6 +23,27 @@ Confirm that the selected source entity is available and can be controlled
 directly in Home Assistant. HAVRV forwards the corresponding standard domain
 service call; it does not override source permissions or capabilities.
 
+## A power reading or Charging status is missing
+
+Select **Edit power-source mappings, specifications and placement** in
+**Options** and confirm the mapping for the correct independent bank/device.
+Only declared live mappings create entities. Numeric sources must have a
+finite value and a compatible voltage/current unit; unitless helpers are
+interpreted as V/A. Enabled and Charging must report `on` or `off`.
+Charging is not inferred from a negative/positive current, an enabled inverter,
+shore power, a running generator, or a running engine.
+
+Power statuses are read-only even if their source is a switch. Use the source
+integration's controls directly when needed; HAVRV does not start/stop a
+generator or operate battery disconnects through these entities.
+
+If a source section exists but its overview marker is missing, choose a
+placement instead of **Not shown**, and ensure `show_power` is not `false`.
+Shore Power supports only left/right outside the RV. Colocated devices share
+one marker but have individual readouts beneath it. Reducing bank counts
+removes the highest-numbered banks and their saved mappings; increasing
+the count again does not restore removed configurations.
+
 ## A tank reading, percentage, or status is missing
 
 Check the tank's source selection in **Options** and verify that the source

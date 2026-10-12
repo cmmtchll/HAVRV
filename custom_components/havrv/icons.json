@@ -68,6 +68,21 @@
       },
       "tire_battery": {
         "default": "mdi:battery"
+      },
+      "power_voltage": {
+        "default": "mdi:flash"
+      },
+      "power_current": {
+        "default": "mdi:flash"
+      },
+      "power_location": {
+        "default": "mdi:map-marker"
+      },
+      "power_nominal_voltage": {
+        "default": "mdi:battery"
+      },
+      "power_nominal_capacity": {
+        "default": "mdi:battery-high"
       }
     },
     "select": {
@@ -80,6 +95,14 @@
           "campsite_minimal": "mdi:tent",
           "maintenance": "mdi:wrench"
         }
+      }
+    },
+    "binary_sensor": {
+      "power_enabled": {
+        "default": "mdi:power"
+      },
+      "power_charging": {
+        "default": "mdi:battery-charging"
       }
     }
   }

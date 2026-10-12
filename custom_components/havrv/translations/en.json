@@ -29,7 +29,10 @@
           "chassis_entities": "Chassis system entities",
           "climate_entities": "Climate system entities",
           "location_entities": "Location system entities",
-          "other_entities": "Other RV entities"
+          "other_entities": "Other RV entities",
+          "house_battery_bank_count": "Number of independent house battery banks",
+          "chassis_battery_bank_count": "Number of independent chassis battery banks",
+          "configure_power_sources": "Configure power sources now"
         },
         "data_description": {
           "name": "A unique name for this RV profile.",
@@ -56,7 +59,10 @@
           "chassis_entities": "Select existing sensors, controls, or climate entities for the RV chassis.",
           "climate_entities": "Select existing sensors, controls, or climate entities for RV climate systems.",
           "location_entities": "Select existing sensors, controls, or climate entities for RV location.",
-          "other_entities": "Select other existing entities to include with this RV."
+          "other_entities": "Select other existing entities to include with this RV.",
+          "house_battery_bank_count": "Defaults to one bank. Each bank is a complete independent unit. Use zero if absent.",
+          "chassis_battery_bank_count": "Defaults to one bank. Each bank is a complete independent unit. Use zero if absent.",
+          "configure_power_sources": "Configure each battery bank, inverter, generator and shore-power device on the following screens, or map them later in Options."
         }
       },
       "reconfigure": {
@@ -80,7 +86,9 @@
           "black_water_tank_capacity": "Black-water tank capacity",
           "rear_axle_count": "Number of rear axle assemblies, including a tag axle",
           "main_rear_wheel_configuration": "Main rear axle wheels",
-          "tag_axle_wheel_configuration": "Tag axle wheels"
+          "tag_axle_wheel_configuration": "Tag axle wheels",
+          "house_battery_bank_count": "Number of independent house battery banks",
+          "chassis_battery_bank_count": "Number of independent chassis battery banks"
         },
         "data_description": {
           "coach_year": "The model year of the coach.",
@@ -100,7 +108,31 @@
           "black_water_tank_capacity": "Liters for metric, or US gallons for US customary.",
           "rear_axle_count": "Count all rear axle assemblies, including the tag axle if present. The front axle is not included.",
           "main_rear_wheel_configuration": "Whether the main rear axle has single or dual wheels.",
-          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one."
+          "tag_axle_wheel_configuration": "Choose the tag axle wheel layout when the rear axle assembly count is greater than one.",
+          "house_battery_bank_count": "Defaults to one bank. Each bank is a complete independent unit. Use zero if absent.",
+          "chassis_battery_bank_count": "Defaults to one bank. Each bank is a complete independent unit. Use zero if absent."
+        }
+      },
+      "power_source": {
+        "title": "Configure {source}",
+        "description": "Map read-only readings for this independent source. Battery voltage/current describe the DC bank; inverter, generator and shore readings describe AC output/supply. Enabled is not proof of supplying power. Charging is a separate battery status, not inferred from current or another source. Leave unknown sources and capacity blank. Placement is optional; left/right are viewed facing forward.",
+        "data": {
+          "voltage": "Voltage source",
+          "current": "Current source",
+          "enabled": "Enabled status source",
+          "charging": "Charging status source",
+          "location": "Dashboard placement",
+          "nominal_voltage": "Bank nominal voltage (V DC)",
+          "nominal_capacity": "Bank nominal capacity (Ah)"
+        },
+        "data_description": {
+          "voltage": "Sensor, number or input number. Compatible units convert to V; unitless sources are interpreted as V.",
+          "current": "Sensor, number or input number. Compatible units convert to A; unitless sources are interpreted as A. The source determines current sign.",
+          "enabled": "Binary sensor, switch or input boolean with on/off states. Read-only; no actions are forwarded.",
+          "charging": "An explicit binary sensor, switch or input boolean reporting whether this bank is charging. Independent of Enabled and of source availability.",
+          "nominal_voltage": "12, 24 or 48 V DC. Defaults to 24 V; confirm your actual bank specification.",
+          "nominal_capacity": "Total capacity of this complete bank in ampere-hours. No assumed capacity or battery-series/parallel calculation.",
+          "location": "Not shown by default. Shore power appears outside the RV on the selected side."
         }
       }
     },
@@ -110,7 +142,13 @@
       "invalid_measurement": "Dimensions and tank capacities must be numbers greater than zero.",
       "tag_axle_wheel_configuration_required": "Choose the wheel layout for the tag axle.",
       "tag_wheel_configuration_without_tag_axle": "A tag axle wheel layout is only valid when the rear axle assembly count is greater than one.",
-      "main_rear_wheel_configuration_required": "Choose the wheel layout for each main rear axle."
+      "main_rear_wheel_configuration_required": "Choose the wheel layout for each main rear axle.",
+      "invalid_power_entity_mapping": "Select a numeric source for voltage/current or an on/off source for Enabled/Charging.",
+      "duplicate_power_entity_mapping": "Use separate source entities for each reading or status on this device.",
+      "invalid_power_location": "Select a valid placement; shore power supports only left or right outside the RV.",
+      "invalid_nominal_voltage": "Choose 12, 24 or 48 V DC for this bank.",
+      "invalid_nominal_capacity": "Enter a finite bank capacity greater than zero in Ah, or leave it blank.",
+      "invalid_battery_bank_count": "Enter a finite, non-negative whole number of independent banks."
     },
     "abort": {
       "already_configured": "An RV with this name is already configured.",
@@ -199,7 +237,30 @@
           "tire_tag_pressure_low": "Tag axle low-pressure limit",
           "tire_tag_pressure_high": "Tag axle high-pressure limit",
           "tire_temperature_high": "High tire-temperature limit",
-          "tire_battery_low": "Low tire-battery limit (default 20%)"
+          "tire_battery_low": "Low tire-battery limit (default 20%)",
+          "configure_power_sources": "Edit power-source mappings, specifications and placement"
+        }
+      },
+      "power_source": {
+        "title": "Configure {source}",
+        "description": "Map read-only readings for this independent source. Battery voltage/current describe the DC bank; inverter, generator and shore readings describe AC output/supply. Enabled is not proof of supplying power. Charging is a separate battery status, not inferred from current or another source. Leave unknown sources and capacity blank. Placement is optional; left/right are viewed facing forward.",
+        "data": {
+          "voltage": "Voltage source",
+          "current": "Current source",
+          "enabled": "Enabled status source",
+          "charging": "Charging status source",
+          "location": "Dashboard placement",
+          "nominal_voltage": "Bank nominal voltage (V DC)",
+          "nominal_capacity": "Bank nominal capacity (Ah)"
+        },
+        "data_description": {
+          "voltage": "Sensor, number or input number. Compatible units convert to V; unitless sources are interpreted as V.",
+          "current": "Sensor, number or input number. Compatible units convert to A; unitless sources are interpreted as A. The source determines current sign.",
+          "enabled": "Binary sensor, switch or input boolean with on/off states. Read-only; no actions are forwarded.",
+          "charging": "An explicit binary sensor, switch or input boolean reporting whether this bank is charging. Independent of Enabled and of source availability.",
+          "nominal_voltage": "12, 24 or 48 V DC. Defaults to 24 V; confirm your actual bank specification.",
+          "nominal_capacity": "Total capacity of this complete bank in ampere-hours. No assumed capacity or battery-series/parallel calculation.",
+          "location": "Not shown by default. Shore power appears outside the RV on the selected side."
         }
       }
     },
@@ -213,7 +274,12 @@
       "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
       "invalid_tire_pressure_threshold": "Pressure limits must be non-negative, and the high limit must be greater than the low limit.",
       "invalid_tire_temperature_threshold": "The high temperature limit must be a valid non-negative number.",
-      "invalid_tire_battery_threshold": "The low battery limit must be between 0 and 100 percent."
+      "invalid_tire_battery_threshold": "The low battery limit must be between 0 and 100 percent.",
+      "invalid_power_entity_mapping": "Select a numeric source for voltage/current or an on/off source for Enabled/Charging.",
+      "duplicate_power_entity_mapping": "Use separate source entities for each reading or status on this device.",
+      "invalid_power_location": "Select a valid placement; shore power supports only left or right outside the RV.",
+      "invalid_nominal_voltage": "Choose 12, 24 or 48 V DC for this bank.",
+      "invalid_nominal_capacity": "Enter a finite bank capacity greater than zero in Ah, or leave it blank."
     }
   },
   "selector": {
@@ -234,6 +300,19 @@
       "options": {
         "single": "Single wheels",
         "dual": "Dual wheels"
+      }
+    },
+    "power_location": {
+      "options": {
+        "not_shown": "Not shown on RV overview",
+        "left_front": "L-Front",
+        "left_mid": "L-Mid",
+        "left_rear": "L-Rear",
+        "right_front": "R-Front",
+        "right_mid": "R-Mid",
+        "right_rear": "R-Rear",
+        "left": "L (outside)",
+        "right": "R (outside)"
       }
     }
   },
@@ -389,6 +468,32 @@
       },
       "tire_battery": {
         "name": "Battery level"
+      },
+      "power_voltage": {
+        "name": "Voltage"
+      },
+      "power_current": {
+        "name": "Current"
+      },
+      "power_location": {
+        "name": "Dashboard placement",
+        "state": {
+          "not_shown": "Not shown on RV overview",
+          "left_front": "L-Front",
+          "left_mid": "L-Mid",
+          "left_rear": "L-Rear",
+          "right_front": "R-Front",
+          "right_mid": "R-Mid",
+          "right_rear": "R-Rear",
+          "left": "L (outside)",
+          "right": "R (outside)"
+        }
+      },
+      "power_nominal_voltage": {
+        "name": "Nominal voltage"
+      },
+      "power_nominal_capacity": {
+        "name": "Nominal capacity"
       }
     },
     "binary_sensor": {
@@ -412,6 +517,12 @@
       },
       "tire_pressure_slow_loss": {
         "name": "Slow pressure loss"
+      },
+      "power_enabled": {
+        "name": "Enabled"
+      },
+      "power_charging": {
+        "name": "Charging"
       }
     },
     "select": {

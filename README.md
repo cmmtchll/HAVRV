@@ -39,9 +39,15 @@ choose existing entities, and configure optional tank and tire monitoring.
   comparative tire analysis.
 - Adds an Operations device with an operation-mode selector (Storage,
   Driving, Campsite full service, Campsite minimal, or Maintenance).
+- Creates independent house/chassis battery-bank devices (one of each by
+  default), plus Inverter, Generator, and Shore Power. Configure bank voltage
+  and capacity, read-only voltage/current/Enabled/Charging sources, and optional
+  physical placement. See [power sources](docs/FEATURES.md#power-source-devices).
 - Includes an RV overview card and a generated RV dashboard. They draw the
   configured axles, single or dual wheels, and water tanks with live readings
   and status colors.
+  Optional power-source markers use your selected locations, with individual
+  live readouts; shore power is drawn outside the RV.
 
 ![HAVRV RV overview card](docs/images/dashboard-horizontal.png)
 

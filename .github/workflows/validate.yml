@@ -28,6 +28,9 @@ jobs:
       - name: Run tests
         run: pytest
 
+      - name: Test dashboard power-source behavior
+        run: node --test tests/test_power_dashboard.mjs
+
       - name: Check config flow coverage
         run: python -m coverage report --include=custom_components/havrv/config_flow.py --fail-under=100
 
