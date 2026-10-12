@@ -771,6 +771,8 @@ def _power_source_schema(
         ("voltage", NUMERIC_POWER_DOMAINS),
         ("current", NUMERIC_POWER_DOMAINS),
         ("enabled", BINARY_POWER_DOMAINS),
+        ("warning", BINARY_POWER_DOMAINS),
+        ("problem", BINARY_POWER_DOMAINS),
         *([("charging", BINARY_POWER_DOMAINS)] if source.battery else []),
     ):
         marker = vol.Optional(
@@ -828,6 +830,8 @@ def _normalize_power_source(
         ("voltage", NUMERIC_POWER_DOMAINS),
         ("current", NUMERIC_POWER_DOMAINS),
         ("enabled", BINARY_POWER_DOMAINS),
+        ("warning", BINARY_POWER_DOMAINS),
+        ("problem", BINARY_POWER_DOMAINS),
         *([("charging", BINARY_POWER_DOMAINS)] if source.battery else []),
     ):
         entity_id = user_input.get(metric)

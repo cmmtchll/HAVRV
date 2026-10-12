@@ -200,6 +200,71 @@ async def test_enabled_and_charging_are_independent_readonly_statuses(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+@pytest.mark.parametrize("domain", ["binary_sensor", "switch", "input_boolean"])
+@pytest.mark.parametrize(
+    "key", ["house_bank_1", "chassis_bank_1", "inverter", "generator", "shore_power"]
+)
+async def test_power_alerts_are_independent_recover_and_clear(
+    hass: HomeAssistant, domain: str, key: str
+) -> None:
+    """Explicit alerts load alone, recover, remap and remove without stale entities."""
+    hass.states.async_set(f"{domain}.warning", "on")
+    hass.states.async_set(f"{domain}.problem", "off")
+    entry = await _setup(
+        hass,
+        {key: {"warning": f"{domain}.warning", "problem": f"{domain}.problem"}},
+        **{
+            CONF_HOUSE_BATTERY_BANK_COUNT: 0 if "bank" not in key else 1,
+            CONF_CHASSIS_BATTERY_BANK_COUNT: 0 if "bank" not in key else 1,
+        },
+    )
+    entities = _entities(hass, entry)
+    warning = entities[f"{key}_warning"]
+    problem = entities[f"{key}_problem"]
+    assert warning.domain == problem.domain == "binary_sensor"
+    assert hass.states.get(warning.entity_id).state == "on"
+    assert hass.states.get(problem.entity_id).state == "off"
+    assert hass.states.get(problem.entity_id).attributes["device_class"] == "problem"
+    assert f"{key}_enabled" not in entities
+    for metric, entity in (("warning", warning), ("problem", problem)):
+        for value, expected in [
+            ("unknown", "unavailable"),
+            ("unavailable", "unavailable"),
+            ("bad", "unavailable"),
+            ("on", "on"),
+            ("off", "off"),
+        ]:
+            hass.states.async_set(f"{domain}.{metric}", value)
+            await hass.async_block_till_done()
+            assert hass.states.get(entity.entity_id).state == expected
+        hass.states.async_remove(f"{domain}.{metric}")
+        await hass.async_block_till_done()
+        assert hass.states.get(entity.entity_id).state == "unavailable"
+    registry = er.async_get(hass)
+    registry.async_update_entity(
+        warning.entity_id, new_entity_id="binary_sensor.my_warning"
+    )
+    hass.states.async_set("binary_sensor.new_warning", "on")
+    hass.config_entries.async_update_entry(
+        entry,
+        options={CONF_POWER_SOURCES: {key: {"warning": "binary_sensor.new_warning"}}},
+    )
+    await hass.async_block_till_done()
+    assert (
+        _entities(hass, entry)[f"{key}_warning"].entity_id == "binary_sensor.my_warning"
+    )
+    assert hass.states.get("binary_sensor.my_warning").state == "on"
+    assert f"{key}_problem" not in _entities(hass, entry)
+    assert registry.async_get(problem.entity_id) is None
+    hass.config_entries.async_update_entry(
+        entry, options={CONF_POWER_SOURCES: {key: {}}}
+    )
+    await hass.async_block_till_done()
+    assert f"{key}_warning" not in _entities(hass, entry)
+    assert registry.async_get("binary_sensor.my_warning") is None
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_independent_banks_specs_remapping_cleanup_and_reconfiguration(
     hass: HomeAssistant,
 ) -> None:

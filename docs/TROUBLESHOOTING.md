@@ -29,7 +29,7 @@ Select **Edit power-source mappings, specifications and placement** in
 **Options** and confirm the mapping for the correct independent bank/device.
 Only declared live mappings create entities. Numeric sources must have a
 finite value and a compatible voltage/current unit; unitless helpers are
-interpreted as V/A. Enabled and Charging must report `on` or `off`.
+interpreted as V/A. Enabled, Charging, Warning, and Problem must report `on` or `off`.
 Charging is not inferred from a negative/positive current, an enabled inverter,
 shore power, a running generator, or a running engine.
 
@@ -37,12 +37,26 @@ Power statuses are read-only even if their source is a switch. Use the source
 integration's controls directly when needed; HAVRV does not start/stop a
 generator or operate battery disconnects through these entities.
 
-If a source section exists but its overview marker is missing, choose a
+If a source section exists but its overview box is missing, choose a
 placement instead of **Not shown**, and ensure `show_power` is not `false`.
-Shore Power supports only left/right outside the RV. Colocated devices share
-one marker but have individual readouts beneath it. Reducing bank counts
+Shore Power supports only left/right outside the RV. Colocated devices have
+separate boxes beside the selected region, packed to avoid overlap. Reducing bank counts
 removes the highest-numbered banks and their saved mappings; increasing
 the count again does not restore removed configurations.
+
+For yellow/red electrical boxes, map explicit **Warning**/**Problem** sources
+in the same options wizard. Problem takes precedence over Warning, then Enabled.
+If a box is dashed with a hollow dot and **No status data** tooltip, check Enabled and any mapped
+alert sources for missing/unknown/unavailable states. An unavailable mapped
+alert is not assumed off. Unmapped optional alerts do not require data.
+Charging and current sign do not set electrical warning/problem colors.
+Electrical boxes use the same subtle tints and font scale as tire labels,
+not solid status-colored tiles. Hover/focus the dot for its status label.
+Equipment graphics additionally use green for Enabled on, like tire shapes;
+the normal-on box indicator is green too. Each placed source has its own
+graphic and box; neither charging nor current direction changes its color.
+Enabled is shown by color and the status dot, not a Yes/No row. Matching
+equipment tags replace callout lines, and the single legend covers all devices.
 
 ## A tank reading, percentage, or status is missing
 
@@ -144,8 +158,8 @@ The repository-root JavaScript is a compatibility loader, not a second card.
 
 With the current editor visible, confirm `show_power: true`, the selected
 RV's device ID, and each device's saved **Dashboard placement**. Complete all
-power-source options screens to save. Colocated devices share a numbered
-marker but have separate readouts; **Not shown** omits a source from the
+power-source options screens to save. Colocated devices retain separate
+nonoverlapping readout boxes; **Not shown** omits a source from the
 overview, not its generated device section.
 
 ## You need to change or remove a source mapping

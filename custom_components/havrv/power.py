@@ -19,6 +19,7 @@ from .entity import HavrvSourceEntity
 
 NUMERIC_POWER_DOMAINS = ("sensor", "number", "input_number")
 BINARY_POWER_DOMAINS = ("binary_sensor", "switch", "input_boolean")
+POWER_BINARY_METRICS = ("enabled", "charging", "warning", "problem")
 
 
 @dataclass(frozen=True)

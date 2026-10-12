@@ -7,7 +7,7 @@ control RV hardware directly.
 
 ## Before you start
 
-- For 0.3.1 updates, restart Home Assistant and refresh the browser after
+- For 0.3.2 updates, restart Home Assistant and refresh the browser after
   installing. Remove old manually added HAVRV dashboard Resources; the
   integration supplies the frontend automatically.
 - Make sure Home Assistant is running and the integrations that provide your
@@ -82,14 +82,27 @@ AC output, and generator/shore readings describe AC supply. Choose an
 aggregate source appropriate to your installation; HAVRV does not sum
 multiple physical inverters or AC legs.
 
-**Enabled** and bank **Charging** accept `binary_sensor`, `switch`, or
-`input_boolean` sources reporting `on`/`off`. Both are read-only, even when
-the source is a switch. Charging requires its own explicit mapping.
+**Enabled**, bank **Charging**, and optional **Warning**/**Problem** accept
+`binary_sensor`, `switch`, or `input_boolean` sources reporting `on`/`off`.
+All are read-only, even when the source is a switch. Each requires its own
+explicit mapping. Warning/Problem are optional for every bank and AC source;
+there are no default electrical alert thresholds. The box's tire-style status
+dot and subtle tint are red for Problem, then amber for Warning, then green
+(on) or gray (off) for Enabled. Missing mapped statuses have a dashed outline,
+hollow dot and no-data tooltip rather than appearing off. See [dashboard colors](DASHBOARD.md#electrical-box-colors).
 
 Choose **L-Front**, **L-Mid**, **L-Rear**, **R-Front**, **R-Mid**, or **R-Rear**
 to place a device on the RV overview; left/right are viewed facing forward.
 Shore Power accepts **L** or **R** and is drawn outside the vehicle. Placement
 defaults to **Not shown**; sources can still appear in dashboard device sections.
+Placed sources have their own readout boxes near the chosen region, including
+multiple banks at the same location; tire labels and other sources are avoided.
+Battery, inverter and generator graphics appear on the coach, with a shore
+plug outside. Graphics use green for Enabled on, gray for off, amber/red for
+Warning/Problem and a dashed outline for unknown; boxes use the same on/off
+colors. Enabled does not need a Yes/No row. Matching tags associate tire-sized
+equipment graphics with their readouts without crossing callout lines.
+One common legend covers the whole overview.
 
 To edit these settings, select **Edit power-source mappings, specifications and
 placement** in **Options**. All wizard screens must be submitted before changes
@@ -98,6 +111,9 @@ bank counts. Reducing a count removes the highest-numbered banks, their HAVRV
 entities, and their saved source configuration. Original source entities are
 never removed. Current version-3 profiles without these settings gain one
 bank of each kind, 24 V nominal defaults, and no invented readings or placement.
+Existing power mappings and locations continue to work without adding
+Warning/Problem mappings. Leave either optional field blank to remove it;
+submit all screens to save.
 
 ## 3. Map existing system entities
 

@@ -10,7 +10,8 @@ entity mappings, optional tank-level monitoring, and configurable tire
 monitoring, and an RV overview dashboard. Notifications, integration-specific triggers and conditions, and
 physical-device discovery are not implemented.
 
-**0.3.1:** The bundled dashboard includes electrical placement and readouts.
+**0.3.2:** The bundled dashboard includes location-based electrical readouts,
+equipment graphics, mapped alert colors, and a common status legend.
 Update HAVRV, restart Home Assistant, and refresh the browser. Remove old
 manually installed HAVRV dashboard Resources; no separate frontend installation
 is needed. See [dashboard upgrade troubleshooting](docs/TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).
@@ -46,13 +47,23 @@ choose existing entities, and configure optional tank and tire monitoring.
   Driving, Campsite full service, Campsite minimal, or Maintenance).
 - Creates independent house/chassis battery-bank devices (one of each by
   default), plus Inverter, Generator, and Shore Power. Configure bank voltage
-  and capacity, read-only voltage/current/Enabled/Charging sources, and optional
+  and capacity, read-only voltage/current/Enabled/Charging and optional
+  Warning/Problem sources, and optional
   physical placement. See [power sources](docs/FEATURES.md#power-source-devices).
 - Includes an RV overview card and a generated RV dashboard. They draw the
   configured axles, single or dual wheels, and water tanks with live readings
   and status colors.
-  Optional power-source markers use your selected locations, with individual
-  live readouts; shore power is drawn outside the RV.
+  Single and dual tire labels keep pressure and temperature on the same line.
+  Electrical readout boxes follow your selected locations, like tire labels,
+  without overlapping colocated sources. They use tire-style translucent
+  tints, fonts, and status dots: green/gray for on/off, amber/red for optional
+  mapped Warning/Problem, and dashed no-data outlines. Colored battery,
+  inverter and generator graphics sit on the coach; the shore plug is outside.
+  Equipment graphics are comparable to tire sizes; matching tags replace
+  crossing callout lines. One common legend covers tires, tanks and electrical,
+  and Enabled is indicated by color rather than a Yes/No row. See
+  [dashboard configuration and colors](docs/DASHBOARD.md).
+  The guide also includes [crowded R-Rear placement examples](docs/DASHBOARD.md#placement-stress-example).
 
 ![HAVRV RV overview card](docs/images/dashboard-horizontal.png)
 
