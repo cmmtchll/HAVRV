@@ -527,18 +527,29 @@ function tireChip(axle, side, sign, states, geometry) {
     const pressure = state.pressure
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
       : `<tspan class="mid muted">—</tspan>`;
+    // Rows are narrow: show the pressure trend as a glyph, color a hot
+    // temperature, and move the battery flag to the chip header.
+    const temperature = temperatureText(state.temperature, true);
     const right = state.pressure
-      ? [flagText(state), temperatureText(state.temperature, true)].filter(Boolean).join(" ")
+      ? [
+          state.dropping ? `<tspan class="trend ${state.level}">▼</tspan>` : "",
+          temperature ? `<tspan class="${state.hot ? "hot" : ""}">${escapeHtml(temperature)}</tspan>` : "",
+        ].filter(Boolean).join(" ")
       : "";
     return `<g class="row" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
     )}">
       <rect class="hit" x="${x}" y="${rowY - 15}" width="${width}" height="20"></rect>
       <text class="wheel ${state.level}" x="${x + 9}" y="${rowY}">${tire.wheel === "inner" ? STR.inner : STR.outer}</text>
-      <text x="${x + 22}" y="${rowY}">${pressure}</text>
-      <text class="small" x="${x + width - 9}" y="${rowY}" text-anchor="end">${escapeHtml(right)}</text>
+      <text class="row-pressure" x="${x + 22}" y="${rowY}">${pressure}</text>
+      <text class="small row-right" x="${x + width - 9}" y="${rowY}" text-anchor="end">${right}</text>
     </g>`;
   });
+  if (tireStates.some((state) => state.lowBattery)) {
+    parts.push(
+      `<text class="flag watch" x="${x + width - 20}" y="${y + 13}" text-anchor="end">BAT</text>`,
+    );
+  }
   return `<g class="chip ${level}">${parts.join("")}${rows.join("")}</g>`;
 }
 
@@ -735,6 +746,8 @@ const STYLES = `
   .muted { fill: var(--hv-muted); }
   .flag { fill: var(--lvl); font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; }
   .wheel { fill: var(--lvl); font-size: 9.5px; font-weight: 700; }
+  .trend { fill: var(--lvl); font-size: 8.5px; }
+  .hot { fill: var(--hv-alert); font-weight: 700; }
   .dot { fill: var(--lvl); }
   .hit { fill: transparent; }
   .tank-shell { fill: color-mix(in srgb, var(--tank) 10%, var(--hv-card)); }
@@ -908,6 +921,20 @@ export class HavrvRvCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card>${
       model ? this._renderModel(model, orientation) : `<div class="wrap"><div class="message">${escapeHtml(STR.noProfile)}</div></div>`
     }</ha-card>`;
+    this._fitRows();
+  }
+
+  /** Drop the pressure unit from dual rows whose text would collide. */
+  _fitRows() {
+    for (const row of this.shadowRoot.querySelectorAll(".row")) {
+      const pressure = row.querySelector(".row-pressure");
+      const right = row.querySelector(".row-right");
+      if (!pressure?.getBBox || !right?.textContent) continue;
+      const box = pressure.getBBox();
+      if (box.width && box.x + box.width + 3 > right.getBBox().x) {
+        pressure.querySelector(".unit")?.remove();
+      }
+    }
   }
 
   _renderHeader(model) {
