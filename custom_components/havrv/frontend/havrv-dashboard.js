@@ -57,6 +57,7 @@ const STR = {
   lowBattery: "Sensor battery low",
   noProfile:
     "No HAVRV RV profile was found. Add an RV profile in Settings → Devices & services.",
+  renderError: "The RV card could not be drawn. See the browser console for details.",
   noTires: "Set the axle layout in the RV profile to show tires.",
   legendOk: "OK",
   legendWatch: "Watch",
@@ -927,11 +928,18 @@ export class HavrvRvCard extends HTMLElement {
       }),
     ]);
     if (key === this._renderKey) return;
+    let body;
+    try {
+      body = model
+        ? this._renderModel(model, orientation)
+        : `<div class="wrap"><div class="message">${escapeHtml(STR.noProfile)}</div></div>`;
+    } catch (err) {
+      console.error("HAVRV RV card failed to render", err);
+      body = `<div class="wrap"><div class="message">${escapeHtml(STR.renderError)}</div></div>`;
+    }
     this._renderKey = key;
     this._orientation = orientation;
-    this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card>${
-      model ? this._renderModel(model, orientation) : `<div class="wrap"><div class="message">${escapeHtml(STR.noProfile)}</div></div>`
-    }</ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card>${body}</ha-card>`;
     this._scheduleFit();
   }
 
