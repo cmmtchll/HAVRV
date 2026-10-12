@@ -28,6 +28,9 @@ choose existing entities, and configure optional tank and tire monitoring.
 
 - Keeps coach details, dimensions, tank capacities, axle layout, and wheel
   configuration on an RV device.
+- Exposes editable dimensions, capacities, and tank/tire limits in the main
+  RV device's **Configuration** section. Other saved profile details appear
+  read-only in **Diagnostics**.
 - Groups selected sensors, binary sensors, switches, lights, and climate
   entities under RV system devices. Sensor readings are mirrored; supported
   controls forward actions to their selected source.

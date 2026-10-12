@@ -237,7 +237,92 @@
       }
     }
   },
+  "exceptions": {
+    "invalid_numeric_setting": {
+      "message": "Enter a finite numeric value."
+    },
+    "invalid_measurement": {
+      "message": "Dimensions and capacities must be greater than zero."
+    },
+    "invalid_tank_threshold": {
+      "message": "Enter percentages from 0 to 100. Fresh-water problem must be below warning; waste-water problem must be above warning."
+    },
+    "invalid_tire_pressure_threshold": {
+      "message": "Pressure limits must be non-negative, and high must be greater than low. An unset companion limit uses its suggested default."
+    },
+    "invalid_tire_temperature_threshold": {
+      "message": "The high temperature limit must be a finite non-negative number."
+    },
+    "invalid_tire_battery_threshold": {
+      "message": "The low battery limit must be between 0 and 100 percent."
+    }
+  },
   "entity": {
+    "number": {
+      "overall_height": {
+        "name": "Overall height"
+      },
+      "overall_length": {
+        "name": "Overall length"
+      },
+      "overall_width": {
+        "name": "Overall width"
+      },
+      "fuel_tank_capacity": {
+        "name": "Fuel tank capacity"
+      },
+      "fresh_water_tank_capacity": {
+        "name": "Fresh-water tank capacity"
+      },
+      "gray_water_tank_capacity": {
+        "name": "Gray-water tank capacity"
+      },
+      "black_water_tank_capacity": {
+        "name": "Black-water tank capacity"
+      },
+      "fresh_water_tank_warning": {
+        "name": "Fresh-water warning level"
+      },
+      "fresh_water_tank_problem": {
+        "name": "Fresh-water problem level"
+      },
+      "gray_water_tank_warning": {
+        "name": "Gray-water warning level"
+      },
+      "gray_water_tank_problem": {
+        "name": "Gray-water problem level"
+      },
+      "black_water_tank_warning": {
+        "name": "Black-water warning level"
+      },
+      "black_water_tank_problem": {
+        "name": "Black-water problem level"
+      },
+      "tire_front_pressure_low": {
+        "name": "Front tire low pressure limit"
+      },
+      "tire_front_pressure_high": {
+        "name": "Front tire high pressure limit"
+      },
+      "tire_axle_pressure_low": {
+        "name": "Rear tire low pressure limit"
+      },
+      "tire_axle_pressure_high": {
+        "name": "Rear tire high pressure limit"
+      },
+      "tire_tag_pressure_low": {
+        "name": "Tag tire low pressure limit"
+      },
+      "tire_tag_pressure_high": {
+        "name": "Tag tire high pressure limit"
+      },
+      "tire_temperature_high": {
+        "name": "Tire high temperature limit"
+      },
+      "tire_battery_low": {
+        "name": "Tire low battery limit"
+      }
+    },
     "sensor": {
       "coach_year": {
         "name": "Coach year"

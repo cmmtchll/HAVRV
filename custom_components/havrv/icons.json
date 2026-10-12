@@ -1,5 +1,28 @@
 {
   "entity": {
+    "number": {
+      "fresh_water_tank_warning": {
+        "default": "mdi:water-percent"
+      },
+      "fresh_water_tank_problem": {
+        "default": "mdi:water-percent-alert"
+      },
+      "gray_water_tank_warning": {
+        "default": "mdi:water-percent"
+      },
+      "gray_water_tank_problem": {
+        "default": "mdi:water-percent-alert"
+      },
+      "black_water_tank_warning": {
+        "default": "mdi:water-percent"
+      },
+      "black_water_tank_problem": {
+        "default": "mdi:water-percent-alert"
+      },
+      "tire_temperature_high": {
+        "default": "mdi:thermometer-alert"
+      }
+    },
     "sensor": {
       "coach_year": {
         "default": "mdi:calendar"

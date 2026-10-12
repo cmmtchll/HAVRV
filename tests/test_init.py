@@ -108,6 +108,7 @@ async def test_setup_uses_home_assistant_units_when_profile_omits_units(
     assert entry.runtime_data.measurement_system == UNIT_SYSTEM_US_CUSTOMARY
     assert [platform.value for platform in entry.runtime_data.platforms] == [
         "select",
+        "number",
         "sensor",
     ]
     profile_entities = {
@@ -120,6 +121,13 @@ async def test_setup_uses_home_assistant_units_when_profile_omits_units(
     assert set(profile_entities) == {
         CONF_MEASUREMENT_SYSTEM,
         CONF_TAG_AXLE_PRESENT,
+        CONF_OVERALL_HEIGHT,
+        CONF_OVERALL_LENGTH,
+        CONF_OVERALL_WIDTH,
+        CONF_FUEL_TANK_CAPACITY,
+        CONF_FRESH_WATER_TANK_CAPACITY,
+        CONF_GRAY_WATER_TANK_CAPACITY,
+        CONF_BLACK_WATER_TANK_CAPACITY,
     }
 
 
@@ -226,7 +234,10 @@ async def test_setup_populates_typed_runtime_profile(hass: HomeAssistant) -> Non
     assert rear_axles.attributes["friendly_name"].endswith(
         "Number of rear axle assemblies"
     ), rear_axles.attributes["friendly_name"]
-    assert profile_entities[CONF_REAR_AXLE_COUNT].entity_category is None
+    assert (
+        profile_entities[CONF_REAR_AXLE_COUNT].entity_category
+        is EntityCategory.DIAGNOSTIC
+    )
     assert (
         hass.states.get(profile_entities[CONF_OVERALL_HEIGHT].entity_id).attributes[
             "device_class"
@@ -333,7 +344,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
 
     entity_registry = er.async_get(hass)
     mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    assert len(mapped_entities) == 8
+    assert len(mapped_entities) == 21
     mapped_entity = next(
         entity
         for entity in mapped_entities
@@ -698,6 +709,7 @@ async def test_options_reload_adds_platform_to_existing_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     assert [platform.value for platform in entry.runtime_data.platforms] == [
         "select",
+        "number",
         "sensor",
     ]
 
