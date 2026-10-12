@@ -61,14 +61,32 @@ every configured tire.
 
 ## A profile value is incorrect
 
-Use the config entry's **Reconfigure** action to update saved vehicle details.
+Edit dimensions and capacities in **Configuration** on the main RV device.
+Other saved profile values appear read-only in **Diagnostics**; use the config
+entry's **Reconfigure** action to update those vehicle details.
 The profile name cannot be changed there; remove and recreate the profile if
 it needs a new name. Existing mappings are not changed by reconfiguration.
 
 Profile dimensions and capacities are specifications entered by the user.
 Confirm their values and selected unit system against a reliable source, such
 as coach documentation or vehicle labels. Home Assistant may display
-measurements in its globally selected unit system.
+measurements using explicit per-entity unit overrides; HAVRV's default for
+these configuration inputs is the profile's selected unit system.
+
+## A configuration limit cannot be saved
+
+Configuration edits use the same validation as the options form. Tank
+warning/problem levels must have the correct ordering for their tank type;
+pressure high must exceed low. Move the bounding limit first when changing
+both. Percentages must be from 0 to 100, dimensions/capacities positive, and
+pressure/high-temperature limits non-negative. Invalid edits show an error and
+do not change saved settings. An `unknown` pressure or temperature limit is
+not active; its `suggested_default` attribute is a form suggestion, not an
+active safety limit.
+
+After upgrading, main-RV dimension and fuel-capacity entities change from
+`sensor` to `number`. Update any dashboard or automation references to those
+old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
 
 ## The RV card or dashboard is missing or wrong
 

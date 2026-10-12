@@ -24,12 +24,50 @@ responsible for communicating with and controlling the actual devices.
 
 ## RV profile specifications
 
-The RV device can expose the profile's coach details, dimensions, tank
-capacities, rear axle count, wheel configuration, and tag-axle presence as
-sensors. These are saved specifications, not live measurements. Dimensions and
-capacities are stored in the profile's selected system and are not transformed
-or verified by HAVRV. Home Assistant may display device-class measurements in
-its globally selected unit system.
+The main RV device's **Configuration** section exposes editable number inputs
+for overall height, length, and width and fuel/fresh/gray/black-water tank
+capacities. These are saved specifications, not live measurements. Unknown
+specifications remain `unknown` until entered; HAVRV never guesses them.
+Dimensions and capacities must be greater than zero and use the profile's
+selected units (m/L or ft/US gal), not Home Assistant's global defaults.
+Explicit per-entity unit overrides remain supported and are converted when
+writing values back to the profile's units.
+
+Coach year, chassis manufacturer/make, builder/model, coach identifier, storage
+zone, measurement system, rear axle count, wheel configuration, and tag-axle
+presence are read-only sensors in **Diagnostics**. Edit those values with
+**Reconfigure**; axle count and coach year are structural/reference fields,
+not quantity inputs.
+
+Configuration also exposes warning/problem percentages for all three water
+tanks and, when tire positions exist, low/high pressure limits for the
+applicable front/rear/tag groups, a shared high-temperature limit, and a
+low-battery limit. Tank defaults are 50% warning / 25% problem for fresh
+water and 50% warning / 75% problem for waste water; battery defaults to 20%.
+Pressure and temperature controls show the actual saved limit. An unset limit
+remains `unknown` and inactive, preserving existing optional-limit behavior.
+Its `suggested_default` attribute matches the form's advisory defaults:
+100/150 psi (689.5/1034.2 kPa) and 150 F (65.6 C). Setting one pressure limit
+also saves its companion's suggested default if that companion was unset.
+These suggestions are not manufacturer-specific safety limits.
+
+Fresh-water problem must stay below warning; waste-water problem must stay
+above warning. Pressure high must exceed low. Percent limits must be between
+0 and 100; pressure and high-temperature limits must be non-negative and all
+values finite. To move a pair beyond its current range, adjust the bounding
+limit first. Invalid changes report an error and leave configuration unchanged.
+
+Device edits persist in the same profile data/options as the configuration
+forms and trigger a normal integration reload so readings and detection use
+the new values. Unrelated settings and source mappings are retained. Reloading
+resets in-memory tire analysis history, as other configuration changes do.
+The controls also support the standard `number.set_value` action.
+
+On upgrade, main-device dimension and fuel-capacity sensors are replaced by
+`number` entities; update dashboards or automations that used those old
+`sensor` entity IDs. Water-tank capacity sensors remain on the tank devices,
+with editable capacity numbers on the main RV device. Read-only diagnostic
+profile sensor IDs are unchanged. Source selections remain in **Options**.
 
 ## Water-tank entities
 

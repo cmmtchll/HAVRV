@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
@@ -21,21 +21,14 @@ from homeassistant.util.unit_conversion import VolumeConverter
 
 from . import HavrvConfigEntry
 from .const import (
-    CONF_BLACK_WATER_TANK_CAPACITY,
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
-    CONF_FRESH_WATER_TANK_CAPACITY,
-    CONF_FUEL_TANK_CAPACITY,
-    CONF_GRAY_WATER_TANK_CAPACITY,
     CONF_MAIN_REAR_WHEEL_CONFIGURATION,
     CONF_MAKE,
     CONF_MANUFACTURER,
     CONF_MEASUREMENT_SYSTEM,
     CONF_MODEL,
-    CONF_OVERALL_HEIGHT,
-    CONF_OVERALL_LENGTH,
-    CONF_OVERALL_WIDTH,
     CONF_REAR_AXLE_COUNT,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
@@ -104,41 +97,6 @@ _PROFILE_SENSOR_DESCRIPTIONS = (
     SensorEntityDescription(
         key=CONF_MEASUREMENT_SYSTEM,
         translation_key=CONF_MEASUREMENT_SYSTEM,
-    ),
-    SensorEntityDescription(
-        key=CONF_OVERALL_HEIGHT,
-        translation_key=CONF_OVERALL_HEIGHT,
-        device_class=SensorDeviceClass.DISTANCE,
-    ),
-    SensorEntityDescription(
-        key=CONF_OVERALL_LENGTH,
-        translation_key=CONF_OVERALL_LENGTH,
-        device_class=SensorDeviceClass.DISTANCE,
-    ),
-    SensorEntityDescription(
-        key=CONF_OVERALL_WIDTH,
-        translation_key=CONF_OVERALL_WIDTH,
-        device_class=SensorDeviceClass.DISTANCE,
-    ),
-    SensorEntityDescription(
-        key=CONF_FUEL_TANK_CAPACITY,
-        translation_key=CONF_FUEL_TANK_CAPACITY,
-        device_class=SensorDeviceClass.VOLUME_STORAGE,
-    ),
-    SensorEntityDescription(
-        key=CONF_FRESH_WATER_TANK_CAPACITY,
-        translation_key=CONF_FRESH_WATER_TANK_CAPACITY,
-        device_class=SensorDeviceClass.VOLUME_STORAGE,
-    ),
-    SensorEntityDescription(
-        key=CONF_GRAY_WATER_TANK_CAPACITY,
-        translation_key=CONF_GRAY_WATER_TANK_CAPACITY,
-        device_class=SensorDeviceClass.VOLUME_STORAGE,
-    ),
-    SensorEntityDescription(
-        key=CONF_BLACK_WATER_TANK_CAPACITY,
-        translation_key=CONF_BLACK_WATER_TANK_CAPACITY,
-        device_class=SensorDeviceClass.VOLUME_STORAGE,
     ),
     SensorEntityDescription(
         key=CONF_REAR_AXLE_COUNT,
@@ -276,6 +234,7 @@ class HavrvProfileSensor(SensorEntity):
 
     entity_description: SensorEntityDescription
     _attr_has_entity_name = True
+    _attr_entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
@@ -307,7 +266,9 @@ class HavrvTankCapacitySensor(HavrvProfileSensor):
         key="tank_capacity",
         name="Capacity",
         translation_key="tank_capacity",
+        device_class=SensorDeviceClass.VOLUME_STORAGE,
     )
+    _attr_entity_category = None
 
     def __init__(
         self,
@@ -322,7 +283,7 @@ class HavrvTankCapacitySensor(HavrvProfileSensor):
             entry,
             self.entity_description,
             capacity,
-            _profile_sensor_unit(entry, capacity_key),
+            _tank_capacity_unit(entry),
         )
         self._attr_unique_id = f"{entry.entry_id}_tank_{tank}_capacity"
         self._attr_device_info = _tank_device_info(entry, tank, tank_name)
@@ -350,7 +311,7 @@ class HavrvTankDerivedSensor(HavrvSourceEntity, SensorEntity):
         self.entity_description = description
         self._tank = tank
         self._capacity = entry.data.get(capacity_key)
-        self._capacity_unit = _profile_sensor_unit(entry, capacity_key)
+        self._capacity_unit = _tank_capacity_unit(entry)
         self._attr_unique_id = f"{entry.entry_id}_tank_{tank}_{description.key}"
         self._attr_device_info = _tank_device_info(entry, tank, tank_name)
 
@@ -724,19 +685,10 @@ class HavrvTireMonitorSensor(SensorEntity):
         return attributes
 
 
-def _profile_sensor_unit(entry: HavrvConfigEntry, key: str) -> str | None:
-    """Return the unit used when this profile value was entered."""
+def _tank_capacity_unit(entry: HavrvConfigEntry) -> str:
+    """Return the profile's tank capacity unit."""
     metric = entry.runtime_data.measurement_system == UNIT_SYSTEM_METRIC
-    if key in (CONF_OVERALL_HEIGHT, CONF_OVERALL_LENGTH, CONF_OVERALL_WIDTH):
-        return "m" if metric else "ft"
-    if key in (
-        CONF_FUEL_TANK_CAPACITY,
-        CONF_FRESH_WATER_TANK_CAPACITY,
-        CONF_GRAY_WATER_TANK_CAPACITY,
-        CONF_BLACK_WATER_TANK_CAPACITY,
-    ):
-        return "L" if metric else "gal"
-    return None
+    return "L" if metric else "gal"
 
 
 def _tank_device_info(entry: HavrvConfigEntry, tank: str, tank_name: str) -> DeviceInfo:
@@ -807,14 +759,7 @@ def _profile_sensors(entry: HavrvConfigEntry) -> list[HavrvProfileSensor]:
         elif description.key == CONF_TAG_AXLE_PRESENT:
             value = "Yes" if profile_data.get(CONF_TAG_AXLE_PRESENT, False) else "No"
         if value is not None:
-            sensors.append(
-                HavrvProfileSensor(
-                    entry,
-                    description,
-                    value,
-                    _profile_sensor_unit(entry, description.key),
-                )
-            )
+            sensors.append(HavrvProfileSensor(entry, description, value))
     return sensors
 
 

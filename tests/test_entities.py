@@ -17,6 +17,7 @@ from custom_components.havrv import (
     binary_sensor,
     climate,
     light,
+    number,
     select,
     sensor,
     switch,
@@ -53,8 +54,8 @@ from custom_components.havrv.tire import (
 
 @pytest.mark.parametrize(
     "platform",
-    [binary_sensor, climate, light, select, sensor, switch],
-    ids=["binary_sensor", "climate", "light", "select", "sensor", "switch"],
+    [binary_sensor, climate, light, number, select, sensor, switch],
+    ids=["binary_sensor", "climate", "light", "number", "select", "sensor", "switch"],
 )
 def test_platforms_declare_parallel_updates(platform: ModuleType) -> None:
     """Declare no extra parallelism for event-driven proxies."""

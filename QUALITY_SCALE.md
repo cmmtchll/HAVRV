@@ -17,8 +17,10 @@ implemented integration behavior, not just repository configuration.
   action-forwarding switches, lights, and climate controls. Existing entries
   without mappings remain supported; entity configuration is editable through
   the options flow.
-- Saved RV profile values, including dimensions, tank capacities, axle count,
-  and wheel layouts, exposed as uniquely named sensors on each RV device.
+- Editable dimensions, tank capacities, and tank/tire limits exposed as number
+  entities in Configuration on the main RV device, with other profile values
+  exposed as read-only diagnostic sensors. Settings persist in the same
+  profile/options as the forms and reload the entry when changed.
 - Explicit optional mappings for fresh-, gray-, and black-water tank levels
   create individual tank devices and expose configured capacities on those
   devices, plus percentage, optional direction-aware threshold status, and

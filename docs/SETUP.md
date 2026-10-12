@@ -51,7 +51,8 @@ The profile can store coach year, chassis manufacturer and make, builder or
 converter and model, coach identifier, overall dimensions, fuel and
 fresh/gray/black-water capacities, rear axle count, and rear wheel
 arrangements. These are reference specifications, not live vehicle readings.
-Home Assistant may display measurements in its globally selected unit system.
+Editable dimensions and capacities use the profile's selected measurement
+system, independent of Home Assistant's global unit defaults.
 
 Older saved profiles that predate the current axle model are not migrated.
 Remove and add those profiles again to use the current setup.
@@ -114,7 +115,9 @@ on its readings and the built-in pressure-trend predictors.
 Open **Settings → Devices & services → HAVRV** and inspect the RV device and
 its child devices. Confirm that:
 
-- The profile sensors show the specifications you entered.
+- The main RV device's **Configuration** section shows editable dimensions,
+  capacities, and tank/tire limits; **Diagnostics** shows the other saved
+  profile details read-only.
 - Mapped entities follow their source states.
 - Tank and tire readings appear for the source entities you selected.
 - Source units and any configured limits are appropriate for your equipment.
@@ -134,6 +137,13 @@ Assistant and refresh your browser. Then follow the
 
 ## Change or remove a profile
 
+- On the main RV device, use **Configuration** to edit dimensions, capacities,
+  and monitoring limits directly. Saved changes also update **Reconfigure**
+  or **Options** and reload the integration. Unknown specifications are not
+  guessed. Unset optional pressure/temperature limits remain inactive until
+  saved; setting one pressure limit initializes an unset companion with its
+  suggested default. See the [feature guide](FEATURES.md#rv-profile-specifications)
+  for defaults, units, validation, and upgrade entity-ID changes.
 - Use the config entry's **Reconfigure** action to update saved coach details.
   The profile name stays the same, and system and tire mappings are not changed.
 - Use **Options** to change system mappings, tank selections and thresholds,

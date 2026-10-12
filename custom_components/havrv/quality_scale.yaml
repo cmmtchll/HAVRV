@@ -43,10 +43,10 @@ rules:
     comment: Source state listeners are registered and removed with entity lifecycle in custom_components/havrv/entity.py.
   entity-unique-id:
     status: done
-    comment: Mapped, profile, and operation-mode entities define unique IDs in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, and custom_components/havrv/select.py.
+    comment: Mapped, profile, configuration-number, and operation-mode entities define stable unique IDs in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, custom_components/havrv/number.py, and custom_components/havrv/select.py.
   has-entity-name:
     status: done
-    comment: Mapped, profile, and operation-mode entities set has_entity_name in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, and custom_components/havrv/select.py.
+    comment: Mapped, profile, configuration-number, and operation-mode entities set has_entity_name in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, custom_components/havrv/number.py, and custom_components/havrv/select.py.
   runtime-data:
     status: done
     comment: Typed config-entry runtime data is populated in custom_components/havrv/__init__.py.
@@ -82,7 +82,7 @@ rules:
     comment: HAVRV has no external connection; unavailable local source entities do not require connection-recovery logging.
   parallel-updates:
     status: done
-    comment: All six platform modules explicitly set PARALLEL_UPDATES = 0 and tests/test_entities.py verifies each declaration; mirrors are event-driven, the operation-mode select is local, and controls delegate concurrency to the mapped source domain.
+    comment: All seven platform modules explicitly set PARALLEL_UPDATES = 0 and tests/test_entities.py verifies each declaration; mirrors are event-driven, configuration numbers and the operation-mode select are local, and controls delegate concurrency to the mapped source domain.
   reauthentication-flow:
     status: exempt
     comment: HAVRV has no authentication, credentials, or external service.
@@ -127,19 +127,19 @@ rules:
     comment: Options changes add mapped system devices after setup, tested in tests/test_init.py.
   entity-category:
     status: done
-    comment: Mapped entities preserve source categories and tire problem entities use diagnostic categories in custom_components/havrv/entity.py and custom_components/havrv/binary_sensor.py.
+    comment: Mapped entities preserve source categories; profile and tire problem sensors are diagnostic, and editable quantities and limits use CONFIG in custom_components/havrv/number.py, verified in tests/test_configuration_numbers.py.
   entity-device-class:
     status: done
-    comment: Profile dimensions and capacities use applicable sensor device classes in custom_components/havrv/sensor.py, covered by tests/test_init.py.
+    comment: Dimensions, capacities, pressure/temperature limits, and battery limits use applicable number device classes in custom_components/havrv/number.py; profile-unit defaults and explicit per-entity overrides are covered by tests/test_configuration_numbers.py.
   entity-disabled-by-default:
     status: exempt
     comment: Entities are explicitly configured or profile values entered by the user; no optional noisy entity set is generated.
   entity-translations:
     status: done
-    comment: Profile entity names and operation-mode states are translated in custom_components/havrv/strings.json.
+    comment: Profile and configuration-number entity names and operation-mode states are translated in custom_components/havrv/strings.json, verified by tests/test_configuration_numbers.py and tests/test_operations.py.
   exception-translations:
-    status: exempt
-    comment: No integration exception classes or untranslated user-facing exception messages are currently exposed.
+    status: done
+    comment: Configuration-number validation raises translated ServiceValidationError messages defined in custom_components/havrv/strings.json and tested in tests/test_configuration_numbers.py.
   icon-translations:
     status: done
     comment: HAVRV-owned profile and operation-mode icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py.

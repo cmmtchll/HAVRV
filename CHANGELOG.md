@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add editable dimensions, capacities, and tank/tire limits to Configuration on
+  the main RV device, sharing saved values and validation with the forms.
+  Move other profile details to read-only Diagnostics. Main-device dimension
+  and fuel-capacity sensor entities are replaced by number entities.
 - Link tank devices to the RV device with `via_device_id`, removing the
   deprecated `via_device` usage that stops working in Home Assistant 2027.8.0.
 

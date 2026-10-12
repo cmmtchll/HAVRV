@@ -195,7 +195,10 @@ class HavrvOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_options_schema(self.config_entry),  # type: ignore[arg-type]
+            data_schema=_options_schema(
+                self.config_entry,
+                default_measurement_system=_default_measurement_system(self.hass),
+            ),  # type: ignore[arg-type]
             errors=errors,
         )
 
@@ -391,7 +394,11 @@ def _mapping_field(category: str) -> str:
     return f"{category}_entities"
 
 
-def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
+def _options_schema(
+    entry: config_entries.ConfigEntry,
+    *,
+    default_measurement_system: str = UNIT_SYSTEM_METRIC,
+) -> vol.Schema:
     """Build source mapping and alert threshold options."""
     existing_options = entry.options
     fields = _entity_mapping_fields(_entry_entity_mappings(entry))
@@ -447,7 +454,9 @@ def _options_schema(entry: config_entries.ConfigEntry) -> vol.Schema:
             mode=selector.NumberSelectorMode.BOX,
         )
     )
-    measurement_system = entry.data.get(CONF_MEASUREMENT_SYSTEM, UNIT_SYSTEM_METRIC)
+    measurement_system = entry.data.get(
+        CONF_MEASUREMENT_SYSTEM, default_measurement_system
+    )
     pressure_thresholds = existing_options.get(CONF_TIRE_PRESSURE_THRESHOLDS, {})
     tire_groups = {position.group for position in tire_positions(entry.data)}
     for group in (TIRE_FRONT, TIRE_AXLE, TIRE_TAG):

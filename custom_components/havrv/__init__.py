@@ -168,7 +168,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
     platforms.add(Platform.SENSOR)
     if positions:
         platforms.add(Platform.BINARY_SENSOR)
-    entry.runtime_data.platforms = [Platform.SELECT, *platforms]
+    entry.runtime_data.platforms = [Platform.SELECT, Platform.NUMBER, *platforms]
     await hass.config_entries.async_forward_entry_setups(
         entry, entry.runtime_data.platforms
     )
@@ -189,7 +189,7 @@ async def async_migrate_entry(_hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: HavrvConfigEntry) -> None:
-    """Reload an RV profile when its mappings change."""
+    """Reload an RV profile when its settings or mappings change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -230,15 +230,50 @@ def _remove_stale_entities_and_devices(
         is_stale_tire = is_tire_entity and not any(
             tire_key.startswith(f"{key}_") for key in active_tire_keys
         )
-        is_moved_capacity = registry_entry.unique_id in {
-            f"{entry.entry_id}_profile_{key}"
-            for key in (
-                CONF_FRESH_WATER_TANK_CAPACITY,
-                CONF_GRAY_WATER_TANK_CAPACITY,
-                CONF_BLACK_WATER_TANK_CAPACITY,
+        is_moved_capacity = (
+            registry_entry.domain == "sensor"
+            and registry_entry.unique_id
+            in {
+                f"{entry.entry_id}_profile_{key}"
+                for key in (
+                    CONF_FRESH_WATER_TANK_CAPACITY,
+                    CONF_GRAY_WATER_TANK_CAPACITY,
+                    CONF_BLACK_WATER_TANK_CAPACITY,
+                )
+            }
+        )
+        is_replaced_specification = (
+            registry_entry.domain == "sensor"
+            and registry_entry.unique_id
+            in {
+                f"{entry.entry_id}_profile_{key}"
+                for key in (
+                    CONF_OVERALL_HEIGHT,
+                    CONF_OVERALL_LENGTH,
+                    CONF_OVERALL_WIDTH,
+                    CONF_FUEL_TANK_CAPACITY,
+                )
+            }
+        )
+        is_stale_limit = registry_entry.unique_id.startswith(
+            f"{entry.entry_id}_configuration_tire_"
+        ) and (
+            not active_tire_keys
+            or any(
+                registry_entry.unique_id.startswith(
+                    f"{entry.entry_id}_configuration_tire_{group}_pressure_"
+                )
+                and not any(key.startswith(prefix) for key in active_tire_keys)
+                for group, prefix in (("axle", "rear_axle_"), ("tag", "tag_axle_"))
             )
-        }
-        if is_stale_mapping or is_stale_tire or is_moved_capacity:
+        )
+        if (
+            is_stale_mapping
+            or is_stale_tire
+            or is_moved_capacity
+            or is_replaced_specification
+            or is_stale_limit
+        ):
             entity_registry.async_remove(registry_entry.entity_id)
 
     for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
