@@ -140,7 +140,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
                 config_entry_id=entry.entry_id,
                 identifiers={(DOMAIN, f"{entry.entry_id}_tank_{tank}")},
                 name=tank_name,
-                via_device=(DOMAIN, entry.entry_id),
+                via_device_id=rv_device.id,
             )
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 

@@ -1,5 +1,6 @@
 """Tests for HAVRV config-entry setup."""
 
+import pytest
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
@@ -728,6 +729,7 @@ async def test_options_reload_adds_platform_to_existing_entry(
 
 async def test_setup_creates_complete_tank_devices_without_sources(
     hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Create configured tank devices without assuming every tank exists."""
     hass.states.async_set(
@@ -765,6 +767,7 @@ async def test_setup_creates_complete_tank_devices_without_sources(
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+    assert "via_device" not in caplog.text
 
     registry = er.async_get(hass)
     entities = er.async_entries_for_config_entry(registry, entry.entry_id)
