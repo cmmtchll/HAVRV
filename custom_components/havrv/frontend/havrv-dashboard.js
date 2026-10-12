@@ -520,9 +520,15 @@ function tireChip(axle, side, sign, states, geometry) {
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
     )}">${parts.join("")}</g>`;
   }
-  const rows = tires.map((tire, i) => {
+  // Stack dual rows in the same order as the wheels they describe: a chip
+  // below the coach lists the inner wheel first, nearest the body.
+  const rowOrder = geometry === ORIENTATIONS.horizontal && sign > 0
+    ? tires.map((_, i) => tires.length - 1 - i)
+    : tires.map((_, i) => i);
+  const rows = rowOrder.map((i, rowIndex) => {
+    const tire = tires[i];
     const state = tireStates[i];
-    const rowY = y + 32 + i * 20;
+    const rowY = y + 32 + rowIndex * 20;
     const entity = tire.pressure || tire.temperature || "";
     const pressure = state.pressure
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
