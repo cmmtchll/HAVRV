@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Link tank devices to the RV device with `via_device_id`, removing the
+  deprecated `via_device` usage that stops working in Home Assistant 2027.8.0.
+
 - Add an RV overview card and generated RV dashboard and view strategies,
   served by the integration. They draw the configured axles, single or dual
   wheels, and water tanks with live tire and tank status.
