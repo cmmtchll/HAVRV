@@ -131,6 +131,16 @@ Assistant's unit preference. Differences can reflect sun, shade, or tire
 heating; investigate readings in context and follow the tire manufacturer's
 guidance.
 
+## RV dashboard
+
+HAVRV serves an RV overview card (`custom:havrv-rv-card`) and dashboard and
+view strategies (`custom:havrv`) from the integration. The card draws the RV
+from above, using the configured axle count, single or dual wheels, tag axle,
+and water tanks. It shows tire pressure and temperature and tank fill levels,
+colored by the HAVRV problem, trend, and tank status entities. The generated
+dashboard adds sections for coach details, tanks, tire analysis, and each
+system device. See the [dashboard guide](DASHBOARD.md).
+
 ## Automations
 
 Replace example entity IDs with the HAVRV entity IDs shown in your

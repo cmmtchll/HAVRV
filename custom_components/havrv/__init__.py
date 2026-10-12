@@ -5,8 +5,10 @@ from dataclasses import dataclass, field
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 from .const import (
@@ -37,6 +39,7 @@ from .const import (
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
 )
+from .dashboard import async_register_frontend
 from .tank import TANK_DEFINITIONS
 from .tire import tire_positions
 
@@ -79,6 +82,14 @@ _DOMAIN_PLATFORMS = {
     "light": Platform.LIGHT,
     "climate": Platform.CLIMATE,
 }
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    """Set up HAVRV services shared by every RV profile."""
+    await async_register_frontend(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> bool:
