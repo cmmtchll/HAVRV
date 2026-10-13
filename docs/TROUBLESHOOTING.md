@@ -134,14 +134,17 @@ old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
   `device_id` to a HAVRV device.
 - If an axle or wheel is missing, check the axle layout and wheel
   configuration in the RV profile. If a tank is missing, configure a capacity
-  or source entity for it.
+  or source entity for it. Also check `show_tires`/`show_tanks` on the card or
+  strategy; they default to `true`, but explicit `false` intentionally hides
+  those groups and their generated sections.
 - A gray wheel or tank has no pressure or percentage reading. Check its source
   entity, as described in the sections above.
 
 ### The power toggle or placed electrical devices are missing
 
-The current card editor includes **Show placed power sources** alongside
-**Show header** and **Show legend**. If only the latter two appear, the browser
+The current card editor includes toggles for tires, tanks, placed power sources,
+coach information, mapped system sections, header and legend. If these are
+missing (for example, only header and legend appear), the browser
 is running an older dashboard module, even if backend power configuration works.
 
 Update the integration and restart Home Assistant, then reload the browser or
@@ -161,6 +164,12 @@ RV's device ID, and each device's saved **Dashboard placement**. Complete all
 power-source options screens to save. Colocated devices retain separate
 nonoverlapping readout boxes; **Not shown** omits a source from the
 overview, not its generated device section.
+
+Crowded drawings now keep readable dimensions and scroll inside the card rather
+than shrink without limit. Scroll horizontally or vertically to see all visible
+readouts, or use a wider section. `layout: auto` changes orientation with the
+card width; `horizontal`/`vertical` pin it. See the
+[layout presets and visibility options](DASHBOARD.md#reuse-driving-and-parked-layouts).
 
 ## You need to change or remove a source mapping
 

@@ -22,6 +22,7 @@ const text = await readFile(
 const {
   buildModel, powerState, layoutPowerBoxes, renderPowerBoxes, renderVehicle, summarize,
   rvView, HavrvDashboardStrategy, HavrvViewStrategy, HavrvRvCard,
+  DISPLAY_CLASSES, dashboardOptions, visibleModel,
 } = await import(`data:text/javascript;base64,${Buffer.from(text).toString("base64")}`);
 
 function fixture() {
@@ -326,7 +327,7 @@ test("electrical boxes reuse tire tint, typography and circular status indicator
   assert.match(text, /prefers-reduced-motion: reduce/);
 });
 
-test("very many colocated banks keep distinct graphics on the coach", () => {
+test("very many colocated banks keep readable distinct graphics with outward overflow", () => {
   const { hass, rv } = fixture();
   const model = buildModel(hass, rv);
   const bank = model.powerSources.find((source) => source.key === "house_bank_1");
@@ -336,15 +337,298 @@ test("very many colocated banks keep distinct graphics on the coach", () => {
   const layout = layoutPowerBoxes(hass, model, "vertical");
   assert.equal(layout.boxes.length, 50);
   assert.equal(layout.icons.length, 50);
-  assert.ok(layout.icons[0].width < 44);
+  assert.ok(layout.icons.every((icon) => icon.width === 44));
+  assert.ok(layout.icons.some((icon) => icon.x < 158));
   for (const icon of layout.icons) {
-    assert.ok(icon.x >= 158 && icon.x + icon.width <= 338);
-    assert.ok(icon.y >= 24 && icon.y + icon.height <= 884);
+    assert.ok(icon.x >= layout.bounds.x && icon.x + icon.width <= layout.bounds.x + layout.bounds.width);
+    assert.ok(icon.y >= layout.bounds.y && icon.y + icon.height <= layout.bounds.y + layout.bounds.height);
     for (const other of layout.icons) {
       if (other === icon) continue;
       assert.ok(icon.x + icon.width <= other.x || other.x + other.width <= icon.x
         || icon.y + icon.height <= other.y || other.y + other.height <= icon.y);
     }
+  }
+});
+
+/** All existing discovered dashboard classes, including the maximum axle layout. */
+function completeFixture() {
+  const { hass, rv } = fixture();
+  const addDevice = (part, readings) => {
+    const id = `device_${part}`;
+    hass.devices[id] = { id, name: part, identifiers: [["havrv", `entry_${part}`]] };
+    for (const [role, state, unit] of readings) {
+      const entity_id = `sensor.${part}_${role}`;
+      hass.entities[entity_id] = { entity_id, platform: "havrv", device_id: id, translation_key: role };
+      hass.states[entity_id] = { state, attributes: { unit_of_measurement: unit } };
+    }
+  };
+  for (const axle of ["front", "rear_axle_1", "rear_axle_2", "rear_axle_3", "tag_axle"]) {
+    for (const side of ["left", "right"]) {
+      for (const wheel of axle.startsWith("rear") ? ["outer", "inner"] : ["single"]) {
+        addDevice(`tire_${axle}_${side}${wheel === "single" ? "" : `_${wheel}`}`, [
+          ["tire_pressure", "102", "psi"], ["tire_temperature", "83", "°F"],
+          ["tire_pressure_problem", axle === "front" && side === "left" ? "on" : "off"],
+        ]);
+      }
+    }
+  }
+  for (const type of ["fresh_water", "gray_water", "black_water"]) {
+    addDevice(`tank_${type}`, [
+      ["tank_percentage", "50", "%"], ["tank_level", "25", "gal"],
+      ["tank_status", type === "black_water" ? "problem" : "ok"],
+      ["tank_last_filled", "2026-10-13T12:00:00Z"],
+    ]);
+  }
+  addDevice("tire_monitor", [["comparison", "0"]]);
+  addDevice("operations", [["operation_mode", "driving"]]);
+  addDevice("existing_mapping", [["mapped_sensor", "1"]]);
+  hass.entities["sensor.coach_make"] = {
+    entity_id: "sensor.coach_make", platform: "havrv", device_id: "rv", translation_key: "make",
+  };
+  hass.states["sensor.coach_make"] = { state: "Example make", attributes: {} };
+  return { hass, rv, model: buildModel(hass, rv) };
+}
+
+test("all display classes declare shared true defaults, readable labels and editor fields", () => {
+  const form = HavrvRvCard.getConfigForm();
+  const schema = form.schema.find((field) => field.type === "grid").schema;
+  assert.deepEqual(schema.map((field) => field.name), Object.keys(DISPLAY_CLASSES));
+  for (const [key, group] of Object.entries(DISPLAY_CLASSES)) {
+    assert.equal(group.default, true);
+    assert.equal(dashboardOptions()[key], true);
+    assert.equal(dashboardOptions({ [key]: false })[key], false);
+    const field = schema.find((field) => field.name === key);
+    assert.equal(field.default, true);
+    assert.deepEqual(field.selector, { boolean: {} });
+    assert.match(form.computeLabel(field), /^Show .+/);
+  }
+  assert.deepEqual(Object.keys(DISPLAY_CLASSES), [
+    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_coach", "show_systems",
+  ]);
+  const card = new HavrvRvCard();
+  card.setConfig({ show_tires: undefined, show_tanks: undefined });
+  assert.equal(card._config.show_tires, true);
+  assert.equal(card._config.show_tanks, true);
+  assert.equal(HavrvRvCard.getStubConfig({ devices: {} }).show_tires, true);
+});
+
+test("visibility filtering is nonmutating, removes hidden alerts and preserves positional APIs", () => {
+  const { hass, model } = completeFixture();
+  const original = structuredClone(model);
+  assert.deepEqual(summarize(hass, model), { alert: 2, watch: 0, offline: 0 });
+  assert.deepEqual(summarize(hass, model, { show_tires: false }), { alert: 1, watch: 0, offline: 0 });
+  assert.deepEqual(summarize(hass, model, { show_tanks: false }), { alert: 1, watch: 0, offline: 0 });
+  const config = Object.fromEntries(Object.keys(DISPLAY_CLASSES).map((key) => [key, false]));
+  const hidden = visibleModel(model, config);
+  for (const key of ["axles", "tanks", "powerSources", "systems", "monitorEntities", "profileEntities"]) {
+    assert.deepEqual(hidden[key], []);
+  }
+  assert.equal(hidden.operationMode, undefined);
+  assert.deepEqual(hidden.watched, []);
+  assert.deepEqual(hidden.profile, {});
+  assert.deepEqual(summarize(hass, model, config), { alert: 0, watch: 0, offline: 0 });
+  const legacy = { name: "Legacy model", axles: model.axles, tanks: model.tanks };
+  assert.deepEqual(summarize(hass, legacy, false), { alert: 2, watch: 0, offline: 0 });
+  assert.match(renderVehicle(hass, legacy, "horizontal", 7, false), /class="tire /);
+  for (const orientation of ["horizontal", "vertical"]) {
+    const svg = renderVehicle(hass, model, orientation, 7, config);
+    assert.doesNotMatch(svg, /class="(?:chip|tire|tank|power-box|power-icon|axle)[ "]/);
+    assert.doesNotMatch(renderVehicle(hass, hidden, orientation, 7), /class="tire /);
+    const noPower = renderVehicle(hass, model, orientation, 7, false);
+    assert.doesNotMatch(noPower, /class="power-box /);
+    assert.match(noPower, /class="tire /);
+    assert.match(noPower, /class="tank /);
+    const bounds = (drawing) => /viewBox="([^"]+)"/.exec(drawing)[1].split(" ").map(Number);
+    const hiddenBounds = bounds(svg);
+    const visibleBounds = bounds(noPower);
+    assert.ok(hiddenBounds[2] < visibleBounds[2] && hiddenBounds[3] < visibleBounds[3]);
+    assert.equal(layoutPowerBoxes(hass, hidden, orientation).obstacles.length, 0);
+  }
+  assert.deepEqual(model, original);
+});
+
+test("both strategies propagate presentation and every visibility option and omit sections", async () => {
+  const { hass, rv } = completeFixture();
+  for (const layout of ["auto", "horizontal", "vertical"]) {
+    const config = {
+      device_id: rv.id, layout,
+      ...Object.fromEntries(Object.keys(DISPLAY_CLASSES).map((key) => [key, false])),
+    };
+    const dashboard = await HavrvDashboardStrategy.generate(config, hass);
+    const view = await HavrvViewStrategy.generate(config, hass);
+    for (const generated of [rvView(hass, rv, config), dashboard.views[0], view]) {
+      assert.equal(generated.sections.length, 1);
+      assert.deepEqual(generated.sections[0].cards[0], { type: "custom:havrv-rv-card", ...config });
+    }
+  }
+  const defaults = rvView(hass, rv);
+  const headings = (config) => rvView(hass, rv, config).sections.flatMap((section) =>
+    section.cards.filter((card) => card.type === "heading").map((card) => card.heading));
+  assert.ok(headings({}).includes("Tanks"));
+  assert.ok(headings({}).includes("Tire analysis"));
+  assert.ok(headings({}).includes("Coach"));
+  assert.ok(headings({}).includes("existing_mapping"));
+  assert.ok(!headings({ show_tanks: false }).includes("Tanks"));
+  assert.ok(!headings({ show_tires: false }).includes("Tire analysis"));
+  assert.ok(!headings({ show_coach: false }).includes("Coach"));
+  assert.ok(!headings({ show_systems: false }).includes("existing_mapping"));
+  assert.equal(defaults.sections.length - rvView(hass, rv, { show_power: false }).sections.length, 6);
+  assert.equal(defaults.sections[0].cards[0].show_tanks, true);
+  assert.equal(defaults.sections[0].cards[0].show_tires, true);
+});
+
+test("card toggles hide diagrams, messages, counts and coach metadata, and restore live data", () => {
+  const { hass } = completeFixture();
+  const card = new HavrvRvCard();
+  card.setConfig({ device_id: "rv" });
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /2 alerts/);
+  assert.match(card.shadowRoot.innerHTML, /Example make/);
+  const key = card._renderKey;
+  card.setConfig({ show_tires: false, show_tanks: false, show_power: false, show_coach: false });
+  assert.notEqual(card._renderKey, key);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="tire |class="tank |class="chip |class="power-box |2 alerts|Set the axle layout|Example make|class="pill mode"/);
+  card.setConfig({ show_header: false, show_legend: false, show_tires: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /<header>|<div class="legend">/);
+  assert.match(card.shadowRoot.innerHTML, /class="tank /);
+  card.setConfig({});
+  assert.match(card.shadowRoot.innerHTML, /2 alerts/);
+  hass.states["sensor.tire_front_left_tire_pressure_problem"].state = "off";
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /1 alert/);
+  hass.states["sensor.tank_fresh_water_tank_percentage"].state = "unavailable";
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /1 no data/);
+  card.setConfig({ show_tanks: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /1 no data|1 alert/);
+});
+
+test("empty models keep setup hints only for visible tires and strategies handle no profiles", async () => {
+  const { hass } = fixture();
+  const card = new HavrvRvCard();
+  card.setConfig({});
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /Set the axle layout/);
+  card.setConfig({ show_tires: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /Set the axle layout|chip-bg ghost|class="tire /);
+  assert.match(card.shadowRoot.innerHTML, /class="power-box /);
+  const empty = { devices: {}, entities: {}, states: {} };
+  card.hass = empty;
+  assert.match(card.shadowRoot.innerHTML, /No HAVRV RV profile/);
+  assert.match(JSON.stringify(await HavrvDashboardStrategy.generate({}, empty)), /No HAVRV RV profile/);
+  assert.match(JSON.stringify(await HavrvViewStrategy.generate({}, empty)), /No HAVRV RV profile/);
+});
+
+test("resize switches auto orientation without shrinking, and explicit layouts stay fixed", () => {
+  const { hass } = completeFixture();
+  let callback;
+  let disconnected = false;
+  globalThis.ResizeObserver = class {
+    constructor(handler) { callback = handler; }
+    observe() {}
+    disconnect() { disconnected = true; }
+  };
+  try {
+    const card = new HavrvRvCard();
+    card.setConfig({});
+    card.hass = hass;
+    card.connectedCallback();
+    for (const [width, orientation] of [[320, "vertical"], [1200, "horizontal"], [480, "vertical"]]) {
+      callback([{ contentRect: { width } }]);
+      assert.equal(card._orientation, orientation);
+      const html = card.shadowRoot.innerHTML;
+      assert.match(html, new RegExp(`class="vehicle ${orientation}"`));
+      const boundsWidth = Number(/viewBox="[^ ]+ [^ ]+ ([^ ]+) [^"]+"/.exec(html)[1]);
+      assert.match(html, new RegExp(`min-width:${boundsWidth}px`));
+      assert.match(html, /\.drawing \{ overflow: auto; max-height: 80vh;/);
+      assert.doesNotMatch(html, /svg.vehicle.vertical \{ max-height/);
+    }
+    for (const layout of ["horizontal", "vertical"]) {
+      card.setConfig({ layout });
+      callback([{ contentRect: { width: layout === "horizontal" ? 320 : 1200 } }]);
+      assert.equal(card._orientation, layout);
+    }
+    card.disconnectedCallback();
+    assert.equal(disconnected, true);
+  } finally {
+    delete globalThis.ResizeObserver;
+  }
+});
+
+test("maximum axles, duals, three tanks and dense banks have nonoverlapping readable layouts", () => {
+  const { hass, model } = completeFixture();
+  const bank = model.powerSources.find((source) => source.key === "house_bank_1");
+  model.powerSources.push(...Array.from({ length: 30 }, (_, index) => ({
+    ...bank, key: `house_bank_${index + 3}`,
+  })));
+  const intersects = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x
+    && a.y < b.y + b.height && a.y + a.height > b.y;
+  for (const orientation of ["horizontal", "vertical"]) {
+    const layout = layoutPowerBoxes(hass, model, orientation);
+    const { boxes, icons, obstacles, bounds } = layout;
+    const tankRegion = orientation === "horizontal"
+      ? { x: 432, y: 120, width: 240, height: 136 }
+      : { x: 180, y: 242, width: 136, height: 240 };
+    assert.equal(obstacles.length, 10);
+    assert.ok(obstacles.every((chip) => chip.width === 156 && chip.height >= 52));
+    assert.ok(icons.every((icon) => icon.width === 44));
+    const items = [...boxes, ...icons, ...obstacles];
+    for (const item of items) {
+      for (const other of items) {
+        if (item !== other) assert.equal(intersects(item, other), false);
+      }
+      assert.equal(intersects(item, tankRegion), false);
+      assert.ok(item.x >= bounds.x && item.y >= bounds.y);
+      assert.ok(item.x + item.width <= bounds.x + bounds.width);
+      assert.ok(item.y + item.height <= bounds.y + bounds.height);
+    }
+    const svg = renderVehicle(hass, model, orientation, 1);
+    assert.equal((svg.match(/class="tire (?:ok|alert)"/g) || []).length, 16);
+    assert.equal((svg.match(/class="tank-label /g) || []).length, 3);
+    assert.doesNotMatch(svg, /compact-tank|textLength=/);
+    for (const chip of obstacles) {
+      assert.ok(svg.includes(`x="${chip.x}" y="${chip.y}" width="${chip.width}" height="${chip.height}"`));
+    }
+    const withoutPower = renderVehicle(hass, model, orientation, 1, false);
+    const viewBox = /viewBox="([^"]+)"/.exec(withoutPower)[1].split(" ").map(Number);
+    for (const chip of obstacles) {
+      assert.ok(chip.x >= viewBox[0] && chip.y >= viewBox[1]);
+      assert.ok(chip.x + chip.width <= viewBox[0] + viewBox[2]);
+      assert.ok(chip.y + chip.height <= viewBox[1] + viewBox[3]);
+    }
+    const noTires = layoutPowerBoxes(hass, visibleModel(model, { show_tires: false }), orientation);
+    assert.equal(noTires.obstacles.length, 0);
+    assert.ok(noTires.bounds.width <= bounds.width && noTires.bounds.height <= bounds.height);
+  }
+});
+
+test("long electrical readings expand columns instead of squeezing glyphs", () => {
+  const { hass, rv } = fixture();
+  const model = buildModel(hass, rv);
+  const bank = model.powerSources.find((source) => source.key === "house_bank_1");
+  hass.states[bank.voltage].state = "123456789";
+  hass.states[bank.voltage].attributes.unit_of_measurement = "mV";
+  for (const orientation of ["horizontal", "vertical"]) {
+    const layout = layoutPowerBoxes(hass, model, orientation);
+    const box = layout.boxes.find((item) => item.source === bank);
+    assert.ok(box.width > 156);
+    const svg = renderVehicle(hass, model, orientation, 1);
+    assert.doesNotMatch(svg, /textLength=|lengthAdjust=/);
+    assert.match(svg, /123,456,789.0/);
+  }
+});
+
+test("long tire readings expand labels and the power collision obstacles together", () => {
+  const { hass, model } = completeFixture();
+  const tire = model.axles[1].left[0];
+  hass.states[tire.pressure].state = "123456789";
+  for (const orientation of ["horizontal", "vertical"]) {
+    const layout = layoutPowerBoxes(hass, model, orientation);
+    const chip = layout.obstacles.find((box) => box.axle.key === "rear_axle_1" && box.side === "left");
+    assert.ok(chip.width > 156);
+    const svg = renderVehicle(hass, model, orientation, 1);
+    assert.ok(svg.includes(`x="${chip.x}" y="${chip.y}" width="${chip.width}" height="${chip.height}"`));
+    assert.match(svg, /123,456,789/);
   }
 });
 
@@ -381,8 +665,8 @@ test("enlarged equipment avoids the reserved tank band and keeps colocated banks
   for (const orientation of ["horizontal", "vertical"]) {
     const layout = layoutPowerBoxes(hass, model, orientation);
     const tank = orientation === "horizontal"
-      ? { x: 316, y: 148, width: 320, height: 80 }
-      : { x: 208, y: 278, width: 80, height: 320 };
+      ? { x: 316, y: 120, width: 320, height: 136 }
+      : { x: 180, y: 278, width: 136, height: 320 };
     for (const icon of layout.icons) {
       assert.ok(icon.x + icon.width <= tank.x || tank.x + tank.width <= icon.x
         || icon.y + icon.height <= tank.y || tank.y + tank.height <= icon.y);

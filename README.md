@@ -64,6 +64,11 @@ choose existing entities, and configure optional tank and tire monitoring.
   and Enabled is indicated by color rather than a Yes/No row. See
   [dashboard configuration and colors](docs/DASHBOARD.md).
   The guide also includes [crowded R-Rear placement examples](docs/DASHBOARD.md#placement-stress-example).
+  Shared, default-on show/hide options cover tires, tanks, power, coach
+  information, mapped system sections, header and legend. Reuse
+  [driving/parked presets](docs/DASHBOARD.md#reuse-driving-and-parked-layouts) in
+  small or large horizontal/vertical views. Hidden classes leave no alert
+  counts or layout reservations; crowded drawings scroll instead of shrinking.
 
 ![HAVRV RV overview card](docs/images/dashboard-horizontal.png)
 

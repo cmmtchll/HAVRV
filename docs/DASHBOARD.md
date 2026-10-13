@@ -18,8 +18,9 @@ The layout follows the RV profile:
 - An optional tag axle, drawn behind the drive axles.
 - Dual positions show outer (**O**) and inner (**I**) readings on one label.
 - Pressure and temperature always share one line per tire, including single
-  wheels. Tight labels omit the pressure unit or compact the temperature rather
-  than moving it to a second line. Missing measurements show no data independently.
+  wheels. Labels grow for long readings and use outward lanes for crowded axles.
+  Tight labels can omit the pressure unit or compact the temperature rather than
+  moving it to a second line. Missing measurements show no data independently.
 - Only the fresh, gray, and black water tanks that you configured are drawn.
 - Optionally placed house/chassis banks, Inverter and Generator have readout
   boxes beside their selected left/right front/mid/rear regions, like tire
@@ -39,6 +40,11 @@ The layout follows the RV profile:
 - Wide cards draw the RV horizontally, with the front on the right. Cards
   narrower than about 560 pixels, such as on phones, draw it vertically with
   the front at the top.
+- The drawing keeps a readable minimum size, rather than squeezing a crowded
+  diagram into the card. Small cards scroll horizontally when necessary; tall
+  drawings scroll vertically within an 80%-of-viewport-height region. Tab to the
+  diagram region to scroll with the keyboard. The same card works in small or
+  large dashboard sections, in either orientation.
 
 <img src="images/dashboard-vertical.png" alt="Vertical HAVRV card in a dark theme" width="320">
 
@@ -59,8 +65,12 @@ the generated dashboard can still include unplaced source-device sections.
 Colocated devices retain separate, nonoverlapping boxes associated with the same
 region. You do not enter physical positions in dashboard YAML.
 
-The card's visual editor has **Show placed power sources** alongside
-**Show header** and **Show legend**. If that toggle is absent, the browser has
+The card's visual editor has toggles for **tires and tire analysis**, **tanks**,
+**placed power sources**, **coach information and operation mode**, and **mapped
+system sections**, alongside **header** and **legend**. Every toggle defaults
+to on. Coach/system sections apply to the generated dashboard; hiding coach
+information also removes the overview subtitle and operation-mode pill, not the
+RV silhouette or name. If these toggles are absent, the browser has
 an older module: update/restart HAVRV, remove any old manually added HAVRV
 dashboard resource, and reset the browser/app cache. See the
 [troubleshooting steps](TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).
@@ -90,6 +100,9 @@ narrow for its readings, the pressure unit is left out for that label.
 
 The header shows the RV name, its year, manufacturer, and model, the operation
 mode, and counts of alerts, items to watch, and readings with no data.
+Only visible tires, tanks and placed electrical sources contribute to these
+counts. Hiding a class also removes its layout reservations and setup hints;
+it does not change the RV profile, entities, monitoring, or source readings.
 
 ### Placement stress example
 
@@ -139,12 +152,12 @@ Unknown status has a dashed unfilled graphic. The readout's normal on dot/tint
 is green too. Charging does not select an active source or override
 these statuses.
 
-Graphics avoid tires, tanks and each other. They normally use a 44-unit footprint,
+Graphics avoid tires, tanks and each other. They use a 44-unit footprint,
 comparable to the tire shapes rather than tiny markers. Matching **HB1**, **CB1**,
 **INV**, **GEN**, and **SHORE** tags associate equipment and readouts with no
-callout lines crossing labels. Very dense bank configurations use smaller graphics on
-the coach rather than overlapping or moving banks outside; boxes remain
-separate. These symbols are placement illustrations, not a wiring
+callout lines crossing labels. Very dense bank configurations use outward
+overflow lanes once the coach is full, instead of shrinking graphics to
+unreadable sizes; boxes remain separate. These symbols are placement illustrations, not a wiring
 diagram or equipment dimensions. Select a graphic to open its mapped status
 (or its reading when no status is mapped).
 
@@ -194,6 +207,66 @@ entities. To customize it, open the dashboard's three-dot menu and choose
 **Take control**. This converts the generated layout into a regular dashboard
 that no longer updates itself.
 
+### Reuse driving and parked layouts
+
+Dashboard and view strategies accept the same `layout` and `show_*` options as
+the card and pass them to each overview. `show_tanks` also hides the tank section,
+`show_tires` hides Tire analysis, `show_coach` hides Coach, and `show_systems`
+hides existing mapped-system sections. No per-system or future-system options
+are required.
+
+These are presentation presets, **not** automatic reactions to the operation
+mode. Use whichever view suits your current task. For example, the following
+uses YAML anchors to reuse compact driving/parked configurations in wide views.
+Replace the device ID with yours. All omitted visibility flags remain `true`.
+
+```yaml
+views:
+  - title: Driving compact
+    path: driving-compact
+    strategy: &driving
+      type: custom:havrv
+      device_id: &rv 0123456789abcdef0123456789abcdef
+      layout: vertical
+      show_tanks: false
+      show_power: false
+      show_coach: false
+      show_systems: false
+      show_header: false
+      show_legend: false
+  - title: Driving wide
+    path: driving-wide
+    strategy:
+      <<: *driving
+      layout: horizontal
+      show_header: true
+      show_legend: true
+  - title: Parked compact
+    path: parked-compact
+    strategy: &parked
+      type: custom:havrv
+      device_id: *rv
+      layout: vertical
+      show_tires: false
+      show_coach: false
+      show_systems: false
+      show_header: false
+      show_legend: false
+  - title: Parked wide
+    path: parked-wide
+    strategy:
+      <<: *parked
+      layout: horizontal
+      show_coach: true
+      show_systems: true
+      show_header: true
+      show_legend: true
+```
+
+For a single view that changes orientation with its available width, use
+`layout: auto`. In a standalone card, use the same visibility/layout options with
+`type: custom:havrv-rv-card`; no new systems are created by these presets.
+
 ### Add an RV view to an existing dashboard
 
 Add a view with the view strategy. Set `device_id` to the RV device, or to any
@@ -225,6 +298,10 @@ In dashboard edit mode, select **Add card** and search for
 | `show_header` | `true` | Show the name, operation mode, and status summary |
 | `show_legend` | `true` | Show the status color legend |
 | `show_power` | `true` | Show individually placed power-source readout boxes |
+| `show_tires` | `true` | Show tire shapes/readouts; also Tire analysis on strategies |
+| `show_tanks` | `true` | Show tank shapes/readouts; also Tanks on strategies |
+| `show_coach` | `true` | Show coach subtitle and operation-mode pill; also Coach on strategies |
+| `show_systems` | `true` | Show existing mapped-system sections on strategies (no extra overview graphics) |
 
 ```yaml
 type: custom:havrv-rv-card
@@ -234,8 +311,9 @@ show_power: true
 ```
 
 In a sections view, the card spans the full width of its section.
-`show_power` defaults to `true`; it enables placed electrical boxes on the
-card, and also electrical-device sections when used on a strategy. There is
+Every `show_*` option defaults to `true`, including for older dashboards that
+omit these keys. Explicit `false` hides that class. `show_power` enables placed
+electrical boxes on the card, and also electrical-device sections when used on a strategy. There is
 no separate electrical strategy. If you previously selected **Take control**,
 your static dashboard does not automatically gain new generated sections; add
 the current card or a strategy view without replacing other views.

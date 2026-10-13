@@ -88,6 +88,13 @@ for new and changed features:
   invalid/unavailable sources and lifecycle behavior as applicable.
 - Update the README and linked setup, feature, and troubleshooting guides for
   user-visible changes, and keep quality-scale rationales and evidence current.
+- Every new dashboard display class must declare its default-`true` show/hide
+  option, readable label and filtered model fields in `DISPLAY_CLASSES` in
+  `custom_components/havrv/frontend/havrv-dashboard.js`. Reuse this declaration
+  for the card editor/defaults and both strategies. Filter before summaries and
+  layout so hidden classes reserve no space, count no alerts and generate no
+  sections. Cover defaults, explicit false, toggling and dense layouts with
+  Node tests. Do not predeclare or implement speculative future systems.
 
 These are contributor requirements, not a claim that every existing feature
 already satisfies them; user guides describe currently implemented behavior.
