@@ -11,6 +11,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util.unit_system import METRIC_SYSTEM, US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.havrv import (
@@ -113,6 +114,85 @@ async def test_sensor_mirrors_numeric_metadata_and_unavailable_state(
     hass.states.async_remove("sensor.battery_voltage")
     assert not entity.available
     assert entity.name == "sensor.battery_voltage"
+
+
+@pytest.mark.parametrize("units", [UNIT_SYSTEM_METRIC, UNIT_SYSTEM_US_CUSTOMARY])
+async def test_generic_numeric_helpers_honor_profile_units_and_overrides(
+    hass: HomeAssistant,
+    units: str,
+) -> None:
+    """Helpers/templates mirror read-only readings in profile, not HA global, units."""
+    metric = units == UNIT_SYSTEM_METRIC
+    hass.config.units = US_CUSTOMARY_SYSTEM if metric else METRIC_SYSTEM
+    readings = (
+        ("sensor.template_temperature", "temperature", 100, "°F", "°C", 37.7777778),
+        ("number.template_pressure", "pressure", 100, "psi", "kPa", 689.4757293),
+        ("input_number.volume", None, 10, "gal", "L", 37.85411784),
+        ("number.length", "distance", 10, "ft", "m", 3.048),
+        ("input_number.mass", "weight", 10, "lb", "kg", 4.5359237),
+        ("sensor.area", "area", 100, "ft²", "m²", 9.290304),
+        ("sensor.speed", "speed", 55, "mph", "km/h", 88.51392),
+    )
+    for source, device_class, value, source_unit, _, _ in readings:
+        attributes = {"unit_of_measurement": source_unit}
+        if device_class:
+            attributes["device_class"] = device_class
+        hass.states.async_set(source, str(value), attributes)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={
+            CONF_NAME: "Units RV",
+            "measurement_system": units,
+            "entity_mappings": {"other": [row[0] for row in readings]},
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    registry = er.async_get(hass)
+    for source, _, value, source_unit, profile_unit, expected in readings:
+        entity_id = registry.async_get_entity_id(
+            "sensor",
+            DOMAIN,
+            f"{entry.entry_id}_other_{source}",
+        )
+        state = hass.states.get(entity_id)
+        assert float(state.state) == pytest.approx(expected if metric else value)
+        assert state.attributes["unit_of_measurement"] == (
+            profile_unit if metric else source_unit
+        )
+        assert hass.states.get(source).state == str(value)
+    temperature_id = registry.async_get_entity_id(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}_other_sensor.template_temperature",
+    )
+    registry.async_update_entity_options(
+        temperature_id,
+        "sensor",
+        {"unit_of_measurement": "K"},
+    )
+    await hass.async_block_till_done()
+    temperature = hass.states.get(temperature_id)
+    assert temperature.attributes["unit_of_measurement"] == "K"
+    assert float(temperature.state) == pytest.approx(310.9277778)
+    helper_id = registry.async_get_entity_id(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}_other_input_number.volume",
+    )
+    hass.states.async_set("input_number.volume", "unavailable")
+    await hass.async_block_till_done()
+    assert hass.states.get(helper_id).state == "unavailable"
+    hass.states.async_set("input_number.volume", "nan", {"unit_of_measurement": "gal"})
+    await hass.async_block_till_done()
+    assert hass.states.get(helper_id).state == "unknown"
+    hass.states.async_set("input_number.volume", "20", {"unit_of_measurement": "gal"})
+    await hass.async_block_till_done()
+    assert float(hass.states.get(helper_id).state) == pytest.approx(
+        75.70823568 if metric else 20,
+    )
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_binary_sensor_mirrors_source_state_and_class(

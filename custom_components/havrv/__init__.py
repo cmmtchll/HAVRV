@@ -41,9 +41,11 @@ from .const import (
     UNIT_SYSTEM_US_CUSTOMARY,
 )
 from .dashboard import async_register_frontend
+from .panel import async_register_management_panel
 from .power import POWER_BINARY_METRICS, power_sources
 from .tank import TANK_DEFINITIONS
 from .tire import tire_positions
+from .websocket_api import async_register_commands, async_reload_profile
 
 
 @dataclass
@@ -79,6 +81,8 @@ type HavrvConfigEntry = ConfigEntry[HavrvRuntimeData]
 
 _DOMAIN_PLATFORMS = {
     "sensor": Platform.SENSOR,
+    "number": Platform.SENSOR,
+    "input_number": Platform.SENSOR,
     "binary_sensor": Platform.BINARY_SENSOR,
     "switch": Platform.SWITCH,
     "light": Platform.LIGHT,
@@ -91,6 +95,8 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     """Set up HAVRV services shared by every RV profile."""
     await async_register_frontend(hass)
+    async_register_commands(hass)
+    await async_register_management_panel(hass)
     return True
 
 
@@ -203,7 +209,7 @@ async def async_migrate_entry(_hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _async_update_listener(hass: HomeAssistant, entry: HavrvConfigEntry) -> None:
     """Reload an RV profile when its settings or mappings change."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    await async_reload_profile(hass, entry)
 
 
 def _entry_entity_mappings(entry: HavrvConfigEntry) -> dict[str, list[str]]:

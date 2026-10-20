@@ -6,6 +6,9 @@ implemented integration behavior, not just repository configuration.
 
 ## Current foundation
 
+- Admin-only, integration-gear management panel for existing profile/mapping
+  configuration, with one draft, validated config-entry updates and conflict
+  detection. Native setup is short; options/reconfigure recovery paths remain.
 - HACS-compatible single-integration repository layout and metadata.
 - UI config flow for adding uniquely named RV profiles with optional coach
   identity, storage zone, dimensions, tank capacities, axle/wheel details, and
@@ -41,7 +44,7 @@ implemented integration behavior, not just repository configuration.
 - End-user setup and project-status documentation.
 
 These foundations do not mean all Bronze rules are complete. Mapping is
-currently user-selected and limited to sensors, binary sensors, switches,
+currently user-selected and limited to sensors, numbers, input-number helpers, binary sensors, switches,
 lights, and climate entities; automatic discovery, alerts, and triggers are
 not implemented.
 

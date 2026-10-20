@@ -1,5 +1,9 @@
 # HAVRV dashboard
 
+The monitoring dashboard is separate from the management page opened by the
+integration entry's gear. Configure profile layout and source mappings on that
+page, then **Apply changes** to update the saved configuration used here.
+
 HAVRV includes an RV overview card and a dashboard generated from your RV
 profile. Both are installed with the integration. You do not need a separate
 HACS frontend download or a Lovelace resource.

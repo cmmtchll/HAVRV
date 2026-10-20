@@ -12,15 +12,16 @@ from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.havrv.config_flow import (
-    _default_measurement_system as get_default_measurement_system,
-)
-from custom_components.havrv.config_flow import (
+    HavrvConfigFlow,
     _normalize_entity_mappings,
     _normalize_options,
     _normalize_power_source,
     _normalize_profile,
     _options_schema,
     _power_source_schema,
+)
+from custom_components.havrv.config_flow import (
+    _default_measurement_system as get_default_measurement_system,
 )
 from custom_components.havrv.const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
@@ -68,12 +69,33 @@ async def _init_user_flow(hass: HomeAssistant) -> dict:
     )
 
 
-async def _finish_power_flow(hass: HomeAssistant, result: dict) -> dict:
+async def test_initial_form_is_short_and_defensively_validated(
+    hass: HomeAssistant,
+) -> None:
+    """Only name and units are offered; invalid direct submissions still fail."""
+    form = await _init_user_flow(hass)
+    assert {str(key) for key in form["data_schema"].schema} == {
+        CONF_NAME,
+        CONF_MEASUREMENT_SYSTEM,
+    }
+    flow = HavrvConfigFlow()
+    flow.hass = hass
+    result = await flow.async_step_user(
+        {
+            CONF_NAME: "Adventure RV",
+            CONF_MEASUREMENT_SYSTEM: "invalid",
+        }
+    )
+    assert result["errors"] == {"base": "invalid_measurement"}
+
+
+async def _finish_power_flow(
+    hass: HomeAssistant, result: dict, *, options: bool = False
+) -> dict:
     """Accept empty optional mappings in the default power-source setup."""
     while result.get("step_id") == "power_source":
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input={}
-        )
+        manager = hass.config_entries.options if options else hass.config_entries.flow
+        result = await manager.async_configure(result["flow_id"], user_input={})
         assert not result.get("errors"), result
     return result
 
@@ -408,7 +430,7 @@ async def test_user_flow_creates_profile_with_optional_fields_blank(
 
     result = await hass.config_entries.flow.async_configure(
         form["flow_id"],
-        user_input={CONF_NAME: "Adventure RV", CONF_CONFIGURE_POWER_SOURCES: False},
+        user_input={CONF_NAME: "Adventure RV"},
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -440,11 +462,8 @@ async def test_user_flow_defaults_to_home_assistant_us_customary_units(
     assert result["data"][CONF_MEASUREMENT_SYSTEM] == UNIT_SYSTEM_US_CUSTOMARY
 
 
-async def test_user_flow_stores_coach_profile_and_specifications(
-    hass: HomeAssistant,
-) -> None:
+def test_profile_normalization_stores_coach_details() -> None:
     """Store optional coach identity, zone, capacities, and axle settings."""
-    form = await _init_user_flow(hass)
     input_data = {
         CONF_NAME: " Liberty ",
         CONF_COACH_YEAR: 2003,
@@ -467,14 +486,11 @@ async def test_user_flow_stores_coach_profile_and_specifications(
         CONF_TAG_AXLE_WHEEL_CONFIGURATION: "single",
     }
 
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"], user_input=input_data
+    data, error = _normalize_profile(
+        input_data, default_measurement_system=UNIT_SYSTEM_METRIC
     )
-    result = await _finish_power_flow(hass, result)
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Liberty"
-    assert result["data"] == {
+    assert error is None
+    assert data == {
         CONF_NAME: "Liberty",
         CONF_HOUSE_BATTERY_BANK_COUNT: 1,
         CONF_CHASSIS_BATTERY_BANK_COUNT: 1,
@@ -501,89 +517,73 @@ async def test_user_flow_stores_coach_profile_and_specifications(
     }
 
 
-async def test_user_flow_accepts_three_rear_axles_including_tag(
-    hass: HomeAssistant,
-) -> None:
+def test_profile_accepts_three_rear_axles_including_tag() -> None:
     """Allow two main rear axles plus a tag axle in the inclusive count."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={
+    data, error = _normalize_profile(
+        {
             CONF_NAME: "Adventure RV",
             CONF_REAR_AXLE_COUNT: "three",
             CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
             CONF_TAG_AXLE_WHEEL_CONFIGURATION: "single",
         },
+        default_measurement_system=UNIT_SYSTEM_METRIC,
     )
 
-    result = await _finish_power_flow(hass, result)
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_REAR_AXLE_COUNT] == 3
-    assert result["data"][CONF_TAG_AXLE_PRESENT] is True
-    positions = tire_positions(result["data"])
+    assert error is None
+    assert data[CONF_REAR_AXLE_COUNT] == 3
+    assert data[CONF_TAG_AXLE_PRESENT] is True
+    positions = tire_positions(data)
     assert any(position.key == "rear_axle_2_left_inner" for position in positions)
     assert any(position.key == "tag_axle_left" for position in positions)
 
 
-async def test_user_flow_derives_no_tag_for_one_rear_axle(
-    hass: HomeAssistant,
-) -> None:
+def test_profile_derives_no_tag_for_one_rear_axle() -> None:
     """A single configured rear axle creates no tag-axle positions."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={
+    data, error = _normalize_profile(
+        {
             CONF_NAME: "Adventure RV",
             CONF_REAR_AXLE_COUNT: "one",
             CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
         },
+        default_measurement_system=UNIT_SYSTEM_METRIC,
     )
 
-    result = await _finish_power_flow(hass, result)
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_TAG_AXLE_PRESENT] is False
-    assert CONF_TAG_AXLE_WHEEL_CONFIGURATION not in result["data"]
-    assert all(position.group != "tag" for position in tire_positions(result["data"]))
+    assert error is None
+    assert data[CONF_TAG_AXLE_PRESENT] is False
+    assert CONF_TAG_AXLE_WHEEL_CONFIGURATION not in data
+    assert all(position.group != "tag" for position in tire_positions(data))
 
 
-async def test_user_flow_stores_grouped_source_entity_mappings(
-    hass: HomeAssistant,
-) -> None:
+def test_profile_stores_grouped_source_entity_mappings() -> None:
     """Store mapped source entities by RV system."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={
+    data, error = _normalize_profile(
+        {
             CONF_NAME: "Adventure RV",
             "power_entities": ["sensor.house_battery_voltage"],
             "water_entities": ["binary_sensor.fresh_water_low"],
         },
+        default_measurement_system=UNIT_SYSTEM_METRIC,
     )
 
-    result = await _finish_power_flow(hass, result)
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_ENTITY_MAPPINGS] == {
+    assert error is None
+    assert data[CONF_ENTITY_MAPPINGS] == {
         "power": ["sensor.house_battery_voltage"],
         "water": ["binary_sensor.fresh_water_low"],
     }
 
 
-async def test_user_flow_rejects_source_entity_in_multiple_groups(
-    hass: HomeAssistant,
-) -> None:
+def test_profile_rejects_source_entity_in_multiple_groups() -> None:
     """Require each source entity to be assigned to one system."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={
+    _, error = _normalize_profile(
+        {
             CONF_NAME: "Adventure RV",
             "power_entities": ["sensor.house_battery_voltage"],
             "water_entities": ["sensor.house_battery_voltage"],
         },
+        default_measurement_system=UNIT_SYSTEM_METRIC,
     )
 
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "duplicate_entity_mapping"}
+    assert error == "duplicate_entity_mapping"
 
 
 async def test_options_flow_updates_source_entity_mappings(
@@ -779,100 +779,50 @@ async def test_user_flow_rejects_whitespace_name(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "name_required"}
 
 
-async def test_user_flow_rejects_invalid_coach_year(hass: HomeAssistant) -> None:
-    """Reject years outside the supported range."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={CONF_NAME: "Adventure RV", CONF_COACH_YEAR: date.today().year + 2},
+@pytest.mark.parametrize(
+    ("fields", "expected"),
+    [
+        ({CONF_COACH_YEAR: date.today().year + 2}, "invalid_coach_year"),
+        ({CONF_FUEL_TANK_CAPACITY: 0}, "invalid_measurement"),
+        ({CONF_MANUFACTURER: {}}, "invalid_measurement"),
+        ({CONF_REAR_AXLE_COUNT: "one"}, "main_rear_wheel_configuration_required"),
+        ({CONF_REAR_AXLE_COUNT: "two"}, "tag_axle_wheel_configuration_required"),
+        (
+            {
+                CONF_REAR_AXLE_COUNT: "one",
+                CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
+                CONF_TAG_AXLE_WHEEL_CONFIGURATION: "dual",
+            },
+            "tag_wheel_configuration_without_tag_axle",
+        ),
+    ],
+)
+def test_profile_rejects_invalid_reference_fields(fields, expected) -> None:
+    """Shared detailed forms reject invalid specifications and incomplete layouts."""
+    _, error = _normalize_profile(
+        {CONF_NAME: "Adventure RV", **fields},
+        default_measurement_system=UNIT_SYSTEM_METRIC,
     )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "invalid_coach_year"}
+    assert error == expected
 
 
-async def test_user_flow_rejects_non_positive_measurement(
-    hass: HomeAssistant,
-) -> None:
-    """Reject dimensions and tank capacities that are not positive."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={CONF_NAME: "Adventure RV", CONF_FUEL_TANK_CAPACITY: 0},
-    )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "invalid_measurement"}
-
-
-async def test_user_flow_requires_main_rear_wheel_configuration(
-    hass: HomeAssistant,
-) -> None:
-    """Require a wheel layout when a non-tag rear axle is configured."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={CONF_NAME: "Adventure RV", CONF_REAR_AXLE_COUNT: "one"},
-    )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "main_rear_wheel_configuration_required"}
-
-
-async def test_user_flow_requires_tag_wheel_configuration(
-    hass: HomeAssistant,
-) -> None:
-    """Require a wheel layout when the profile has a tag axle."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={CONF_NAME: "Adventure RV", CONF_REAR_AXLE_COUNT: "two"},
-    )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "tag_axle_wheel_configuration_required"}
-
-
-async def test_user_flow_rejects_tag_wheels_when_no_tag_axle(
-    hass: HomeAssistant,
-) -> None:
-    """Reject a tag axle wheel layout when no tag axle is selected."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={
-            CONF_NAME: "Adventure RV",
-            CONF_REAR_AXLE_COUNT: "one",
-            CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
-            CONF_TAG_AXLE_WHEEL_CONFIGURATION: "dual",
-        },
-    )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "tag_wheel_configuration_without_tag_axle"}
-
-
-async def test_user_flow_accepts_tag_axle_with_wheel_configuration(
-    hass: HomeAssistant,
-) -> None:
+def test_profile_accepts_tag_axle_with_wheel_configuration() -> None:
     """Accept a tag axle when its wheel configuration is provided."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={
+    data, error = _normalize_profile(
+        {
             CONF_NAME: "Adventure RV",
             CONF_REAR_AXLE_COUNT: "two",
             CONF_MAIN_REAR_WHEEL_CONFIGURATION: "dual",
             CONF_TAG_AXLE_WHEEL_CONFIGURATION: "dual",
         },
+        default_measurement_system=UNIT_SYSTEM_METRIC,
     )
 
-    result = await _finish_power_flow(hass, result)
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_TAG_AXLE_PRESENT] is True
-    assert result["data"][CONF_REAR_AXLE_COUNT] == 2
-    assert result["data"][CONF_TAG_AXLE_WHEEL_CONFIGURATION] == "dual"
-    positions = tire_positions(result["data"])
+    assert error is None
+    assert data[CONF_TAG_AXLE_PRESENT] is True
+    assert data[CONF_REAR_AXLE_COUNT] == 2
+    assert data[CONF_TAG_AXLE_WHEEL_CONFIGURATION] == "dual"
+    positions = tire_positions(data)
     assert any(position.key == "rear_axle_1_left_inner" for position in positions)
     assert any(position.key == "tag_axle_left_inner" for position in positions)
     assert not any(position.key.startswith("rear_axle_2_") for position in positions)
@@ -945,22 +895,30 @@ def test_power_numeric_selector_and_validation_match(domain: str) -> None:
     assert "nominal_capacity" not in settings
 
 
-async def test_setup_configures_independent_banks_and_readonly_sources(
+async def test_options_configure_independent_banks_and_readonly_sources(
     hass: HomeAssistant,
 ) -> None:
-    """Complete the setup wizard with independent banks and explicit charging."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        user_input={
+    """Complete the native recovery wizard with banks and explicit charging."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={
             CONF_NAME: "Power RV",
             CONF_HOUSE_BATTERY_BANK_COUNT: 2,
             CONF_CHASSIS_BATTERY_BANK_COUNT: 0,
         },
     )
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={
+            CONF_CONFIGURE_POWER_SOURCES: True,
+        },
+    )
     assert result["step_id"] == "power_source"
     assert result["description_placeholders"] == {"source": "House Batteries Bank 1"}
-    result = await hass.config_entries.flow.async_configure(
+    result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
             "voltage": "input_number.house_voltage",
@@ -975,9 +933,8 @@ async def test_setup_configures_independent_banks_and_readonly_sources(
         },
     )
     assert result["description_placeholders"] == {"source": "House Batteries Bank 2"}
-    result = await _finish_power_flow(hass, result)
+    result = await _finish_power_flow(hass, result, options=True)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    entry = result["result"]
     settings = entry.options[CONF_POWER_SOURCES]
     assert list(settings) == [
         "house_bank_1",
@@ -995,15 +952,17 @@ async def test_setup_configures_independent_banks_and_readonly_sources(
     assert settings["shore_power"] == {"location": "not_shown"}
 
 
-async def test_power_setup_invalid_capacity_preserves_input(
+async def test_power_options_invalid_capacity_preserves_input(
     hass: HomeAssistant,
 ) -> None:
     """Invalid capacity stays on the same bank and retains valid submitted fields."""
-    form = await _init_user_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        form["flow_id"], user_input={CONF_NAME: "Power RV"}
+    entry = MockConfigEntry(domain=DOMAIN, version=3, data={CONF_NAME: "Power RV"})
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input={CONF_CONFIGURE_POWER_SOURCES: True}
     )
-    result = await hass.config_entries.flow.async_configure(
+    result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={"voltage": "sensor.voltage", "nominal_capacity": 0},
     )
@@ -1011,10 +970,10 @@ async def test_power_setup_invalid_capacity_preserves_input(
     assert result["description_placeholders"]["source"] == "House Batteries Bank 1"
     fields = {key.schema: key for key in result["data_schema"].schema}
     assert fields["voltage"].description["suggested_value"] == "sensor.voltage"
-    result = await hass.config_entries.flow.async_configure(
+    result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"nominal_capacity": 200}
     )
-    await _finish_power_flow(hass, result)
+    await _finish_power_flow(hass, result, options=True)
 
 
 async def test_options_edit_power_settings_and_preserve_other_options(
