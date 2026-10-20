@@ -562,6 +562,10 @@ class Node {
     for (const listener of this.listeners.get(type) || []) listener(event);
     return event;
   }
+  dispatchEvent(event) {
+    for (const listener of this.listeners.get(event.type) || []) listener(event);
+    return true;
+  }
 }
 const rootOf = (node) => node.parentNode ? rootOf(node.parentNode) : node;
 const walk = (node) => [node, ...node.children.flatMap(walk)];
@@ -636,19 +640,17 @@ test("field controls have accessible labels, suggestions do not set values, and 
   panel.disconnectedCallback();
 });
 
-test("tabs and source pickers retain edits; hass state updates do not reset them", async () => {
+test("tabs and source selectors retain edits; hass state updates do not reset them", async () => {
   const { panel, root, api } = await panelFixture();
   panel.navigate("power");
   const input = root.getElementById("field-power-house_bank_1-voltage");
   input.value = "input_number.custom"; input.fire("change");
-  const picker = root.getElementById("picker-source");
-  picker.value = "house_bank_2"; picker.fire("change");
+  root.getElementById("select-source-house_bank_2").fire("click");
   assert.equal(root.getElementById("field-power-house_bank_2-voltage").value, "sensor.bank2");
   panel.navigate("tanks");
   panel.hass = { ...panel.hass, states: { ...panel.hass.states, "sensor.power": { state: "101", attributes: {} } } };
   panel.navigate("power");
-  const back = root.getElementById("picker-source");
-  back.value = "house_bank_1"; back.fire("change");
+  root.getElementById("select-source-house_bank_1").fire("click");
   assert.equal(root.getElementById("field-power-house_bank_1-voltage").value, "input_number.custom");
   assert.equal(api.calls.length, 1);
   panel.disconnectedCallback();
@@ -676,6 +678,297 @@ test("entity datalist keeps missing IDs, filters other domains and treats labels
   const missing = root.getElementById("field-power-house_bank_1-voltage-sources");
   assert.equal(missing.children.some((node) => node.value === "sensor.voltage"), true);
   assert.equal(root.textContent.includes("Unavailable or missing"), true);
+  panel.disconnectedCallback();
+});
+
+test("clear actions share a row with every optional control without changing draft semantics", async () => {
+  const { panel, root } = await panelFixture();
+  for (const section of ["profile", "power", "tanks", "tires", "systems"]) {
+    panel.navigate(section);
+    for (const clear of walk(root).filter((node) => node.getAttribute("class") === "clear-control")) {
+      if (!clear.getAttribute("aria-label").startsWith("Clear ")) continue;
+      assert.equal(clear.parentNode.getAttribute("class"), "control-row");
+      assert.ok(clear.parentNode.children.some((node) => ["INPUT", "SELECT", "TEXTAREA"].includes(node.tagName)));
+      assert.equal(clear.textContent, "×");
+    }
+  }
+  panel.navigate("power");
+  const input = root.getElementById("field-power-house_bank_1-voltage");
+  const clear = input.parentNode.children.find((node) => node.getAttribute("class") === "clear-control");
+  clear.fire("click");
+  assert.equal(panel.model.value("power", "voltage", "house_bank_1"), undefined);
+  assert.equal(panel.model.dirty, true);
+  panel.disconnectedCallback();
+});
+
+test("entity identity is inline with the title; live value shares the input row and opens native more-info", async () => {
+  const { panel, root, api } = await panelFixture();
+  panel.hass = { ...panel.hass, states: { ...panel.hass.states,
+    "sensor.voltage": { state: "13.4", attributes: { friendly_name: "House <b>bank</b>", unit_of_measurement: "V" } },
+  } };
+  panel.navigate("power");
+  const input = root.getElementById("field-power-house_bank_1-voltage");
+  const box = input.parentNode.parentNode;
+  const heading = box.children.find((node) => node.getAttribute("class") === "field-heading");
+  assert.equal(heading.children[0].tagName, "LABEL");
+  assert.equal(heading.children[1].tagName, "SMALL");
+  assert.equal(heading.children[1].textContent, "House <b>bank</b> (sensor.voltage)");
+  assert.equal(walk(box).some((node) => node.tagName === "B"), false);
+  const value = input.parentNode.children.find((node) => node.getAttribute("class") === "source-value");
+  assert.equal(value.textContent, "13.4 V");
+  let info;
+  panel.addEventListener("hass-more-info", (event) => { info = event; });
+  value.fire("click");
+  assert.deepEqual(info.detail, { entityId: "sensor.voltage" });
+  assert.equal(info.bubbles, true);
+  assert.equal(info.composed, true);
+  assert.equal(panel.model.dirty, false);
+  assert.equal(api.calls.length, 1);
+  panel.disconnectedCallback();
+});
+
+test("live previews update without replacing focused or uncommitted input or resetting drafts", async () => {
+  const { panel, root } = await panelFixture();
+  panel.navigate("tires");
+  const input = root.getElementById("field-options--tire_front_left_pressure");
+  input.value = "sensor.partially_typed";
+  input.focus();
+  panel.model.setValue("profile", "coach_model", "Unsaved");
+  panel.hass = { ...panel.hass, formatEntityState: (state) => `${state.state} psi`, states: {
+    ...panel.hass.states, "number.tpms": { state: "112", attributes: { friendly_name: "Front left" } },
+  } };
+  assert.equal(root.getElementById(input.id), input);
+  assert.equal(input.value, "sensor.partially_typed");
+  assert.equal(root.activeElement, input);
+  assert.equal(root.textContent.includes("112 psi"), true);
+  assert.equal(panel.model.value("profile", "coach_model"), "Unsaved");
+  assert.equal(panel.model.value("options", "tire_front_left_pressure"), "number.tpms");
+  assert.equal(root.getElementById("tire-position-front_left").getAttribute("class"), "tire-position");
+  panel.disconnectedCallback();
+});
+
+test("source states use HA formatting and plain entity-row typography instead of button badges", async () => {
+  const { panel, root } = await panelFixture();
+  const calls = [];
+  panel.hass = { ...panel.hass, formatEntityState: (state) => {
+    calls.push(state);
+    return state.state === "unavailable" ? "Indisponible" : "1.234,50 kPa";
+  } };
+  panel.navigate("tires");
+  let value = walk(root).find((node) => node.getAttribute("class") === "source-value");
+  assert.equal(value.textContent, "Indisponible");
+  assert.equal(calls.at(-1), panel.hass.states["number.tpms"]);
+  panel.hass = { ...panel.hass, states: { ...panel.hass.states,
+    "number.tpms": { state: "1234.5", attributes: { unit_of_measurement: "kPa" } },
+  } };
+  assert.equal(value.textContent, "1.234,50 kPa");
+  assert.equal(value.disabled, false);
+  const style = walk(root).find((node) => node.tagName === "STYLE").textContent;
+  assert.match(style, /\.field button\.source-value\{[^}]*border:0;[^}]*border-radius:0;[^}]*background:none;/);
+  assert.match(style, /\.field button\.source-value\{[^}]*color:var\(--primary-text-color[^}]*font-weight:400/);
+  assert.match(style, /\.source-value:focus-visible\{/);
+  assert.equal(panel.model.dirty, false);
+  panel.disconnectedCallback();
+});
+
+test("missing sources stay visible but cannot open nonexistent history; unavailable sources can", async () => {
+  const { panel, root } = await panelFixture();
+  panel.navigate("power");
+  let events = 0;
+  panel.addEventListener("hass-more-info", () => events++);
+  let value = walk(root).find((node) => node.getAttribute("class") === "source-value");
+  assert.equal(value.disabled, true);
+  value.fire("click");
+  assert.equal(events, 0);
+  panel.navigate("tires");
+  value = walk(root).find((node) => node.getAttribute("class") === "source-value");
+  assert.equal(value.disabled, false);
+  assert.equal(value.textContent, "Unavailable or missing");
+  value.fire("click");
+  assert.equal(events, 1);
+  assert.equal(root.getElementById("tire-position-front_left").getAttribute("class"), "tire-position missing");
+  panel.disconnectedCallback();
+});
+
+test("multi-source mappings show individual live values and retain independent removal controls", async () => {
+  const { panel, root } = await panelFixture();
+  panel.navigate("systems");
+  const list = walk(root).find((node) => node.getAttribute("class") === "source-list" && node.children.length);
+  assert.equal(list.children[0].textContent.includes("100"), true);
+  assert.equal(list.children[0].textContent.includes("Power <img onerror=bad>"), true);
+  const remove = list.children[0].children.find((node) => node.getAttribute("aria-label") === "Remove sensor.power");
+  remove.fire("click");
+  assert.deepEqual(panel.model.value("options", "power_entities"), []);
+  assert.equal(panel.model.dirty, true);
+  panel.disconnectedCallback();
+});
+
+test("RV diagram follows arbitrary draft axles and duals with independent keyboard-accessible positions", async () => {
+  const { panel, root } = await panelFixture();
+  const keys = ["front_left", "front_right",
+    ...["axle_1", "axle_2", "tag_axle"].flatMap((axle) =>
+      ["left", "right"].flatMap((side) => ["inner", "outer"].map((wheel) => `${axle}_${side}_${wheel}`)))];
+  panel.model.schema.tires = keys.map((key) => ({ key, name: key, group: "axle" }));
+  panel.model.setValue("profile", "coach_model", "Keep me");
+  panel.navigate("tires");
+  const wheels = walk(root).filter((node) => node.getAttribute("class")?.startsWith("tire-position"));
+  assert.equal(wheels.length, keys.length);
+  assert.equal(new Set(wheels.map((node) => node.getAttribute("style"))).size, keys.length);
+  assert.ok(wheels.every((node) => node.tagName === "BUTTON" && node.getAttribute("aria-label")));
+  const axleTops = [...new Set(wheels.map((node) =>
+    Number(node.getAttribute("style").match(/top:([\d.]+)%/)[1]) * 280 / 100))].sort((a, b) => a - b);
+  assert.ok(axleTops.at(-1) + 40 <= 280, "wheels must fit the narrow-screen coach");
+  assert.ok(axleTops.slice(1).every((top, index) => top - axleTops[index] >= 40),
+    "maximum axle layout must not overlap on narrow screens");
+  root.getElementById("tire-position-axle_2_right_outer").fire("click");
+  assert.equal(panel.selectedTire, "axle_2_right_outer");
+  assert.equal(root.getElementById(`select-position-${panel.selectedTire}`).getAttribute("aria-pressed"), "true");
+  assert.equal(root.getElementById(`tire-position-${panel.selectedTire}`).getAttribute("aria-pressed"), "true");
+  assert.equal(panel.model.value("profile", "coach_model"), "Keep me");
+  panel.model.schema.tires = [];
+  panel.render();
+  assert.equal(walk(root).filter((node) => node.getAttribute("class")?.startsWith("tire-position")).length, 0);
+  panel.disconnectedCallback();
+});
+
+test("power and tire selectors use icon rows with draft mappings and live availability, not dropdowns", async () => {
+  const { panel, root, api } = await panelFixture();
+  panel.navigate("power");
+  assert.equal(root.getElementById("picker-source"), undefined);
+  const first = root.getElementById("select-source-house_bank_1");
+  assert.equal(first.getAttribute("aria-pressed"), "true");
+  assert.equal(walk(first).find((node) => node.tagName === "HA-ICON").getAttribute("icon"), "mdi:car-battery");
+  assert.equal(first.textContent.includes("1 source mapped"), true);
+  assert.equal(first.textContent.includes("1 unavailable or missing"), true);
+  panel.hass = { ...panel.hass, states: { ...panel.hass.states,
+    "sensor.voltage": { state: "13.2", attributes: { unit_of_measurement: "V" } },
+  } };
+  assert.equal(root.getElementById(first.id), first, "live updates must not rebuild editors");
+  assert.equal(first.textContent.includes("unavailable"), false);
+  const input = root.getElementById("field-power-house_bank_1-voltage");
+  input.value = "input_number.edited"; input.fire("change");
+  root.getElementById(first.id).fire("keydown", { key: "ArrowDown" });
+  assert.equal(panel.selectedPower, "house_bank_2");
+  assert.equal(root.activeElement.id, "select-source-house_bank_2");
+  root.getElementById("select-source-house_bank_2").fire("keydown", { key: "Home" });
+  assert.equal(root.getElementById(input.id).value, "input_number.edited");
+  panel.navigate("tires");
+  assert.equal(root.getElementById("picker-position"), undefined);
+  const tire = root.getElementById("select-position-front_left");
+  assert.equal(walk(tire).find((node) => node.tagName === "HA-ICON").getAttribute("icon"), "mdi:circle-double");
+  assert.equal(tire.getAttribute("aria-pressed"), "true");
+  assert.equal(tire.getAttribute("type"), "button");
+  assert.equal(tire.parentNode.getAttribute("role"), "group");
+  assert.equal(tire.textContent.includes("1 unavailable or missing"), true);
+  assert.equal(root.getElementById("tire-position-front_left").getAttribute("aria-pressed"), "true");
+  panel.hass = { ...panel.hass, states: { ...panel.hass.states,
+    "number.tpms": { state: "112", attributes: { unit_of_measurement: "psi" } },
+  } };
+  assert.equal(root.getElementById(tire.id), tire);
+  assert.equal(tire.textContent.includes("1 source mapped"), true);
+  assert.equal(tire.textContent.includes("unavailable"), false);
+  assert.equal(panel.model.value("power", "voltage", "house_bank_1"), "input_number.edited");
+  assert.equal(api.calls.some((message) => message.type.endsWith("/apply")), false);
+  panel.disconnectedCallback();
+});
+
+test("power selector supports every generated bank and AC source without guessing availability", async () => {
+  const { panel, root } = await panelFixture();
+  panel.model.schema.power.push(
+    { key: "house_bank_3", name: "House bank 3", battery: true, fields: [entity("voltage")] },
+    ...["inverter", "generator", "shore_power"].map((key) => ({ key, name: key, fields: [entity("voltage")] })),
+  );
+  panel.navigate("power");
+  for (const [key, icon] of [
+    ["house_bank_3", "mdi:car-battery"], ["inverter", "mdi:sine-wave"],
+    ["generator", "mdi:engine"], ["shore_power", "mdi:power-plug"],
+  ]) {
+    const row = root.getElementById(`select-source-${key}`);
+    assert.equal(row.textContent.includes("No sources mapped"), true);
+    assert.equal(row.textContent.includes("available"), false);
+    assert.equal(walk(row).find((node) => node.tagName === "HA-ICON").getAttribute("icon"), icon);
+    row.fire("click");
+    assert.equal(panel.selectedPower, key);
+    assert.ok(root.getElementById(`field-power-${key}-voltage`));
+  }
+  assert.equal(panel.model.dirty, false);
+  root.getElementById("select-source-shore_power").fire("keydown", { key: "ArrowDown" });
+  assert.equal(panel.selectedPower, "house_bank_1");
+  root.getElementById("select-source-house_bank_1").fire("keydown", { key: "End" });
+  assert.equal(panel.selectedPower, "shore_power");
+  panel.model.busy = true;
+  panel.render();
+  assert.equal(root.getElementById("select-source-generator").disabled, true);
+  root.getElementById("select-source-generator").fire("keydown", { key: "Home" });
+  assert.equal(panel.selectedPower, "shore_power");
+  panel.disconnectedCallback();
+});
+
+test("overview has descriptive system navigation, scoped registry links and a draft profile summary", async () => {
+  const { panel, root, api } = await panelFixture();
+  panel.model.values.profile.rear_axle_count = "two";
+  panel.model.schema.profile.push({ name: "rear_axle_count", selector: { select: { options: [
+    { value: "two", label: "2, including tag" },
+  ] } } });
+  panel.model.schema.power.push({
+    key: "chassis_bank_1", name: "Chassis bank 1", battery: true, fields: [entity("voltage")],
+  });
+  panel.model.setValue("profile", "coach_model", "Retain this draft");
+  panel.navigate("overview");
+  for (const text of ["Your RV, organized", "Configure your systems", "Your Home Assistant",
+    "Profile name", "Measurement system", "US customary", "2, including tag", "2 / 1",
+    "3 independent battery banks", "1 positions from your draft axle layout",
+    "Fresh, gray and black water"]) assert.equal(root.textContent.includes(text), true, text);
+  assert.equal(walk(root).some((node) => node.getAttribute("href") === "/config/entities?config_entry=entry"), true);
+  assert.equal(walk(root).some((node) => node.getAttribute("href")?.includes("/lovelace")), false);
+  root.getElementById("configure-power").fire("click");
+  assert.equal(panel.section, "power");
+  panel.navigate("overview");
+  root.getElementById("edit-profile").fire("click");
+  assert.equal(panel.section, "profile");
+  panel.navigate("overview");
+  const review = walk(root).find((node) => node.tagName === "BUTTON" &&
+    node.textContent === "Review unavailable source: number.tpms");
+  review.fire("click");
+  assert.equal(panel.section, "tires");
+  assert.equal(panel.selectedTire, "front_left");
+  assert.equal(root.activeElement.id, "field-options--tire_front_left_pressure");
+  assert.equal(panel.model.value("profile", "coach_model"), "Retain this draft");
+  assert.equal(api.calls.length, 1);
+  panel.disconnectedCallback();
+});
+
+test("zero or omitted banks, empty tires and removed selections do not invent mappings or defaults", async () => {
+  const { panel, root, api } = await panelFixture();
+  panel.navigate("power");
+  root.getElementById("select-source-house_bank_2").fire("click");
+  panel.model.values.profile.house_battery_bank_count = 0;
+  panel.model.values.profile.chassis_battery_bank_count = 0;
+  panel.model.schema.power = [{ key: "shore_power", name: "<b>Shore</b>", battery: false, fields: [entity("voltage")] }];
+  panel.render();
+  assert.equal(panel.selectedPower, "shore_power");
+  assert.equal(root.getElementById("select-source-house_bank_2"), undefined);
+  assert.equal(root.getElementById("select-source-shore_power").textContent.includes("<b>Shore</b>"), true);
+  assert.equal(walk(root.getElementById("select-source-shore_power")).some((node) => node.tagName === "B"), false);
+  panel.model.schema.tires = [];
+  panel.navigate("tires");
+  assert.equal(panel.selectedTire, undefined);
+  assert.equal(root.getElementById("select-position-front_left"), undefined);
+  assert.equal(walk(root).filter((node) => node.getAttribute("class") === "tire-position").length, 0);
+  panel.navigate("overview");
+  assert.equal(root.textContent.includes("0 / 0"), true);
+  assert.equal(root.textContent.includes("0 positions"), true);
+  delete panel.model.values.profile.house_battery_bank_count;
+  delete panel.model.values.profile.chassis_battery_bank_count;
+  panel.model.schema.power = snapshot().schema.power.slice(0, 1);
+  panel.model.schema.tires = snapshot().schema.tires;
+  panel.model.schema.profile.find((field) => field.name === "measurement_system").selector.select.options[0].label = "Translated units";
+  panel.render();
+  assert.equal(root.textContent.includes("1 / 0"), true, "summaries follow backend schema defaults, never assumed counts");
+  assert.equal(root.textContent.includes("Translated units"), true);
+  assert.equal(panel.model.value("profile", "house_battery_bank_count"), undefined);
+  assert.equal(panel.model.value("profile", "rear_axle_count"), undefined);
+  assert.equal(api.calls.length, 1);
   panel.disconnectedCallback();
 });
 
