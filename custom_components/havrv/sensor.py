@@ -10,7 +10,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfArea,
+    UnitOfTemperature,
+)
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
@@ -18,8 +23,15 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import (
+    AreaConverter,
+    BaseUnitConverter,
+    DistanceConverter,
     ElectricCurrentConverter,
     ElectricPotentialConverter,
+    MassConverter,
+    PressureConverter,
+    SpeedConverter,
+    TemperatureConverter,
     VolumeConverter,
 )
 
@@ -77,6 +89,16 @@ from .tire import (
 )
 
 PARALLEL_UPDATES = 0
+
+_PROFILE_UNITS: tuple[tuple[type[BaseUnitConverter], str, str], ...] = (
+    (DistanceConverter, "m", "ft"),
+    (VolumeConverter, "L", "gal"),
+    (PressureConverter, "kPa", "psi"),
+    (TemperatureConverter, UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT),
+    (MassConverter, "kg", "lb"),
+    (AreaConverter, UnitOfArea.SQUARE_METERS, UnitOfArea.SQUARE_FEET),
+    (SpeedConverter, "km/h", "mph"),
+)
 
 _PROFILE_SENSOR_DESCRIPTIONS = (
     SensorEntityDescription(
@@ -139,8 +161,8 @@ class HavrvSensor(HavrvSourceEntity, SensorEntity):
         return self.source_name
 
     @property
-    def native_value(self) -> float | str | None:
-        """Return the source sensor state."""
+    def _source_value(self) -> float | str | None:
+        """Return the unconverted source state without fabricating invalid readings."""
         state = self._source_state
         if state is None or not self.available:
             return None
@@ -151,10 +173,43 @@ class HavrvSensor(HavrvSourceEntity, SensorEntity):
         return value if math.isfinite(value) else None
 
     @property
+    def _unit_conversion(self) -> tuple[type[BaseUnitConverter], str, str] | None:
+        """Resolve compatible numeric units using the profile's measurement system."""
+        unit = self.source_attributes.get("unit_of_measurement")
+        if not isinstance(unit, str):
+            return None
+        for converter, metric, customary in _PROFILE_UNITS:
+            if unit in converter.VALID_UNITS:
+                target = (
+                    metric
+                    if self._entry.runtime_data.measurement_system == UNIT_SYSTEM_METRIC
+                    else customary
+                )
+                return converter, unit, target
+        return None
+
+    @property
+    def native_value(self) -> float | str | None:
+        """Convert compatible numeric readings to profile units."""
+        value = self._source_value
+        conversion = self._unit_conversion
+        if isinstance(value, float) and conversion is not None:
+            converter, source, target = conversion
+            return converter.convert(value, source, target)
+        return value
+
+    @property
     def native_unit_of_measurement(self) -> str | None:
-        """Return the source unit."""
+        """Report compatible profile units without changing unsupported units."""
+        if conversion := self._unit_conversion:
+            return conversion[2]
         unit = self.source_attributes.get("unit_of_measurement")
         return unit if isinstance(unit, str) else None
+
+    @property
+    def suggested_unit_of_measurement(self) -> str | None:
+        """Prefer profile units while retaining explicit per-entity overrides."""
+        return conversion[2] if (conversion := self._unit_conversion) else None
 
     @property
     def icon(self) -> str | None:
@@ -219,7 +274,7 @@ class HavrvTankLevelSensor(HavrvSensor):
     @property
     def native_value(self) -> float | str | None:
         """Return the level, converting volumes to the RV profile unit."""
-        value = super().native_value
+        value = self._source_value
         source_unit = self.source_attributes.get("unit_of_measurement")
         if (
             isinstance(value, float)
@@ -232,7 +287,8 @@ class HavrvTankLevelSensor(HavrvSensor):
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Report volumes in the RV profile unit; keep other units unchanged."""
-        unit = super().native_unit_of_measurement
+        source_unit = self.source_attributes.get("unit_of_measurement")
+        unit = source_unit if isinstance(source_unit, str) else None
         return self._profile_unit if unit in VolumeConverter.VALID_UNITS else unit
 
     @property

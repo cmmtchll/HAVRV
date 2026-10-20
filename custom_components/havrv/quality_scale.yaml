@@ -10,13 +10,13 @@ rules:
     comment: HACS-compatible icon asset is present at custom_components/havrv/brand/icon.png.
   common-modules:
     status: done
-    comment: Shared source-entity behavior is centralized in custom_components/havrv/entity.py; independent power-source identities and defaults are shared through custom_components/havrv/power.py.
+    comment: Shared source behavior is centralized in custom_components/havrv/entity.py; native and management configuration use custom_components/havrv/configuration.py and custom_components/havrv/management.py.
   config-flow-test-coverage:
     status: done
-    comment: CI enforces 100% config-flow module coverage with tests/test_config_flow.py.
+    comment: CI enforces 100% coverage of custom_components/havrv/config_flow.py and its extracted custom_components/havrv/configuration.py validators with tests/test_config_flow.py.
   config-flow:
     status: done
-    comment: UI setup flow, field descriptions, config data and options are implemented in custom_components/havrv/config_flow.py and custom_components/havrv/strings.json.
+    comment: Short native setup and recovery flows use custom_components/havrv/config_flow.py; the admin-only gear panel uses custom_components/havrv/panel.py and custom_components/havrv/websocket_api.py with coverage in tests/test_management.py.
   dependency-transparency:
     status: done
     comment: No runtime requirements are declared in custom_components/havrv/manifest.json.

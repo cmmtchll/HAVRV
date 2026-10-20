@@ -18,7 +18,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import Entity
 
 from . import HavrvConfigEntry, _entry_entity_mappings
-from .config_flow import _normalize_options
+from .configuration import _normalize_options
 from .const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
     CONF_FRESH_WATER_TANK_CAPACITY,

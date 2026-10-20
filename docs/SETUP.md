@@ -40,11 +40,11 @@ control RV hardware directly.
 
 1. In Home Assistant, go to **Settings → Devices & services → Add integration**
    and select **HAVRV**.
-2. Enter a unique profile name. Add the optional coach details and
-   specifications that you know; you can leave unknown values blank.
-3. Select the measurement system that matches the values you enter:
-   dimensions use meters or feet, and tank capacities use liters or US gallons.
-4. Select a Home Assistant zone if you want to record the RV's usual storage
+2. Enter a unique profile name and select a measurement system. Finish the
+   short native dialog; no source selections or known specifications are required.
+3. Open the profile's **gear button** on the HAVRV integration page. This opens
+   the admin-only HAVRV management page, not the old options wizard.
+4. In **RV profile**, select a Home Assistant zone if you want to record the RV's usual storage
    location.
 5. If known, enter the number of rear axle assemblies and wheel arrangements.
    The axle count includes a tag axle: one means one main rear axle; two means
@@ -52,10 +52,38 @@ control RV hardware directly.
 6. Enter the number of independent house and chassis battery banks. Each
    defaults to **1**; use **0** if absent. This counts complete banks, not
    individual batteries in series or parallel.
-7. Leave **Configure power sources now** selected to configure each bank,
-   Inverter, Generator, and Shore Power on the following screens. Unknown
-   sources and capacities may remain blank. You can also skip these screens
-   and configure them later in **Options**.
+7. Use **Power** to select any bank, Inverter, Generator, or Shore Power directly.
+   Unknown sources and capacities may remain blank. Use **Tanks**, **Tires** and
+   **System mappings** for the other existing configuration.
+8. Review the profile-wide draft with **Apply changes**, then confirm to save.
+   Switching tabs does not save anything. **Discard** abandons the whole draft.
+
+### The management page and drafts
+
+All existing settings share one draft, including capacities shown in both the
+profile and tank editors. Suggestions are not automatically applied: blank
+optional limits and unknown specifications stay unspecified. Numeric source
+pickers accept `sensor`, `number` and `input_number`; template-backed entities
+appear in their resulting domains. Selectors for controls and on/off states
+retain their domain restrictions.
+
+Applying validates the complete profile and reviews removals, including devices
+affected by reducing bank/axle counts. Original source entities are never
+removed or changed. A saved change reloads HAVRV once; reload resets in-memory
+tire analysis history. Explicit **Saved; reload failed** or an unverified reload
+does not mean persistence failed; check the entry before retrying a save.
+
+Drafts are kept only in the browser's memory. Confirm before leaving with
+unsaved changes. External changes made through a number entity, native flow or
+another browser invalidate an older draft rather than being overwritten.
+Reload saved configuration explicitly before editing again after a conflict.
+Changing measurement systems converts configured dimensions, capacities and
+tire limits to preserve their physical meaning.
+
+The native **Reconfigure** action and options flow remain recovery alternatives.
+The detailed native-flow descriptions below also explain those fallback forms;
+the normal gear destination is the management page. Existing supported profiles
+use their existing storage and entity identities, without recreation for this UI.
 
 The profile can store coach year, chassis manufacturer and make, builder or
 converter and model, coach identifier, overall dimensions, fuel and
@@ -104,8 +132,9 @@ colors. Enabled does not need a Yes/No row. Matching tags associate tire-sized
 equipment graphics with their readouts without crossing callout lines.
 One common legend covers the whole overview.
 
-To edit these settings, select **Edit power-source mappings, specifications and
-placement** in **Options**. All wizard screens must be submitted before changes
+To edit these settings, open **Power** on the management page. In the native
+options fallback, select **Edit power-source mappings, specifications and
+placement**. All fallback wizard screens must be submitted before changes
 are saved; cancelling preserves previous settings. Use **Reconfigure** to change
 bank counts. Reducing a count removes the highest-numbered banks, their HAVRV
 entities, and their saved source configuration. Original source entities are
@@ -117,24 +146,24 @@ submit all screens to save.
 
 ## 3. Map existing system entities
 
-During setup, optionally assign entities to system groups such as power, water,
+In **System mappings**, optionally assign entities to groups such as power, water,
 chassis, climate, and location. Select the entity that actually represents
 each function in your installation; names and entity IDs are not standardized
 across RVs.
 
 System mappings accept:
 
-- `sensor` and `binary_sensor` entities for read-only values and states.
+- `sensor`, `number`, `input_number` and `binary_sensor` entities for read-only values and states.
 - `switch`, `light`, and `climate` entities for mirrored state and supported
   controls.
 
 HAVRV creates an RV device and child devices for groups with mapped entities.
 It does not rename, remove, or take ownership of the original source entities.
-You can leave mappings empty and add them later in the integration's options.
+You can leave mappings empty and add them later on the management page.
 
 ## 4. Optionally configure water tanks
 
-In the integration's **Options**, select an existing sensor for each
+In **Tanks**, select an existing numeric source for each
 fresh-water, gray-water, or black-water tank level you want to expose. Tank
 types are selected explicitly; HAVRV does not infer them from entity names.
 Each selection creates a tank device with a live **Level** sensor. If a
@@ -153,7 +182,7 @@ Tire positions are generated when the profile has a rear axle count. HAVRV
 creates front and rear tire devices according to the configured axle and
 wheel layouts. A tag axle is included when the count is greater than one.
 
-In **Options**, choose an existing pressure, temperature, and/or battery
+In **Tires**, choose an existing pressure, temperature, and/or battery
 sensor for each tire position. Sources may be `sensor`, `number`, or
 `input_number` entities. These are read-only mirrors; HAVRV does not discover
 or control TPMS hardware.

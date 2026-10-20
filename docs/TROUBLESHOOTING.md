@@ -4,10 +4,31 @@ HAVRV mirrors selected Home Assistant entities; start by checking each source
 entity in Home Assistant. If the source itself is missing, unavailable, or
 incorrect, resolve that with the integration that provides it.
 
+## The management gear page is missing or cannot save
+
+Restart Home Assistant after updating HAVRV and refresh the browser. The page
+requires an administrator account and a normally loaded HAVRV entry; it is not
+a sidebar panel. Open it from the intended profile's gear so the entry ID is
+selected correctly. Disabled/error entries retain Home Assistant's native
+recovery actions.
+
+Changes in all sections remain drafts until **Apply changes** and confirmation.
+Validation failures keep the draft and link to the affected section. If saved
+configuration changed elsewhere, an older draft is rejected; inspect the edits,
+then explicitly reload the saved configuration before trying again.
+
+If the connection drops during Apply, re-read the saved profile before retrying:
+the write may have completed. If configuration is saved but reload fails, retry
+the integration reload rather than blindly applying again. The native
+**Reconfigure** action and options flow are recovery alternatives. Do not run
+them expecting to share an unsaved panel draft.
+If the page reports that Home Assistant must restart, restart Home Assistant;
+an acknowledged retry alone does not mean the entry loaded successfully.
+
 ## A mapped entity is missing
 
-Open HAVRV's **Options** and check that the intended entity is selected in the
-correct system group. System mappings accept sensors, binary sensors,
+Open HAVRV's gear page, choose **System mappings** and check that the intended entity is selected in the
+correct system group. System mappings accept sensors, numbers, input-number helpers, binary sensors,
 switches, lights, and climate entities. HAVRV does not discover hardware or
 infer mappings from entity names.
 
@@ -25,8 +46,8 @@ service call; it does not override source permissions or capabilities.
 
 ## A power reading or Charging status is missing
 
-Select **Edit power-source mappings, specifications and placement** in
-**Options** and confirm the mapping for the correct independent bank/device.
+Open **Power** on the management page and confirm the mapping for the correct
+independent bank/device. The same settings remain in the native options fallback.
 Only declared live mappings create entities. Numeric sources must have a
 finite value and a compatible voltage/current unit; unitless helpers are
 interpreted as V/A. Enabled, Charging, Warning, and Problem must report `on` or `off`.
@@ -60,7 +81,7 @@ equipment tags replace callout lines, and the single legend covers all devices.
 
 ## A tank reading, percentage, or status is missing
 
-Check the tank's source selection in **Options** and verify that the source
+Check the tank's source selection in **Tanks** and verify that the source
 reports a usable level. **Percentage** requires a capacity in the RV profile.
 **Status** requires both warning and problem percentages. Tank types are
 selected explicitly; HAVRV does not identify them from entity names.

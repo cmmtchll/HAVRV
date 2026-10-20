@@ -7,7 +7,7 @@ useful, and consistent with Home Assistant's async integration patterns.
 
 - Python `>=3.14.2,<3.15`, matching Home Assistant Core `2026.10.0`.
 - Git.
-- Node.js 20 or later for dashboard tests (already available on CI runners).
+- Node.js 20 or later for dashboard and management-panel tests (available on CI runners).
 
 ## Set up a development environment
 
@@ -32,13 +32,14 @@ ruff check .
 ruff format --check .
 mypy
 pytest
-node --test tests/test_power_dashboard.mjs
-python -m coverage report --include=custom_components/havrv/config_flow.py --fail-under=100
+node --test tests/test_power_dashboard.mjs tests/test_config_panel.mjs
+python -m coverage report --include=custom_components/havrv/config_flow.py,custom_components/havrv/configuration.py --fail-under=100
 python scripts/quality_scale_audit.py
 ```
 
 The pytest configuration enforces at least 96% coverage for the integration.
-The additional coverage report enforces full config-flow module coverage. The
+The additional coverage report enforces full native-flow and shared
+configuration-validator module coverage. The
 quality-scale audit reports every Bronze-through-Platinum rule and whether the
 current checklist assessment marks it done, exempt, or todo. A successful audit
 means the checklist is complete and evidence references are valid; it does not

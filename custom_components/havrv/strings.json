@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add an RV",
-        "description": "Create an RV profile. Vehicle details are optional. Dimensions use meters or feet, and tank capacities use liters or US gallons according to the selected measurement system.",
+        "description": "Create an RV profile with a unique name and measurement system. After setup, open this profile's gear button to configure vehicle details and source mappings. All management-page sections share one draft until Apply changes.",
         "data": {
           "name": "RV profile name",
           "coach_year": "Coach year",

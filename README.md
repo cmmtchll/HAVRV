@@ -32,12 +32,16 @@ choose existing entities, and configure optional tank and tire monitoring.
 
 ## What HAVRV does
 
+- Opens a dedicated management page from the integration entry's gear button,
+  with profile, power, tank, tire and system-mapping editors. Changes across
+  sections stay in one draft until **Apply changes**; no separate frontend
+  installation or YAML is required. Initial setup asks only for a name and units.
 - Keeps coach details, dimensions, tank capacities, axle layout, and wheel
   configuration on an RV device.
 - Exposes editable dimensions, capacities, and tank/tire limits in the main
   RV device's **Configuration** section. Other saved profile details appear
   read-only in **Diagnostics**.
-- Groups selected sensors, binary sensors, switches, lights, and climate
+- Groups selected sensors, numbers, input-number helpers, binary sensors, switches, lights, and climate
   entities under RV system devices. Sensor readings are mirrored; supported
   controls forward actions to their selected source.
 - Optionally creates water-tank devices and tire devices from selected existing

@@ -111,7 +111,8 @@ def source_entities(
         for category, entity_ids in mappings.items()
         if category in SYSTEM_CATEGORIES
         for entity_id in entity_ids
-        if entity_id.split(".", maxsplit=1)[0] == domain
+        if entity_id.split(".", maxsplit=1)[0]
+        in (("sensor", "number", "input_number") if domain == "sensor" else (domain,))
     ]
 
 

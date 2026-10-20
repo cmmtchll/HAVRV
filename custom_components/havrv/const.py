@@ -86,7 +86,15 @@ SYSTEM_CATEGORIES = (
     SYSTEM_OTHER,
 )
 
-SUPPORTED_ENTITY_DOMAINS = ("sensor", "binary_sensor", "switch", "light", "climate")
+SUPPORTED_ENTITY_DOMAINS = (
+    "sensor",
+    "number",
+    "input_number",
+    "binary_sensor",
+    "switch",
+    "light",
+    "climate",
+)
 
 AXLE_COUNT_ONE = "one"
 AXLE_COUNT_TWO = "two"

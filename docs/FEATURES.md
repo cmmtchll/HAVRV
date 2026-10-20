@@ -4,6 +4,16 @@ Use this page as a reference for the entities HAVRV creates and how they
 behave. For installation and configuration steps, see the [setup
 guide](SETUP.md).
 
+## Management page
+
+The integration entry's gear opens a dedicated, admin-only page with Overview,
+RV profile, Power, Tanks, Tires and System mappings. It edits the same config
+entry as native forms and configuration-number entities. All sections share one
+in-memory draft and one **Apply changes** operation, with validation, removal
+review and stale-draft detection. Existing IDs and source ownership are retained.
+The monitoring dashboard is separate and unchanged. Native options/reconfigure
+flows remain available as recovery paths.
+
 ## System entity mappings
 
 HAVRV organizes selected entities beneath the RV device and child devices for
@@ -12,7 +22,8 @@ not poll source entities.
 
 | Source domain | HAVRV behavior |
 | --- | --- |
-| `sensor` | Mirrors the current state, unit, device class, state class, display precision, and icon. Numeric states remain numeric; other available states are exposed as text. |
+| `sensor` | Mirrors the current state and metadata, converting compatible numeric units to the profile system. Other available states are exposed as text. |
+| `number`, `input_number` | Read-only numeric sensor mirrors; no number-setting actions are forwarded. Template numbers and sensors use their actual entity domains. |
 | `binary_sensor` | Mirrors on/off state, device class, and icon. |
 | `switch` | Mirrors state and forwards turn-on, turn-off, and toggle actions to the selected source. |
 | `light` | Mirrors state and color modes and forwards supported Home Assistant light service arguments. |
@@ -21,6 +32,13 @@ not poll source entities.
 If a source is missing, `unknown`, or `unavailable`, its HAVRV mirror is
 unavailable until a usable source state returns. Source integrations remain
 responsible for communicating with and controlling the actual devices.
+
+Generic numeric mirrors convert recognized length, volume, pressure, temperature,
+mass, area and speed units to the profile's metric or US customary units,
+including helpers without a device class. Other units remain passthrough.
+Home Assistant's global unit preference does not replace these profile defaults;
+explicit per-entity display-unit overrides still work. Original source states
+are never modified.
 
 ## RV profile specifications
 
@@ -36,7 +54,7 @@ writing values back to the profile's units.
 Coach year, chassis manufacturer/make, builder/model, coach identifier, storage
 zone, measurement system, rear axle count, wheel configuration, and tag-axle
 presence are read-only sensors in **Diagnostics**. Edit those values with
-**Reconfigure**; axle count and coach year are structural/reference fields,
+**RV profile** on the management page or **Reconfigure**; axle count and coach year are structural/reference fields,
 not quantity inputs.
 
 Configuration also exposes warning/problem percentages for all three water
@@ -67,13 +85,15 @@ On upgrade, main-device dimension and fuel-capacity sensors are replaced by
 `number` entities; update dashboards or automations that used those old
 `sensor` entity IDs. Water-tank capacity sensors remain on the tank devices,
 with editable capacity numbers on the main RV device. Read-only diagnostic
-profile sensor IDs are unchanged. Source selections remain in **Options**.
+profile sensor IDs are unchanged. Source selections are editable on the
+management page or through the native options fallback.
 
 ## Power-source devices
 
 Each RV has independently numbered **House Batteries** and **Chassis Batteries**
 bank devices, plus a logical **Inverter**, **Generator**, and **Shore Power**.
-Bank counts default to one each and can be changed in **Reconfigure**. Each
+Bank counts default to one each and can be changed in **RV profile** on the
+management page or through native **Reconfigure**. Each
 bank is a complete independent unit; HAVRV does not assume its internal wiring.
 
 | Entity | Meaning |
