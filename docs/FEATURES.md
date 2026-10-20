@@ -14,6 +14,27 @@ review and stale-draft detection. Existing IDs and source ownership are retained
 The monitoring dashboard is separate and unchanged. Native options/reconfigure
 flows remain available as recovery paths.
 
+Inputs place their clear action alongside the control. Source names appear
+beside field titles, with live values that open Home Assistant's entity details
+and history dialog without leaving or saving the draft. Multiple mappings have
+an individual value/details action for each selected source. Missing entities
+remain visible; history availability depends on Home Assistant's recorder.
+Live values use Home Assistant's localized entity-state formatting and plain
+theme-colored text, not action-button badges.
+Power and Tires use icon-based selection lists instead of dropdowns, showing
+each bank, supply or tire's draft mapping count and live unavailable-source count.
+Selecting another item never saves or discards the profile-wide draft.
+On small screens the selection rows scroll horizontally rather than becoming a
+dropdown.
+Overview groups links under **Configure your systems**, includes a draft RV
+profile summary, and links to the profile-filtered device/entity registries.
+Its unavailable-source links open the corresponding editor; these describe source
+availability, not an inferred safety or power-supply status.
+The Tires tab includes a clickable RV position diagram generated from the
+draft axle layout, alongside its selection list. Filled wheels indicate the
+selected position; dashed wheels indicate a missing or unavailable mapped source,
+not a vehicle safety assessment.
+
 ## System entity mappings
 
 HAVRV organizes selected entities beneath the RV device and child devices for
