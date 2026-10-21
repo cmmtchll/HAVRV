@@ -830,13 +830,14 @@ const powerTag = (source) =>
       : ({ inverter: "INV", generator: "GEN", shore_power: "SHORE" })[source.key] || source.name;
 
 const POWER_READING_METRICS = ["voltage", "current", "charging"];
+const AC_LINE_METRICS = ["voltage", "current", "frequency", "power"];
 const SHORE_READING_METRICS = [
   "voltage", "current", "frequency", "power",
   "line_2_voltage", "line_2_current", "line_2_frequency", "line_2_power", "energy",
 ];
 const powerMetricLabel = (metric, shore) => {
   if (!shore) return metric[0].toUpperCase() + metric.slice(1);
-  if (metric === "energy") return "Energy";
+  if (metric === "energy" || metric === "enabled") return metric === "energy" ? "Energy" : "Enabled";
   const kind = metric.replace(/^line_2_/, "");
   const label = ({ voltage: "Voltage", current: "Amps", frequency: "Frequency", power: "Watts" })[kind]
     || kind[0].toUpperCase() + kind.slice(1);
@@ -942,13 +943,28 @@ export function layoutPowerBoxes(hass, model, orientation) {
     const shore = source.key === "shore_power";
     const metrics = (shore ? SHORE_READING_METRICS : POWER_READING_METRICS)
       .filter((metric) => source[metric]);
+    const lines = !shore ? []
+      : AC_LINE_METRICS.some((metric) => source[`line_2_${metric}`]) ? ["", "line_2_"]
+        : AC_LINE_METRICS.some((metric) => source[metric]) ? [""] : [];
+    const rows = shore
+      ? AC_LINE_METRICS.map((metric) =>
+        lines.map((prefix) => source[`${prefix}${metric}`] ? `${prefix}${metric}` : undefined))
+        .filter((row) => row.some(Boolean))
+      : metrics.reduce((result, metric, index) => {
+        if (index % 2 === 0) result.push([]);
+        result.at(-1).push(metric);
+        return result;
+      }, []);
+    const sharedMetrics = shore ? ["enabled", "energy"].filter((metric) => source[metric]) : [];
+    if (sharedMetrics.length) rows.push(sharedMetrics);
     const columnWidth = Math.max(75, ...metrics.map((metric) =>
       (state[metric] && typeof state[metric] === "object"
         ? `${state[metric].text} ${state[metric].unit}`.length * 8 + 12 : 75)),
-      ...(shore ? metrics.map((metric) => powerMetricLabel(metric, true).length * 6 + 12) : []));
-    const width = columnWidth * 2 + 6;
+      ...(shore ? metrics.map((metric) => powerMetricLabel(metric, true).replace(/^Line [12] /, "").length * 6 + 12) : []));
+    const width = Math.max(156, columnWidth * (shore ? Math.max(1, lines.length, sharedMetrics.length) : 2) + 6);
     const rowHeight = shore ? 36 : 20;
-    const height = Math.max(52, 24 + Math.ceil(metrics.length / 2) * rowHeight);
+    const headerHeight = lines.length ? 16 : 0;
+    const height = Math.max(52, 24 + headerHeight + rows.length * rowHeight + (sharedMetrics.length ? 20 : 0));
     const depth = vertical ? width : height;
     const anchor = icons.find((icon) => icon.source === source).anchor;
     let distance = TIRE_OUTER + 14 + depth / 2;
@@ -964,7 +980,7 @@ export function layoutPowerBoxes(hass, model, orientation) {
     do {
       for (const offset of [0, -36, 36, -72, 72, -108, 108]) {
         const [cx, cy] = geometry.map(u + offset, side * distance);
-        box = { source, state, metrics, side, anchor, x: cx - width / 2, y: cy - height / 2, width, height, columnWidth, vertical };
+        box = { source, state, metrics, rows, lines, sharedMetrics, headerHeight, side, anchor, x: cx - width / 2, y: cy - height / 2, width, height, columnWidth, vertical };
         if (![...obstacles, ...icons, ...boxes].some((other) => overlaps(box, other))) break;
       }
       distance += depth + 12;
@@ -974,12 +990,14 @@ export function layoutPowerBoxes(hass, model, orientation) {
   return { boxes, icons, obstacles, bounds: drawingBounds(geometry, [...boxes, ...icons, ...obstacles], model) };
 }
 
+function powerReadingValue(metric, value) {
+  if (metric === "enabled") return value === true ? "On" : value === false ? "Off" : STR.noData;
+  if (metric === "charging") return value === true ? "Yes" : value === false ? "No" : STR.noData;
+  return value ? `${value.text} ${value.unit}` : STR.noData;
+}
+
 function powerReadingText(metric, value, shore = false) {
-  const label = powerMetricLabel(metric, shore);
-  const text = metric !== "charging"
-    ? value ? `${value.text} ${value.unit}` : "No data"
-    : value === true ? "Yes" : value === false ? "No" : "No data";
-  return `${label}: ${text}`;
+  return `${powerMetricLabel(metric, shore)}: ${powerReadingValue(metric, value)}`;
 }
 
 /** Draw color-coded, keyboard-accessible source boxes instead of bottom tiles. */
@@ -995,7 +1013,9 @@ export function renderPowerBoxes(hass, layout) {
     </g>`;
   }).join("");
   return icons + layout.boxes.map((box) => {
-    const { source, state, metrics, x, y, width, height, columnWidth } = box;
+    const { source, state, metrics, rows, lines, sharedMetrics, headerHeight, x, y, width, height, columnWidth } = box;
+    const shore = source.key === "shore_power";
+    const sharedY = y + 24 + headerHeight + (rows.length - 1) * 36;
     const name = `${powerTag(source)}: ${source.name}`;
     const status = POWER_STATUS_LABELS[state.level];
     const statusEntity = powerStatusEntity(source, state);
@@ -1010,23 +1030,29 @@ export function renderPowerBoxes(hass, layout) {
         <rect class="hit" x="${x + width - 22}" y="${y}" width="22" height="22"></rect>
         <circle class="dot" cx="${x + width - 11}" cy="${y + 10}" r="4"></circle>
       </g>
-      ${metrics.map((metric, index) => {
-        const shore = source.key === "shore_power";
-        const label = powerMetricLabel(metric, shore);
+      ${lines.map((prefix, column) =>
+        `<text class="chip-label" x="${x + 9 + column * columnWidth}" y="${y + 30}">Line ${prefix ? 2 : 1}</text>`).join("")}
+      ${sharedMetrics.length ? `<path class="shore-divider" d="M${x + 9} ${sharedY} H${x + width - 9}"></path>
+        <text class="chip-label" x="${x + 9}" y="${sharedY + 14}">Combined</text>` : ""}
+      ${!metrics.length && !sharedMetrics.length ? `<text class="small" x="${x + 9}" y="${y + 34}">No readings mapped</text>` : ""}
+      ${rows.map((row, rowIndex) => row.map((metric, column) => {
+        if (!metric) return "";
+        const label = powerMetricLabel(metric, shore).replace(/^Line [12] /, "");
         const text = powerReadingText(metric, state[metric], shore);
-        const rowY = y + (shore ? 47 : 32) + Math.floor(index / 2) * (shore ? 36 : 20);
-        const rowX = x + 9 + (index % 2) * columnWidth;
-        const measurement = metric !== "charging";
+        const rowY = y + (shore ? 47 : 32) + headerHeight + rowIndex * (shore ? 36 : 20)
+          + (sharedMetrics.includes(metric) ? 20 : 0);
+        const rowX = x + 9 + column * columnWidth;
+        const measurement = metric !== "charging" && metric !== "enabled";
         const value = measurement && state[metric]
           ? `<tspan class="mid">${escapeHtml(state[metric].text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state[metric].unit)}</tspan>`
-          : `<tspan class="small row-right">${escapeHtml(measurement ? STR.noData : text)}</tspan>`;
+          : `<tspan class="small row-right">${escapeHtml(measurement ? STR.noData : shore ? powerReadingValue(metric, state[metric]) : text)}</tspan>`;
         return `<g data-entity="${escapeHtml(source[metric])}" tabindex="0" role="button" aria-label="${escapeHtml(`${source.name}: ${text}`)}">
           <title>${escapeHtml(text)}</title>
-          <rect class="hit" x="${rowX - 4}" y="${rowY - 13}" width="${columnWidth - 2}" height="16"></rect>
+          <rect class="hit" x="${rowX - 4}" y="${rowY - (shore ? 29 : 13)}" width="${columnWidth - 2}" height="${shore ? 34 : 16}"></rect>
           ${shore ? `<text class="small" x="${rowX}" y="${rowY - 16}">${escapeHtml(label)}</text>` : ""}
           <text class="power-value" x="${rowX}" y="${rowY}">${value}</text>
         </g>`;
-      }).join("")}
+      }).join("")).join("")}
     </g>`;
   }).join("");
 }
@@ -1117,6 +1143,7 @@ const STYLES = `
   .row-right { font-size: 10px; }
   .dot { fill: var(--lvl); }
   .hit { fill: transparent; }
+  .shore-divider { fill: none; stroke: var(--hv-line); stroke-width: 1; }
   .tank-shell { fill: color-mix(in srgb, var(--tank) 10%, var(--hv-card)); }
   .tank-fill { fill: color-mix(in srgb, var(--tank) 70%, transparent); }
   .tank-frame { fill: none; stroke: color-mix(in srgb, var(--tank) 65%, transparent); stroke-width: 1.5; }

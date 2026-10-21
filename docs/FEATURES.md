@@ -183,6 +183,9 @@ are green when Enabled is on, gray when off, amber/red for Warning/Problem,
 and dashed/unfilled for unknown. They do not infer wiring or supply priority.
 Graphics normally have a tire-comparable 44-unit footprint. The overview omits
 Enabled Yes/No rows and uses one common legend for electrical, tires and tanks.
+Shore Power additionally separates its readings into Line 1 (left) and Line 2
+(right) columns, with mapped Enabled and shared Energy in a divided Combined
+section below. Enabled reports its own source, not the Warning/Problem color.
 HAVRV applies no electrical alert thresholds; [dashboard colors](DASHBOARD.md#electrical-box-colors)
 come only from the declared binary sources.
 

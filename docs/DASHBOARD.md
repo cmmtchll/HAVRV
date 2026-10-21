@@ -45,8 +45,13 @@ The layout follows the RV profile:
   Separate battery, generator, inverter and plug graphics show the equipment
   itself on the coach; the shore plug is outside. Each bank has its own graphic.
   Select a reading or use Tab and Enter/Space to open its details.
-- Shore Power's box labels the mapped **Line 1** and **Line 2** voltage, amps,
-  frequency and watts, followed by one shared **Energy** reading in kWh.
+- Shore Power's box stacks voltage, amps, frequency and watts in a **Line 1**
+  left column and a **Line 2** right column. Missing mappings leave their
+  positions empty rather than moving readings into the other line's column.
+  A divider separates a **Combined** section below the line readings, with
+  the mapped **Enabled** status (On/Off/No data) and one shared **Energy**
+  reading in kWh. Enabled is independent of the Warning/Problem status dot:
+  a known problem can color the box red while Enabled still reports On.
   Only mapped readings appear, and an unavailable reading does not hide other
   readings. Larger boxes reserve enough space in both orientations without
   overlapping other equipment. Generated Shore Power sections include the
