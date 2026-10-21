@@ -21,7 +21,21 @@ from custom_components.havrv.const import (
 from custom_components.havrv.const import (
     UNIT_SYSTEM_METRIC as METRIC,
 )
-from custom_components.havrv.tank import tank_percent, tank_status, thresholds_valid
+from custom_components.havrv.tank import (
+    defined_tanks,
+    tank_percent,
+    tank_status,
+    thresholds_valid,
+)
+
+
+def test_defined_tanks() -> None:
+    """Only capacities and nonempty mappings define tanks, not thresholds."""
+    assert defined_tanks({}, {}) == set()
+    assert defined_tanks(
+        {CONF_FRESH_WATER_TANK_CAPACITY: 0},
+        {"gray_water": "input_number.gray", "black_water": ""},
+    ) == {"fresh_water", "gray_water"}
 
 
 def test_tank_percent() -> None:

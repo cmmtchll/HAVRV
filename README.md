@@ -10,8 +10,10 @@ entity mappings, optional tank-level monitoring, and configurable tire
 monitoring, and an RV overview dashboard. Notifications, integration-specific triggers and conditions, and
 physical-device discovery are not implemented.
 
-**0.3.2:** The bundled dashboard includes location-based electrical readouts,
-equipment graphics, mapped alert colors, and a common status legend.
+**0.4.2:** Clearing a water tank's capacity and level source now removes its
+HAVRV sensors and empty device on reload, including old leftovers, so the
+dashboard shows only defined tanks. Capacity-only tanks and configured tanks
+with unavailable sources remain visible. Original source entities are untouched.
 Update HAVRV, restart Home Assistant, and refresh the browser. Remove old
 manually installed HAVRV dashboard Resources; no separate frontend installation
 is needed. See [dashboard upgrade troubleshooting](docs/TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).

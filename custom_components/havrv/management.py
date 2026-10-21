@@ -48,6 +48,7 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .power import power_sources
+from .tank import defined_tanks
 from .tire import tire_entity_key, tire_positions
 
 
@@ -414,6 +415,15 @@ def validate_values(
         candidate.options[CONF_POWER_SOURCES] = settings
     impacts = [f"power.{key}" for key in sorted(old_sources - {s.key for s in sources})]
     impacts += [f"tires.{key}" for key in sorted(old_positions - active_positions)]
+    impacts += [
+        f"tanks.{tank}"
+        for tank in sorted(
+            defined_tanks(entry.data, entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {}))
+            - defined_tanks(
+                candidate.data, candidate.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
+            )
+        )
+    ]
     for section, before, after in (
         ("options", baseline["options"], typed_values["options"]),
         ("power", baseline["power"], typed_values["power"]),

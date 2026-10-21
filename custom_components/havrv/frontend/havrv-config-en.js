@@ -54,6 +54,8 @@ export const en = {
   impacts: "Configuration impacts", cancel: "Keep editing", confirmApply: "Confirm and apply",
   removePower: "Remove HAVRV power device: {name}",
   removeTire: "Remove HAVRV tire position: {name}",
+  removeTank: "Remove HAVRV tank sensors and empty device: {name}",
+  tankNames: { fresh_water: "Fresh-water tank", gray_water: "Gray-water tank", black_water: "Black-water tank" },
   removeMapping: "Remove HAVRV mapping: {name}",
   beforeAfter: "{before} → {after}", errorSummary: "Configuration needs attention",
   invalidField: "Check this field.", errorField: "{field}: {error}",

@@ -34,6 +34,7 @@ from custom_components.havrv.const import (
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
     CONF_TANK_ENTITY_MAPPINGS,
+    CONF_TANK_THRESHOLDS,
     CONF_TIRE_BATTERY_LOW,
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_THRESHOLDS,
@@ -42,6 +43,7 @@ from custom_components.havrv.const import (
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
 )
+from custom_components.havrv.tank import TANK_DEFINITIONS
 
 DEFAULT_POWER_DEVICE_NAMES = {
     "House Batteries Bank 1",
@@ -977,3 +979,201 @@ async def test_capacity_only_tank_has_all_sensors_and_attaches_later(
         "sensor", DOMAIN, f"{entry.entry_id}_tank_fresh_water_percentage"
     )
     assert hass.states.get(percentage_id).state == "25.0"
+
+
+@pytest.mark.parametrize("tank", TANK_DEFINITIONS)
+async def test_clearing_tank_removes_entities_and_device(
+    hass: HomeAssistant, tank: str
+) -> None:
+    """Remove only the cleared tank and allow it to be configured again."""
+    capacity_key = TANK_DEFINITIONS[tank][1]
+    capacities = {key: 100 for _, key in TANK_DEFINITIONS.values()}
+    mappings = {key: f"input_number.{key}" for key in TANK_DEFINITIONS}
+    for source in mappings.values():
+        hass.states.async_set(source, "50", {"unit_of_measurement": "%"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_NAME: "RV", **capacities},
+        options={CONF_TANK_ENTITY_MAPPINGS: mappings},
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    other = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_NAME: "Other RV", capacity_key: 200},
+        options={CONF_TANK_ENTITY_MAPPINGS: {tank: mappings[tank]}},
+        version=3,
+    )
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    other.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(other.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    devices = dr.async_get(hass)
+    prefix = f"{entry.entry_id}_tank_{tank}_"
+    old_entities = {
+        entity.entity_id
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if entity.unique_id.startswith(prefix)
+    }
+    assert len(old_entities) == 5
+    preserved = {
+        entity.unique_id: entity.entity_id
+        for entity in er.async_entries_for_config_entry(registry, other.entry_id)
+    }
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            CONF_NAME: "RV",
+            **{k: v for k, v in capacities.items() if k != capacity_key},
+        },
+        options={
+            CONF_TANK_ENTITY_MAPPINGS: {k: v for k, v in mappings.items() if k != tank},
+            CONF_TANK_THRESHOLDS: {
+                tank: {"warning": 50, "problem": 25 if tank == "fresh_water" else 75}
+            },
+        },
+    )
+    await hass.async_block_till_done()
+    assert not any(registry.async_get(entity_id) for entity_id in old_entities)
+    assert not any(hass.states.get(entity_id) for entity_id in old_entities)
+    assert (
+        devices.async_get_device_by_identifier(
+            (DOMAIN, f"{entry.entry_id}_tank_{tank}"), entry.entry_id
+        )
+        is None
+    )
+    for remaining in set(TANK_DEFINITIONS) - {tank}:
+        assert devices.async_get_device_by_identifier(
+            (DOMAIN, f"{entry.entry_id}_tank_{remaining}"), entry.entry_id
+        )
+    assert preserved == {
+        entity.unique_id: entity.entity_id
+        for entity in er.async_entries_for_config_entry(registry, other.entry_id)
+    }
+    assert all(hass.states.get(source).state == "50" for source in mappings.values())
+    assert registry.async_get_entity_id(
+        "number", DOMAIN, f"{entry.entry_id}_profile_{capacity_key}"
+    )
+    hass.config_entries.async_update_entry(
+        entry,
+        data={CONF_NAME: "RV", **capacities},
+        options={CONF_TANK_ENTITY_MAPPINGS: mappings},
+    )
+    await hass.async_block_till_done()
+    assert devices.async_get_device_by_identifier(
+        (DOMAIN, f"{entry.entry_id}_tank_{tank}"), entry.entry_id
+    )
+    percentage_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, prefix + "percentage"
+    )
+    assert hass.states.get(percentage_id).state == "50.0"
+
+
+@pytest.mark.parametrize("tank", TANK_DEFINITIONS)
+@pytest.mark.parametrize("remaining", ["capacity", "source"])
+async def test_partially_cleared_tank_retains_identity(
+    hass: HomeAssistant, tank: str, remaining: str
+) -> None:
+    """Keep configured tanks, including unavailable sources, without stale capacity."""
+    capacity_key = TANK_DEFINITIONS[tank][1]
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_NAME: "RV", capacity_key: 100},
+        options={CONF_TANK_ENTITY_MAPPINGS: {tank: "number.level"}},
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    devices = dr.async_get(hass)
+    device = devices.async_get_device_by_identifier(
+        (DOMAIN, f"{entry.entry_id}_tank_{tank}"), entry.entry_id
+    )
+    prefix = f"{entry.entry_id}_tank_{tank}_"
+    level_id = registry.async_get_entity_id("sensor", DOMAIN, prefix + "level")
+    capacity_id = registry.async_get_entity_id("sensor", DOMAIN, prefix + "capacity")
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            CONF_NAME: "RV",
+            **({capacity_key: 100} if remaining == "capacity" else {}),
+        },
+        options={
+            CONF_TANK_ENTITY_MAPPINGS: {tank: "number.level"}
+            if remaining == "source"
+            else {}
+        },
+    )
+    await hass.async_block_till_done()
+    assert devices.async_get(device.id) == device
+    assert registry.async_get_entity_id("sensor", DOMAIN, prefix + "level") == level_id
+    assert hass.states.get(level_id).state == "unavailable"
+    assert (registry.async_get(capacity_id) is not None) == (remaining == "capacity")
+    if remaining == "source":
+        hass.states.async_set("number.level", "invalid")
+        await hass.async_block_till_done()
+        percentage_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, prefix + "percentage"
+        )
+        assert hass.states.get(percentage_id).state == "unavailable"
+        assert devices.async_get(device.id) == device
+        for value, expected in (("unavailable", "unavailable"), ("50", "50.0")):
+            hass.states.async_set("number.level", value, {"unit_of_measurement": "%"})
+            await hass.async_block_till_done()
+            assert hass.states.get(level_id).state == expected
+        hass.config_entries.async_update_entry(
+            entry, options={CONF_TANK_ENTITY_MAPPINGS: {tank: "sensor.replacement"}}
+        )
+        await hass.async_block_till_done()
+        assert devices.async_get(device.id) == device
+        assert (
+            registry.async_get_entity_id("sensor", DOMAIN, prefix + "level") == level_id
+        )
+
+
+@pytest.mark.parametrize("protected", ["none", "entity", "shared"])
+async def test_setup_cleans_legacy_tank_registry(
+    hass: HomeAssistant, protected: str
+) -> None:
+    """Repair old orphaned tanks while preserving unrelated entities and ownership."""
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_NAME: "RV"}, version=3)
+    entry.add_to_hass(hass)
+    devices = dr.async_get(hass)
+    device = devices.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_tank_gray_water")},
+    )
+    registry = er.async_get(hass)
+    old = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}_tank_gray_water_level",
+        config_entry=entry,
+        device_id=device.id,
+    )
+    if protected == "entity":
+        unrelated = registry.async_get_or_create(
+            "sensor",
+            "other",
+            f"{entry.entry_id}_tank_gray_water_custom",
+            config_entry=entry,
+            device_id=device.id,
+        )
+    elif protected == "shared":
+        other = MockConfigEntry(domain="other")
+        other.add_to_hass(hass)
+        other_device = devices.async_get_or_create(
+            config_entry_id=other.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_tank_gray_water")},
+        )
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert registry.async_get(old.entity_id) is None
+    assert (devices.async_get(device.id) is not None) == (protected == "entity")
+    if protected == "entity":
+        assert registry.async_get(unrelated.entity_id)
+    elif protected == "shared":
+        assert devices.async_get(other_device.id)

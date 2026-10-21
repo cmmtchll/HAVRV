@@ -1064,6 +1064,19 @@ test("global Apply opens review, disables repeated saves and writes only after c
   panel.disconnectedCallback();
 });
 
+test("tank removal review names the device and sensors rather than a source mapping", async () => {
+  const { panel, root } = await panelFixture();
+  const pending = panel.review([], ["tanks.fresh_water", "tanks.gray_water", "tanks.black_water"]);
+  const dialog = walk(root).find((node) => node.tagName === "DIALOG");
+  for (const name of ["Fresh-water tank", "Gray-water tank", "Black-water tank"]) {
+    assert.ok(dialog.textContent.includes(`Remove HAVRV tank sensors and empty device: ${name}`));
+  }
+  assert.ok(!dialog.textContent.includes("Remove HAVRV mapping: tanks."));
+  findText(dialog, "button", "Keep editing").fire("click");
+  assert.equal(await pending, false);
+  panel.disconnectedCallback();
+});
+
 test("restart-needed outcome is shown explicitly rather than as loaded or generic failure", async () => {
   const { panel, root } = await panelFixture({
     reload: async () => ({ loaded: false, restart_required: true }),

@@ -26,6 +26,10 @@ The layout follows the RV profile:
   Tight labels can omit the pressure unit or compact the temperature rather than
   moving it to a second line. Missing measurements show no data independently.
 - Only the fresh, gray, and black water tanks that you configured are drawn.
+  A capacity or level source defines a tank; thresholds alone do not. Clear
+  both capacity and source and apply changes to remove it from the overview
+  and generated tank sections. Configured tanks with unavailable sources stay
+  visible as **No data**; empty leftover devices are ignored.
 - Optionally placed house/chassis banks, Inverter and Generator have readout
   boxes beside their selected left/right front/mid/rear regions, like tire
   labels. Matching equipment tags identify the graphic and its box without

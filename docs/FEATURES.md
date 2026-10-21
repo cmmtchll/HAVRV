@@ -176,17 +176,27 @@ come only from the declared binary sources.
 ## Water-tank entities
 
 Fresh-, gray-, and black-water level mappings are optional and selected
-explicitly. Each selected source creates a tank device with a **Level** sensor;
-a configured capacity adds **Capacity** and **Percentage** sensors. HAVRV
-does not infer a tank's type from its source entity ID or name.
+explicitly. A saved capacity or selected source defines a tank device with
+**Level**, **Percentage**, **Status**, and a history sensor; a capacity adds
+**Capacity**. Without a usable source, readings stay unavailable. Percentage
+sources work without a capacity; volume sources need a compatible capacity to
+derive percentage. HAVRV does not infer a tank's type from its source entity ID
+or name.
 
-When both warning and problem percentages are configured, the tank also gets a
-**Status** sensor (`ok`, `warning`, or `problem`). Fresh-water thresholds are
+The **Status** sensor (`ok`, `warning`, or `problem`) uses the configured
+warning/problem pair, or the advisory defaults (fresh: 50%/25%; gray/black:
+50%/75%). Fresh-water thresholds are
 direction-aware for falling levels; gray- and black-water thresholds are
 direction-aware for rising levels. **Last filled** (fresh water) or **Last
 emptied** (gray/black water) records a crossing of fixed 95% / 5% boundaries.
 That timestamp is restored after restart, and the first reading after startup
 does not create an event. Fuel-level devices are not implemented.
+
+Clearing both capacity and source removes that tank's HAVRV sensors and empty
+device on reload. Existing orphaned tanks are cleaned on setup too. Thresholds
+alone do not define tanks, while temporary source outages never remove a defined
+tank. Original sources and unrelated entities are preserved; a device with
+unrelated entities or another config entry is retained.
 
 ## Operations device
 

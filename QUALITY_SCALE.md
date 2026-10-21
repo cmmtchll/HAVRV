@@ -37,6 +37,10 @@ implemented integration behavior, not just repository configuration.
   devices, plus percentage, optional direction-aware threshold status, and
   last-filled/last-emptied history sensors. Fuel-level devices are not
   implemented.
+- Tank lifecycle reconciliation removes obsolete HAVRV tank sensors and empty
+  devices when capacity and source are both cleared, including old leftovers
+  on setup. Capacity-only/source-only tanks remain supported, and unavailable
+  sources do not remove configured tanks.
 - An Operations device with a restorable operation-mode selector. The mode
   does not yet change problem detection.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.

@@ -73,7 +73,13 @@ from .power import (
     power_settings,
     power_sources,
 )
-from .tank import STATUS_OPTIONS, TANK_DEFINITIONS, tank_percent, tank_status
+from .tank import (
+    STATUS_OPTIONS,
+    TANK_DEFINITIONS,
+    defined_tanks,
+    tank_percent,
+    tank_status,
+)
 from .tire import (
     HavrvTireEntity,
     TireMonitorGroup,
@@ -873,7 +879,10 @@ def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
     """Create tank devices from configured capacities and mapped level sources."""
     mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
     entities: list[Entity] = []
+    active_tanks = defined_tanks(entry.data, mappings)
     for tank in TANK_TYPES:
+        if tank not in active_tanks:
+            continue
         name, capacity_key = TANK_DEFINITIONS[tank]
         capacity = entry.data.get(capacity_key)
         if capacity is not None:
@@ -881,8 +890,6 @@ def _tank_entities(entry: HavrvConfigEntry) -> list[Entity]:
                 HavrvTankCapacitySensor(entry, tank, name, capacity_key, capacity)
             )
         source_entity_id = mappings.get(tank)
-        if capacity is None and source_entity_id is None:
-            continue
         entities.append(HavrvTankLevelSensor(entry, tank, name, source_entity_id))
 
         def derived(key: str, translation_key: str) -> SensorEntityDescription:
