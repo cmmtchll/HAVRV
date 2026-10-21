@@ -801,6 +801,7 @@ export class HavrvConfigPanel extends HTMLElement {
           const tire = this.model.snapshot.schema.tires?.find((item) => impact === `tires.${item.key}`);
           const label = source ? t("removePower", { name: source.name })
             : tire ? t("removeTire", { name: tire.name })
+            : impact.startsWith("tanks.") ? t("removeTank", { name: t(`tankNames.${impact.slice(6)}`) })
             : t("removeMapping", { name: impact.replace(/^(options|power)\./, "") });
           warnings.append(element("li", label));
         });

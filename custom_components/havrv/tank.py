@@ -1,5 +1,7 @@
 """Helpers for derived tank values."""
 
+from collections.abc import Mapping
+
 from homeassistant.util.unit_conversion import VolumeConverter
 
 from .const import (
@@ -21,6 +23,15 @@ TANK_DEFINITIONS = {
 
 STATUS_OK = "ok"
 STATUS_OPTIONS = (STATUS_OK, TANK_WARNING, TANK_PROBLEM)
+
+
+def defined_tanks(data: Mapping[str, object], mappings: Mapping[str, str]) -> set[str]:
+    """Return tanks with a saved capacity or a mapped level source."""
+    return {
+        tank
+        for tank, (_, capacity_key) in TANK_DEFINITIONS.items()
+        if data.get(capacity_key) is not None or mappings.get(tank)
+    }
 
 
 def tank_percent(

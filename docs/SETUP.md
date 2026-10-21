@@ -7,7 +7,7 @@ control RV hardware directly.
 
 ## Before you start
 
-- For 0.3.2 updates, restart Home Assistant and refresh the browser after
+- For 0.4.2 updates, restart Home Assistant and refresh the browser after
   installing. Remove old manually added HAVRV dashboard Resources; the
   integration supplies the frontend automatically.
 - Make sure Home Assistant is running and the integrations that provide your
@@ -168,7 +168,18 @@ fresh-water, gray-water, or black-water tank level you want to expose. Tank
 types are selected explicitly; HAVRV does not infer them from entity names.
 Each selection creates a tank device with a live **Level** sensor. If a
 capacity is saved in the RV profile, the tank device also shows **Capacity**
-and a calculated **Percentage**.
+and a calculated **Percentage**. A capacity alone also defines a tank; its
+readings remain unavailable until a level source is selected. A percentage
+source does not need a capacity to provide **Percentage**.
+
+To remove a tank, clear **both its capacity and level source** and apply the
+changes. HAVRV removes its generated tank sensors and empty device during the
+reload, including leftovers from earlier versions. Thresholds alone do not
+keep a tank defined. Original source entities and their devices are never
+removed. Main-RV configuration controls remain available to add it again.
+Device customizations may need restoring after re-adding a tank, and automations
+referencing removed HAVRV entities or devices may need updating. This is not
+a recorder-history purge.
 
 You may set warning and problem percentages for a tank, but both thresholds
 must be set together. Fresh water warns as the level falls; gray and black

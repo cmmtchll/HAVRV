@@ -130,6 +130,33 @@ def test_unit_switch_converts_exactly_once(units):
     assert again.options == result.options
 
 
+@pytest.mark.parametrize("capacity", [False, True])
+@pytest.mark.parametrize("source", [False, True])
+def test_tank_removal_impacts_follow_definition(capacity, source):
+    """Confirm tank removal only after the final defining field is cleared."""
+    entry = profile_entry()
+    values = editable_values(entry, "metric")
+    if not capacity:
+        values["profile"].pop("fresh_water_tank_capacity")
+    if not source:
+        values["options"].pop("fresh_water_tank_level")
+    _, _, errors, impacts = validate_values(entry, values, "metric")
+    assert not errors
+    assert ("tanks.fresh_water" in impacts) == (not capacity and not source)
+
+
+def test_capacity_only_tank_removal_impact():
+    """Removing a tank without a mapped source still requires confirmation."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"name": "RV", "gray_water_tank_capacity": 100}, version=3
+    )
+    values = editable_values(entry, "metric")
+    values["profile"].pop("gray_water_tank_capacity")
+    _, _, errors, impacts = validate_values(entry, values, "metric")
+    assert not errors
+    assert impacts == ["tanks.gray_water"]
+
+
 def test_layout_reduction_prunes_only_havrv_settings():
     """Reduced axle/bank counts produce impacts and drop inactive per-device data."""
     entry = profile_entry()
@@ -374,6 +401,65 @@ async def test_websocket_get_validate_and_apply(hass, hass_ws_client, management
     assert entry.options["custom_option"] == {"preserve": True}
 
 
+async def test_applying_tank_removal_reloads_and_cleans_registry(hass, hass_ws_client):
+    """Apply the user's cleared tank through the real management/reload path."""
+    source_entry = MockConfigEntry(domain="input_number")
+    source_entry.add_to_hass(hass)
+    devices = dr.async_get(hass)
+    source_device = devices.async_get_or_create(
+        config_entry_id=source_entry.entry_id,
+        identifiers={("input_number", "gray_source")},
+    )
+    registry = er.async_get(hass)
+    source = registry.async_get_or_create(
+        "input_number",
+        "input_number",
+        "gray_source",
+        config_entry=source_entry,
+        device_id=source_device.id,
+    )
+    hass.states.async_set(source.entity_id, "50", {"unit_of_measurement": "%"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "RV", "gray_water_tank_capacity": 100},
+        options={"tank_entity_mappings": {"gray_water": source.entity_id}},
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    tank = devices.async_get_device_by_identifier(
+        (DOMAIN, f"{entry.entry_id}_tank_gray_water"), entry.entry_id
+    )
+    assert tank
+    values = editable_values(entry, "metric")
+    values["profile"].pop("gray_water_tank_capacity")
+    values["options"].pop("gray_water_tank_level")
+    client = await hass_ws_client(hass)
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "havrv/config/apply",
+            "entry_id": entry.entry_id,
+            "revision": revision(entry),
+            "values": values,
+            "confirm_impacts": True,
+        }
+    )
+    response = await client.receive_json()
+    assert response["success"], response
+    await hass.async_block_till_done()
+    assert hass.data["havrv_management_reload"][entry.entry_id] == "loaded"
+    assert devices.async_get(tank.id) is None
+    assert not any(
+        entity.unique_id.startswith(f"{entry.entry_id}_tank_")
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+    )
+    assert registry.async_get(source.entity_id) == source
+    assert devices.async_get(source_device.id) == source_device
+    assert hass.states.get(source.entity_id).state == "50"
+
+
 @pytest.mark.parametrize("command", ["get", "validate", "apply", "reload"])
 async def test_websocket_admin_required(
     hass, hass_ws_client, hass_read_only_access_token, command
@@ -399,6 +485,7 @@ async def test_websocket_admin_required(
         ("stale", "conflict"),
         ("invalid", "invalid_config"),
         ("impact", "confirmation_required"),
+        ("tank", "confirmation_required"),
     ],
 )
 async def test_apply_rejects_without_writes(
@@ -426,6 +513,9 @@ async def test_apply_rejects_without_writes(
         msg["revision"] = "stale"
     elif case == "invalid":
         values["profile"]["overall_length"] = -1
+    elif case == "tank":
+        values["profile"].pop("fresh_water_tank_capacity")
+        values["options"].pop("fresh_water_tank_level")
     else:
         values["profile"]["house_battery_bank_count"] = 1
     client = await hass_ws_client(hass)

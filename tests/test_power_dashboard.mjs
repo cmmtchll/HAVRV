@@ -389,6 +389,50 @@ function completeFixture() {
   return { hass, rv, model: buildModel(hass, rv) };
 }
 
+test("empty tank devices disappear from the card and strategies, not unavailable tanks", async () => {
+  const { hass, rv } = completeFixture();
+  const card = new HavrvRvCard();
+  card.setConfig({ device_id: rv.id });
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /class="tank gray_water /);
+  const grayDevice = "device_tank_gray_water";
+  const grayIds = Object.values(hass.entities)
+    .filter((entry) => entry.device_id === grayDevice).map((entry) => entry.entity_id);
+  for (const id of grayIds) hass.states[id].state = "unavailable";
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /class="tank gray_water offline/);
+  assert.equal(buildModel(hass, rv).tanks.length, 3);
+  const before = summarize(hass, buildModel(hass, rv)).offline;
+  hass.entities = Object.fromEntries(Object.entries(hass.entities).filter(([id]) => !grayIds.includes(id)));
+  for (const id of grayIds) delete hass.states[id];
+  // The device may linger if another integration has attached an entity to it.
+  hass.entities["sensor.unrelated"] = {
+    entity_id: "sensor.unrelated", platform: "other", device_id: grayDevice, translation_key: "tank_level",
+  };
+  hass.entities["sensor.custom_gray"] = {
+    entity_id: "sensor.custom_gray", platform: "havrv", device_id: grayDevice, translation_key: "custom",
+  };
+  card.hass = hass;
+  const model = buildModel(hass, rv);
+  assert.deepEqual(model.tanks.map((tank) => tank.type), ["fresh_water", "black_water"]);
+  assert.equal(summarize(hass, model).offline, before - 1);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="tank gray_water /);
+  for (const view of [
+    rvView(hass, rv),
+    await HavrvViewStrategy.generate({ device_id: rv.id }, hass),
+    (await HavrvDashboardStrategy.generate({ device_id: rv.id }, hass)).views[0],
+  ]) {
+    assert.doesNotMatch(JSON.stringify(view), /sensor\.tank_gray_water_/);
+  }
+  hass.entities = Object.fromEntries(Object.entries(hass.entities)
+    .filter(([, entry]) => !entry.device_id?.startsWith("device_tank_")));
+  card.hass = hass;
+  assert.equal(buildModel(hass, rv).tanks.length, 0);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="tank /);
+  const view = await HavrvViewStrategy.generate({ device_id: rv.id }, hass);
+  assert.ok(!view.sections.some((section) => section.cards.some((item) => item.heading === "Tanks")));
+});
+
 test("all display classes declare shared true defaults, readable labels and editor fields", () => {
   const form = HavrvRvCard.getConfigForm();
   const schema = form.schema.find((field) => field.type === "grid").schema;

@@ -43,7 +43,7 @@ from .const import (
 from .dashboard import async_register_frontend
 from .panel import async_register_management_panel
 from .power import POWER_BINARY_METRICS, power_sources
-from .tank import TANK_DEFINITIONS
+from .tank import TANK_DEFINITIONS, defined_tanks
 from .tire import tire_positions
 from .websocket_api import async_register_commands, async_reload_profile
 
@@ -149,8 +149,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
             via_device_id=rv_device.id,
         )
     tank_mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
-    for tank, (tank_name, capacity_key) in TANK_DEFINITIONS.items():
-        if data.get(capacity_key) is not None or tank in tank_mappings:
+    active_tanks = defined_tanks(data, tank_mappings)
+    for tank, (tank_name, _capacity_key) in TANK_DEFINITIONS.items():
+        if tank in active_tanks:
             device_registry.async_get_or_create(
                 config_entry_id=entry.entry_id,
                 identifiers={(DOMAIN, f"{entry.entry_id}_tank_{tank}")},
@@ -235,6 +236,24 @@ def _remove_stale_entities_and_devices(
     """Remove registry entries and child devices no longer in the profile."""
     entity_registry = er.async_get(hass)
     device_registry = dr.async_get(hass)
+    active_tanks = defined_tanks(
+        entry.data, entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
+    )
+    active_tank_ids = {
+        f"{entry.entry_id}_tank_{tank}_{metric}"
+        for tank in active_tanks
+        for metric in (
+            "level",
+            "percentage",
+            "status",
+            "last_filled" if tank == "fresh_water" else "last_emptied",
+            *(
+                ["capacity"]
+                if entry.data.get(TANK_DEFINITIONS[tank][1]) is not None
+                else []
+            ),
+        )
+    }
     active_power_sources = {
         source.key: entry.options.get(CONF_POWER_SOURCES, {}).get(source.key, {})
         for source in power_sources(entry.data)
@@ -261,6 +280,12 @@ def _remove_stale_entities_and_devices(
     for registry_entry in er.async_entries_for_config_entry(
         entity_registry, entry.entry_id
     ):
+        if registry_entry.platform != DOMAIN:
+            continue
+        is_stale_tank = (
+            registry_entry.unique_id.startswith(f"{entry.entry_id}_tank_")
+            and registry_entry.unique_id not in active_tank_ids
+        )
         is_stale_mapping = any(
             registry_entry.unique_id.startswith(f"{entry.entry_id}_{category}_")
             and registry_entry.unique_id not in active_mapping_ids
@@ -319,6 +344,7 @@ def _remove_stale_entities_and_devices(
             or is_moved_capacity
             or is_replaced_specification
             or is_stale_limit
+            or is_stale_tank
         ):
             entity_registry.async_remove(registry_entry.entity_id)
 
@@ -330,6 +356,12 @@ def _remove_stale_entities_and_devices(
                 if (
                     identifier.removeprefix(f"{entry.entry_id}_source_")
                     in active_power_sources
+                ):
+                    continue
+            elif identifier.startswith(f"{entry.entry_id}_tank_"):
+                if (
+                    identifier.removeprefix(f"{entry.entry_id}_tank_") in active_tanks
+                    or device.config_entry_id != entry.entry_id
                 ):
                     continue
             elif identifier.startswith(f"{entry.entry_id}_tire_"):

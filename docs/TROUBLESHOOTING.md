@@ -82,9 +82,25 @@ equipment tags replace callout lines, and the single legend covers all devices.
 ## A tank reading, percentage, or status is missing
 
 Check the tank's source selection in **Tanks** and verify that the source
-reports a usable level. **Percentage** requires a capacity in the RV profile.
-**Status** requires both warning and problem percentages. Tank types are
+reports a usable level. Volume sources require a compatible capacity to derive
+**Percentage**; percentage sources do not. **Status** uses the configured
+warning/problem pair or advisory defaults. Tank types are
 selected explicitly; HAVRV does not identify them from entity names.
+
+## A cleared tank still appears
+
+Clear both the tank's capacity and its level source in **Tanks**, then apply
+changes. Either field keeps a tank defined; warning/problem thresholds do not.
+In 0.4.2 and later, setup/reload removes obsolete HAVRV tank sensors and empty
+devices, including leftovers from older versions. After upgrading, restart Home
+Assistant and refresh the browser. An unavailable source is not a removed tank.
+
+Source entities are never deleted. A tank device with unrelated entities or
+another config entry is retained, but does not appear as a tank when it has no
+HAVRV tank sensors. Removal may require updating automations referencing the
+removed HAVRV entities/device; re-adding may require restoring customizations.
+Manually authored dashboard cards with explicit entity IDs must be edited
+manually. Recorder history is not explicitly purged.
 
 ## The operation mode is unknown
 

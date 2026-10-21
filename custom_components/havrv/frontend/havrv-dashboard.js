@@ -262,10 +262,12 @@ export function buildModel(hass, rv) {
       });
     } else if (part.startsWith("tank_")) {
       const type = part.slice("tank_".length);
+      const roles = entityRoles(entries, TANK_ROLES);
+      if (!Object.keys(roles).length) continue;
       model.tanks.push({
         type,
         name: device.name_by_user || STR.tankLabels[type] || deviceName(device),
-        ...entityRoles(entries, TANK_ROLES),
+        ...roles,
       });
     } else if (part.startsWith("source_")) {
       const key = part.slice("source_".length);

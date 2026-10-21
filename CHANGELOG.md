@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.4.2
+
+- Remove HAVRV tank sensors and empty tank devices when both capacity and level
+  source are cleared. Repair leftovers from older versions on setup/reload.
+- Keep capacity-only and source-only tanks, including unavailable sources;
+  thresholds alone do not define a tank. Remove stale capacity sensors when
+  the capacity is cleared but a source remains.
+- Exclude empty leftover tank devices from the dashboard and generated views.
+  Include tank removal in the management page's impact confirmation.
+- Preserve source entities, other RV profiles, and unrelated device entities.
+  Re-adding a removed tank may require restoring device customizations and
+  updating automations referencing the removed HAVRV device or entities.
+
 ## 0.3.2
 
 - Keep tire pressure and temperature on the same line for both single and dual
