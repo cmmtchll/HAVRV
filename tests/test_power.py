@@ -21,8 +21,134 @@ from custom_components.havrv.diagnostics import async_get_config_entry_diagnosti
 from custom_components.havrv.power import (
     HavrvPowerSourceEntity,
     PowerSource,
+    power_settings,
     power_sources,
 )
+
+SHORE_READINGS = {
+    "voltage": ("120000", "mV", "120.0", "V"),
+    "current": ("35000", "mA", "35.0", "A"),
+    "frequency": ("0.06", "kHz", "60.0", "Hz"),
+    "power": ("4.16", "kW", "4160.0", "W"),
+    "line_2_voltage": ("119", "V", "119.0", "V"),
+    "line_2_current": ("27", "A", "27.0", "A"),
+    "line_2_frequency": ("60000", "mHz", "60.0", "Hz"),
+    "line_2_power": ("3280", "W", "3280.0", "W"),
+    "energy": ("2600", "Wh", "2.6", "kWh"),
+}
+
+
+@pytest.mark.parametrize("domain", ["sensor", "number", "input_number"])
+@pytest.mark.parametrize("profile_system", ["metric", "us_customary"])
+async def test_two_shore_lines_and_shared_energy(
+    hass: HomeAssistant, domain: str, profile_system: str
+) -> None:
+    """Map all shore readings independently and honor physical meter resets."""
+    hass.config.units = (
+        US_CUSTOMARY_SYSTEM if profile_system == "metric" else METRIC_SYSTEM
+    )
+    mappings = {}
+    for metric, (value, unit, _, _) in SHORE_READINGS.items():
+        source_id = f"{domain}.template_{metric}"
+        mappings[metric] = source_id
+        hass.states.async_set(source_id, value, {"unit_of_measurement": unit})
+    entry = await _setup(
+        hass,
+        {"shore_power": {"line_count": 2, **mappings}},
+        **{CONF_MEASUREMENT_SYSTEM: profile_system},
+    )
+    entities = _entities(hass, entry)
+    for metric, (_, _, expected, unit) in SHORE_READINGS.items():
+        entity = entities[f"shore_power_{metric}"]
+        state = hass.states.get(entity.entity_id)
+        assert state.state == expected
+        assert state.attributes["unit_of_measurement"] == unit
+        assert state.attributes["state_class"] == (
+            "total_increasing" if metric == "energy" else "measurement"
+        )
+        assert entity.translation_key == f"shore_{metric}"
+        assert entity.device_id == entities["shore_power_energy"].device_id
+        hass.states.async_set(mappings[metric], "1")
+    await hass.async_block_till_done()
+    assert all(
+        hass.states.get(entities[f"shore_power_{metric}"].entity_id).state == "1.0"
+        for metric in SHORE_READINGS
+    )
+    energy_id = entities["shore_power_energy"].entity_id
+    hass.states.async_set(mappings["energy"], "0", {"unit_of_measurement": "kWh"})
+    await hass.async_block_till_done()
+    assert hass.states.get(energy_id).state == "0.0"
+    assert not any(entity.domain == "button" for entity in entities.values())
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(energy_id).state == "0.0"
+
+
+@pytest.mark.parametrize("metric", ["frequency", "power", "energy", "line_2_voltage"])
+@pytest.mark.parametrize(
+    ("value", "unit"),
+    [("unavailable", None), ("nan", None), ("bad", None), ("5", "gal")],
+)
+async def test_new_shore_readings_fail_and_recover(
+    hass: HomeAssistant, metric: str, value: str, unit: str | None
+) -> None:
+    """Invalid sources never become fabricated readings or hide other metrics."""
+    entry = await _setup(
+        hass, {"shore_power": {"line_count": 2, metric: "sensor.reading"}}
+    )
+    entity_id = _entities(hass, entry)[f"shore_power_{metric}"].entity_id
+    assert hass.states.get(entity_id).state == "unavailable"
+    hass.states.async_set("sensor.reading", value, {"unit_of_measurement": unit})
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "unavailable"
+    hass.states.async_set("sensor.reading", "3")
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "3.0"
+
+
+async def test_shore_line_count_lifecycle_and_energy_override(
+    hass: HomeAssistant,
+) -> None:
+    """Keep legacy Line 1 identity, clean Line 2, and respect user unit overrides."""
+    hass.states.async_set("sensor.voltage", "120", {"unit_of_measurement": "V"})
+    hass.states.async_set("sensor.energy", "2", {"unit_of_measurement": "kWh"})
+    entry = await _setup(hass, {"shore_power": {"voltage": "sensor.voltage"}})
+    source = PowerSource("shore_power", "Shore Power")
+    assert power_settings(entry, source)["line_count"] == 1
+    voltage_id = _entities(hass, entry)["shore_power_voltage"].entity_id
+    for count in (2, 1):
+        hass.config_entries.async_update_entry(
+            entry,
+            options={
+                CONF_POWER_SOURCES: {
+                    "shore_power": {
+                        "line_count": count,
+                        "voltage": "sensor.voltage",
+                        "line_2_voltage": "sensor.voltage",
+                        "energy": "sensor.energy",
+                    }
+                }
+            },
+        )
+        await hass.async_block_till_done()
+        entities = _entities(hass, entry)
+        assert entities["shore_power_voltage"].entity_id == voltage_id
+        assert ("shore_power_line_2_voltage" in entities) == (count == 2)
+    energy = entities["shore_power_energy"]
+    er.async_get(hass).async_update_entity_options(
+        energy.entity_id, "sensor", {"unit_of_measurement": "Wh"}
+    )
+    await hass.async_block_till_done()
+    hass.states.async_set("sensor.energy", "3", {"unit_of_measurement": "kWh"})
+    await hass.async_block_till_done()
+    assert hass.states.get(energy.entity_id).state == "3000.0"
+    hass.states.async_set("sensor.energy", "-1", {"unit_of_measurement": "kWh"})
+    await hass.async_block_till_done()
+    assert hass.states.get(energy.entity_id).state == "unavailable"
+    hass.config_entries.async_update_entry(entry, options={CONF_POWER_SOURCES: {}})
+    await hass.async_block_till_done()
+    assert "shore_power_energy" not in _entities(hass, entry)
+    assert power_settings(entry, source)["line_count"] == 2
 
 
 async def _setup(

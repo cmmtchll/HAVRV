@@ -56,6 +56,11 @@ choose existing entities, and configure optional tank and tire monitoring.
   and capacity, read-only voltage/current/Enabled/Charging and optional
   Warning/Problem sources, and optional
   physical placement. See [power sources](docs/FEATURES.md#power-source-devices).
+- Maps one or two shore-power AC lines (two by default for new configurations),
+  with optional voltage, amps, frequency and watts per line and one shared kWh
+  energy source. Existing single-line mappings stay on Line 1 until expanded.
+  Hughes Watchdog readings can come from its existing Home Assistant entities;
+  HAVRV does not connect to the meter or reset its energy counter.
 - Includes an RV overview card and a generated RV dashboard. They draw the
   configured axles, single or dual wheels, and water tanks with live readings
   and status colors.

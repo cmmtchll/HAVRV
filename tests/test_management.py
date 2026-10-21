@@ -78,6 +78,55 @@ def test_noop_does_not_populate_defaults(minimal):
     assert values == before
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_shore_editor_default_and_line_count_changes(legacy):
+    """Share defaults, active fields and removal semantics with native options."""
+    entry = profile_entry()
+    if legacy:
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            version=3,
+            data=dict(entry.data),
+            options={
+                **entry.options,
+                "power_sources": {
+                    **entry.options["power_sources"],
+                    "shore_power": {"voltage": "sensor.legacy"},
+                },
+            },
+        )
+    values = editable_values(entry, "metric")
+    schema = editor_schema(Candidate(dict(entry.data), dict(entry.options)), "metric")
+    shore = next(source for source in schema["power"] if source["key"] == "shore_power")
+    count = next(field for field in shore["fields"] if field["name"] == "line_count")
+    assert count["suggested_value"] == (1 if legacy else 2)
+    values["power"].setdefault("shore_power", {})["energy"] = "sensor.energy"
+    candidate, _, errors, _ = validate_values(entry, values, "metric")
+    assert not errors
+    assert candidate.options["power_sources"]["shore_power"]["line_count"] == (
+        1 if legacy else 2
+    )
+    values["power"]["shore_power"].update(
+        {"line_count": 2, "line_2_frequency": "input_number.frequency"}
+    )
+    candidate, _, errors, _ = validate_values(entry, values, "metric")
+    assert not errors
+    assert candidate.options["power_sources"]["shore_power"]["line_2_frequency"] == (
+        "input_number.frequency"
+    )
+    expanded = MockConfigEntry(
+        domain=DOMAIN, version=3, data=candidate.data, options=candidate.options
+    )
+    values["power"]["shore_power"]["line_count"] = 1
+    candidate, _, errors, impacts = validate_values(expanded, values, "metric")
+    assert not errors
+    assert "line_2_frequency" not in candidate.options["power_sources"]["shore_power"]
+    assert "power.input_number.frequency" in impacts
+    values["power"]["shore_power"]["line_count"] = 3
+    _, _, errors, _ = validate_values(entry, values, "metric")
+    assert any(error["code"] == "invalid_shore_line_count" for error in errors)
+
+
 def test_full_snapshot_clears_and_preserves_unknown_fields():
     """Cleared sources/limits disappear, while unrelated saved keys survive."""
     entry = profile_entry()

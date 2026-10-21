@@ -110,6 +110,29 @@ AC output, and generator/shore readings describe AC supply. Choose an
 aggregate source appropriate to your installation; HAVRV does not sum
 multiple physical inverters or AC legs.
 
+For **Shore Power**, choose **1** or **2** AC lines. New shore configurations
+default to **2**; saved configurations without a line count retain **1**, with
+their existing voltage/current sources on **Line 1**. Expand the count when
+ready to map Line 2. Each line accepts optional **Voltage**, **Amps**,
+**Frequency**, and **Watts** sources. The original Voltage/Current fields
+represent Line 1. Choose one shared **Energy** source for all shore power.
+Sources may be sensors, numbers, or input-number helpers, including template
+entities. Compatible units convert to **V**, **A**, **Hz**, **W**, and **kWh**;
+unitless helpers use those respective units. These electrical units do not
+change between profile measurement systems; entity-specific display overrides
+remain respected.
+
+Use existing Home Assistant entities from Hughes Watchdog or another meter;
+there is no direct vendor connection. HAVRV does not derive watts from volts
+and amps, sum line energy, or integrate power into energy. Energy follows the
+underlying meter, including its resets; HAVRV has no energy-reset button or
+local trip counter.
+
+Changing line count refreshes the management editor. In the native options
+fallback, submit the changed count to refresh the available fields, then submit
+the mappings and complete the wizard to save. Reducing to one line removes
+Line 2's saved mappings and HAVRV entities, never the underlying sources.
+
 **Enabled**, bank **Charging**, and optional **Warning**/**Problem** accept
 `binary_sensor`, `switch`, or `input_boolean` sources reporting `on`/`off`.
 All are read-only, even when the source is a switch. Each requires its own

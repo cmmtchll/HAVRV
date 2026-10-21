@@ -72,8 +72,11 @@ from .const import (
 )
 from .power import (
     BINARY_POWER_DOMAINS,
+    DEFAULT_SHORE_LINE_COUNT,
     NUMERIC_POWER_DOMAINS,
     PowerSource,
+    power_numeric_metrics,
+    shore_line_count,
 )
 from .tank import thresholds_valid
 from .tire import tire_entity_key, tire_positions
@@ -606,9 +609,19 @@ def _power_source_schema(
 ) -> vol.Schema:
     """Build one source form with the same defaults used at runtime."""
     fields: dict[vol.Marker, Any] = {}
+    if source.key == "shore_power":
+        fields[vol.Required("line_count", default=shore_line_count(settings))] = (
+            selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=2, step=1, mode=selector.NumberSelectorMode.BOX
+                )
+            )
+        )
     for metric, domains in (
-        ("voltage", NUMERIC_POWER_DOMAINS),
-        ("current", NUMERIC_POWER_DOMAINS),
+        *(
+            (metric, NUMERIC_POWER_DOMAINS)
+            for metric in power_numeric_metrics(source, settings)
+        ),
         ("enabled", BINARY_POWER_DOMAINS),
         ("warning", BINARY_POWER_DOMAINS),
         ("problem", BINARY_POWER_DOMAINS),
@@ -664,10 +677,17 @@ def _normalize_power_source(
 ) -> tuple[dict[str, Any], str | None]:
     """Validate optional read-only mappings without guessing source states."""
     settings: dict[str, Any] = {}
+    if source.key == "shore_power":
+        count = user_input.get("line_count", DEFAULT_SHORE_LINE_COUNT)
+        if not _is_finite_number(count) or count not in (1, 2):
+            return {}, "invalid_shore_line_count"
+        settings["line_count"] = int(count)
     selected: set[str] = set()
     for metric, domains in (
-        ("voltage", NUMERIC_POWER_DOMAINS),
-        ("current", NUMERIC_POWER_DOMAINS),
+        *(
+            (metric, NUMERIC_POWER_DOMAINS)
+            for metric in power_numeric_metrics(source, settings)
+        ),
         ("enabled", BINARY_POWER_DOMAINS),
         ("warning", BINARY_POWER_DOMAINS),
         ("problem", BINARY_POWER_DOMAINS),

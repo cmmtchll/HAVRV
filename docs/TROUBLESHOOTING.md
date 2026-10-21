@@ -58,6 +58,16 @@ Power statuses are read-only even if their source is a switch. Use the source
 integration's controls directly when needed; HAVRV does not start/stop a
 generator or operate battery disconnects through these entities.
 
+For missing shore-line readings, check **Shore power line count** and select
+two lines before mapping Line 2. Existing voltage/current mappings are Line 1;
+new shore configurations default to two lines, but older configurations retain
+one until expanded. Frequency, watts and shared energy require their own
+numeric sources with compatible Hz, W and kWh units, respectively (or unitless
+helpers interpreted in those units). Negative energy is unavailable. HAVRV
+does not calculate missing watts/energy or connect directly to Hughes Watchdog.
+Reset energy through the underlying meter/integration; its next energy reading
+will be mirrored by HAVRV. There is no HAVRV energy-reset button or trip counter.
+
 If a source section exists but its overview box is missing, choose a
 placement instead of **Not shown**, and ensure `show_power` is not `false`.
 Shore Power supports only left/right outside the RV. Colocated devices have

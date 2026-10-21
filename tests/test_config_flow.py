@@ -949,7 +949,7 @@ async def test_options_configure_independent_banks_and_readonly_sources(
     assert settings["house_bank_1"]["warning"] == "binary_sensor.house_warning"
     assert settings["house_bank_1"]["problem"] == "switch.house_problem"
     assert settings["house_bank_2"] == {"nominal_voltage": 24, "location": "not_shown"}
-    assert settings["shore_power"] == {"location": "not_shown"}
+    assert settings["shore_power"] == {"line_count": 2, "location": "not_shown"}
 
 
 async def test_power_options_invalid_capacity_preserves_input(
@@ -1054,7 +1054,103 @@ def test_shore_placement_is_external_and_ignores_battery_fields() -> None:
     )
     assert _normalize_power_source(
         {"location": "right", "charging": "binary_sensor.unused"}, shore
-    ) == ({"location": "right"}, None)
+    ) == ({"line_count": 2, "location": "right"}, None)
+
+
+@pytest.mark.parametrize("count", [0, 3, 1.5, True, "2", None, float("nan")])
+def test_invalid_shore_line_counts(count: object) -> None:
+    """Reject invalid counts rather than truncating them or enabling extra lines."""
+    assert _normalize_power_source(
+        {"line_count": count}, PowerSource("shore_power", "Shore")
+    ) == ({}, "invalid_shore_line_count")
+
+
+@pytest.mark.parametrize("count", [1, 2])
+@pytest.mark.parametrize("domain", ["sensor", "number", "input_number"])
+def test_shore_line_schema_and_numeric_validation(count: int, domain: str) -> None:
+    """All shore numeric roles use the same source domains and active-line rules."""
+    shore = PowerSource("shore_power", "Shore")
+    fields = {
+        marker.schema: validator
+        for marker, validator in _power_source_schema(
+            shore, {"line_count": count}
+        ).schema.items()
+    }
+    settings = {"line_count": count}
+    metrics = ["voltage", "current", "frequency", "power", "energy"]
+    if count == 2:
+        metrics += [f"line_2_{metric}" for metric in metrics[:4]]
+    for metric in metrics:
+        assert fields[metric].config["domain"] == ["sensor", "number", "input_number"]
+        settings[metric] = f"{domain}.template_{metric}"
+    normalized, error = _normalize_power_source(settings, shore)
+    assert error is None
+    assert all(normalized[metric] == settings[metric] for metric in metrics)
+    assert ("line_2_voltage" in fields) == (count == 2)
+    settings["frequency"] = "switch.invalid"
+    assert _normalize_power_source(settings, shore)[1] == "invalid_power_entity_mapping"
+    settings["frequency"] = settings["energy"]
+    assert (
+        _normalize_power_source(settings, shore)[1] == "duplicate_power_entity_mapping"
+    )
+
+
+async def test_native_shore_count_refreshes_before_saving(
+    hass: HomeAssistant,
+) -> None:
+    """Changing count refreshes fields before committing the complete wizard."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={CONF_NAME: "Shore"},
+        options={CONF_POWER_SOURCES: {"shore_power": {"voltage": "sensor.legacy"}}},
+    )
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input={CONF_CONFIGURE_POWER_SOURCES: True}
+    )
+    while result["description_placeholders"]["source"] != "Shore Power":
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={}
+        )
+    assert "line_2_voltage" not in {key.schema for key in result["data_schema"].schema}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"line_count": 1.5}
+    )
+    assert result["errors"] == {"base": "invalid_shore_line_count"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"line_count": 2, "voltage": "sensor.legacy"},
+    )
+    assert "line_2_voltage" in {key.schema for key in result["data_schema"].schema}
+    assert "line_count" not in entry.options[CONF_POWER_SOURCES]["shore_power"]
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "line_count": 1,
+            "voltage": "sensor.legacy",
+            "line_2_power": "number.watts",
+        },
+    )
+    assert "line_2_power" not in {key.schema for key in result["data_schema"].schema}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"line_count": 2, "voltage": "sensor.legacy"}
+    )
+    line_2_field = next(
+        key for key in result["data_schema"].schema if key.schema == "line_2_power"
+    )
+    assert line_2_field.description["suggested_value"] == "number.watts"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "line_count": 2,
+            "voltage": "sensor.legacy",
+            "line_2_power": "number.watts",
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_POWER_SOURCES]["shore_power"]["line_count"] == 2
 
 
 @pytest.mark.parametrize("domain", ["binary_sensor", "switch", "input_boolean"])

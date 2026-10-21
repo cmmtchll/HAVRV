@@ -42,7 +42,7 @@ from .const import (
 )
 from .dashboard import async_register_frontend
 from .panel import async_register_management_panel
-from .power import POWER_BINARY_METRICS, power_sources
+from .power import POWER_BINARY_METRICS, power_numeric_metrics, power_sources
 from .tank import TANK_DEFINITIONS, defined_tanks
 from .tire import tire_positions
 from .websocket_api import async_register_commands, async_reload_profile
@@ -258,6 +258,7 @@ def _remove_stale_entities_and_devices(
         source.key: entry.options.get(CONF_POWER_SOURCES, {}).get(source.key, {})
         for source in power_sources(entry.data)
     }
+    source_definitions = {source.key: source for source in power_sources(entry.data)}
     active_power_ids = {
         f"{entry.entry_id}_source_{key}_{metric}"
         for key, settings in active_power_sources.items()
@@ -271,7 +272,10 @@ def _remove_stale_entities_and_devices(
             ),
             *(
                 metric
-                for metric in ("voltage", "current", *POWER_BINARY_METRICS)
+                for metric in (
+                    *power_numeric_metrics(source_definitions[key], settings),
+                    *POWER_BINARY_METRICS,
+                )
                 if settings.get(metric)
             ),
         )

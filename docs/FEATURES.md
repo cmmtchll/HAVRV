@@ -121,6 +121,9 @@ bank is a complete independent unit; HAVRV does not assume its internal wiring.
 | --- | --- |
 | Voltage | A declared DC-bank or AC-output/supply reading, converted to V |
 | Current | A declared current reading, converted to A; source sign is preserved |
+| Shore line voltage/amps | Optional readings per AC line, converted to V/A |
+| Shore line frequency/watts | Optional readings per AC line, converted to Hz/W |
+| Shore energy | One shared cumulative source in kWh; resets follow the underlying meter |
 | Enabled | Read-only on/off status from its explicitly mapped source |
 | Charging (banks only) | Read-only status reporting whether that particular bank is charging |
 | Warning | Optional read-only mapped advisory status; on gives the source box an amber dot/tint |
@@ -135,6 +138,16 @@ Recognized compatible electrical units are converted; incompatible units are
 unavailable. Unitless helpers are interpreted as V or A according to the
 declared mapping. Both profile measurement systems use V/A/Ah. Explicit
 per-entity display-unit overrides remain respected.
+
+Shore Power supports one or two lines, defaulting to two for a new
+configuration. Existing mappings without a line count remain single-line;
+their entity identities are preserved as Line 1 when expanded. Each reading
+is optional and independent. Frequency, watts, and shared energy support the
+same numeric source domains and compatible-unit conversion; unitless sources
+use Hz, W, and kWh respectively. Negative energy is invalid. No missing reading
+is calculated, and there is no HAVRV reset control or trip-energy accumulator.
+Hughes Watchdog may supply readings through its existing Home Assistant
+entities; HAVRV does not communicate with that hardware directly.
 
 House banks typically supply domestic DC loads and the inverter; chassis banks
 serve engine starting and vehicle systems. An inverter converts battery DC

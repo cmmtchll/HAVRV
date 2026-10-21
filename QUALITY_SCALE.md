@@ -25,6 +25,10 @@ implemented integration behavior, not just repository configuration.
   read-only voltage/current/Enabled mappings, optional Warning/Problem and bank Charging,
   nominal bank specifications, and optional dashboard placement. No charging
   path, active supply, state of charge, or power-flow topology is inferred.
+- Shore Power supports one or two AC lines, with optional V/A/Hz/W mappings
+  per line and one shared cumulative kWh source. New configurations default
+  to two lines; legacy single-line identities remain stable. Energy resets
+  are owned by the underlying meter, with no HAVRV reset or trip counter.
 - Individually placed, collision-aware electrical readout boxes with colors
   from explicit Warning/Problem/Enabled mappings and distinct unavailable status,
   plus colored equipment graphics on the coach and an external shore plug.
