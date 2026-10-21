@@ -86,8 +86,19 @@ test("shore lines use registry roles and show one shared energy reading in both 
     const layout = layoutPowerBoxes(hass, model, orientation);
     const box = layout.boxes.find((box) => box.source === shore);
     assert.equal(box.metrics.length, 9);
-    assert.equal(box.height, 204);
+    assert.equal(box.height, 240);
+    assert.deepEqual(box.rows, [
+      ["voltage", "line_2_voltage"], ["current", "line_2_current"],
+      ["frequency", "line_2_frequency"], ["power", "line_2_power"],
+      ["enabled", "energy"],
+    ]);
     const svg = renderPowerBoxes(hass, layout);
+    assert.match(svg, />Line 1<\/text>/);
+    assert.match(svg, />Line 2<\/text>/);
+    assert.match(svg, /class="shore-divider"/);
+    assert.match(svg, />Combined<\/text>/);
+    assert.match(svg, />Enabled<\/text>/);
+    assert.match(svg, />On<\/tspan>/);
     for (const line of [1, 2]) {
       for (const label of ["Voltage", "Amps", "Frequency", "Watts"]) {
         assert.ok(svg.includes(`Line ${line} ${label}`));
@@ -117,6 +128,81 @@ test("shore lines use registry roles and show one shared energy reading in both 
   assert.equal(powerState(hass, shore).line_2_frequency, undefined);
 });
 
+test("shore columns retain metric alignment, zeroes and unavailable readings", () => {
+  const { hass, rv } = shoreFixture();
+  delete hass.entities["sensor.renamed_shore_power_current"];
+  const model = buildModel(hass, rv);
+  const shore = model.powerSources.find((source) => source.key === "shore_power");
+  hass.states[shore.line_2_voltage].state = "0";
+  hass.states[shore.frequency].state = "unavailable";
+  hass.states[shore.enabled].state = "off";
+  hass.states[shore.energy].state = "0";
+  for (const orientation of ["horizontal", "vertical"]) {
+    const layout = layoutPowerBoxes(hass, model, orientation);
+    const box = layout.boxes.find((box) => box.source === shore);
+    assert.deepEqual(box.rows[1], [undefined, "line_2_current"]);
+    const svg = renderPowerBoxes(hass, layout);
+    const position = (metric) => {
+      const group = svg.split(`<g data-entity="${shore[metric]}"`)[1].split("</g>")[0];
+      const match = /<text class="power-value" x="([^"]+)" y="([^"]+)"/.exec(group);
+      return match.slice(1).map(Number);
+    };
+    for (const metric of ["voltage", "frequency", "power"]) {
+      const left = position(metric);
+      const right = position(`line_2_${metric}`);
+      assert.equal(right[0] - left[0], box.columnWidth);
+      assert.equal(left[1], right[1]);
+    }
+    assert.ok(position("energy")[1] > position("power")[1]);
+    assert.equal(position("energy")[1], position("enabled")[1]);
+    assert.match(svg, /Line 2 Voltage: 0.0 V/);
+    assert.match(svg, /Line 1 Frequency: No data/);
+    assert.match(svg, /Enabled: Off/);
+    assert.match(svg, /Energy: 0.000 kWh/);
+  }
+});
+
+test("shore combined status follows only Enabled, independently of warning and problem", () => {
+  const { hass, rv } = shoreFixture();
+  const model = buildModel(hass, rv);
+  const shore = model.powerSources.find((source) => source.key === "shore_power");
+  hass.states[shore.problem].state = "on";
+  for (const [state, label] of [["on", "On"], ["off", "Off"], ["unavailable", "No data"]]) {
+    hass.states[shore.enabled].state = state;
+    const svg = renderPowerBoxes(hass, layoutPowerBoxes(hass, model, "vertical"));
+    assert.match(svg, /class="power-box power-problem" data-source="shore_power"/);
+    assert.ok(svg.includes(`aria-label="Shore: Enabled: ${label}"`));
+  }
+});
+
+test("single-line shore omits Line 2 and Line 2-only mappings stay in the right column", () => {
+  for (const line2Only of [false, true]) {
+    const { hass, rv } = shoreFixture();
+    for (const [id, entry] of Object.entries(hass.entities)) {
+      if (entry.device_id !== "device_shore_power") continue;
+      if (entry.translation_key === "power_location") continue;
+      const metric = entry.translation_key.replace(/^shore_/, "");
+      if (line2Only ? !metric.startsWith("line_2_") : metric.startsWith("line_2_")) {
+        delete hass.entities[id];
+        delete hass.states[id];
+      }
+    }
+    const model = buildModel(hass, rv);
+    const layout = layoutPowerBoxes(hass, model, "vertical");
+    const box = layout.boxes.find((box) => box.source.key === "shore_power");
+    const svg = renderPowerBoxes(hass, layout);
+    if (line2Only) {
+      assert.deepEqual(box.rows[0], [undefined, "line_2_voltage"]);
+      assert.deepEqual(box.sharedMetrics, []);
+      assert.doesNotMatch(svg, /Combined/);
+    } else {
+      assert.deepEqual(box.rows[0], ["voltage"]);
+      assert.deepEqual(box.sharedMetrics, ["enabled", "energy"]);
+      assert.doesNotMatch(svg, /Line 2/);
+    }
+  }
+});
+
 test("partial shore sources remain interactive without inventing unmapped line readings", () => {
   const { hass, rv } = shoreFixture();
   for (const [id, entry] of Object.entries(hass.entities)) {
@@ -130,8 +216,29 @@ test("partial shore sources remain interactive without inventing unmapped line r
   const layout = layoutPowerBoxes(hass, model, "vertical");
   const box = layout.boxes.find((box) => box.source.key === "shore_power");
   assert.deepEqual(box.metrics, ["energy"]);
+  assert.ok(box.width >= 156);
   assert.match(renderPowerBoxes(hass, layout), /data-entity="sensor.renamed_shore_power_energy" tabindex="0" role="button"/);
   assert.doesNotMatch(renderPowerBoxes(hass, layout), /Line 1|Line 2/);
+});
+
+test("status-only shore uses the Combined section without inventing measurements", () => {
+  const { hass, rv } = shoreFixture();
+  for (const [id, entry] of Object.entries(hass.entities)) {
+    if (entry.device_id === "device_shore_power"
+      && !["power_enabled", "power_location"].includes(entry.translation_key)) {
+      delete hass.entities[id];
+      delete hass.states[id];
+    }
+  }
+  const model = buildModel(hass, rv);
+  const layout = layoutPowerBoxes(hass, model, "vertical");
+  const box = layout.boxes.find((box) => box.source.key === "shore_power");
+  assert.deepEqual(box.rows, [["enabled"]]);
+  assert.equal(box.height, 80);
+  const svg = renderPowerBoxes(hass, layout);
+  assert.match(svg, />Combined<\/text>/);
+  assert.match(svg, /aria-label="Shore: Enabled: On"/);
+  assert.doesNotMatch(svg, /Line 1|Line 2|>Energy<\/text>/);
 });
 
 test("registry discovery uses stable identities and watches every mapped role", () => {

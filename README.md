@@ -72,7 +72,9 @@ choose existing entities, and configure optional tank and tire monitoring.
   inverter and generator graphics sit on the coach; the shore plug is outside.
   Equipment graphics are comparable to tire sizes; matching tags replace
   crossing callout lines. One common legend covers tires, tanks and electrical,
-  and Enabled is indicated by color rather than a Yes/No row. See
+  and Enabled is indicated by color rather than a Yes/No row. Shore Power
+  groups Line 1 on the left and Line 2 on the right, with shared Enabled and
+  Energy readings in a separate Combined section. See
   [dashboard configuration and colors](docs/DASHBOARD.md).
   The guide also includes [crowded R-Rear placement examples](docs/DASHBOARD.md#placement-stress-example).
   Shared, default-on show/hide options cover tires, tanks, power, coach
