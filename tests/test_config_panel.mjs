@@ -85,6 +85,36 @@ test("opening a draft does not fill suggested values or write anything", async (
   assert.deepEqual(api.calls.map((message) => message.type), ["havrv/config/get"]);
 });
 
+test("shore line-count refresh keeps hidden drafts but excludes Line 2 from one-line saves", async () => {
+  const { api, draft } = await loaded({
+    validate: (message, initial) => {
+      const schema = structuredClone(initial.schema);
+      const fields = [number("line_count"), entity("voltage"), entity("energy")];
+      if (message.values.power.shore_power.line_count === 2) fields.push(entity("line_2_voltage"));
+      schema.power.push({ key: "shore_power", name: "Shore Power", fields });
+      const values = structuredClone(message.values);
+      if (values.power.shore_power.line_count === 1) delete values.power.shore_power.line_2_voltage;
+      return { valid: true, values, schema, errors: [], impacts: [] };
+    },
+  });
+  draft.schema.power.push({
+    key: "shore_power", name: "Shore Power",
+    fields: [number("line_count"), entity("voltage"), entity("energy"), entity("line_2_voltage")],
+  });
+  draft.setValue("power", "line_count", 2, "shore_power");
+  draft.setValue("power", "line_2_voltage", "number.template_line2", "shore_power");
+  draft.setValue("power", "energy", "sensor.shared_energy", "shore_power");
+  draft.setValue("power", "line_count", 1, "shore_power");
+  await draft.refreshSchema();
+  assert.equal(draft.payload().power.shore_power.line_2_voltage, undefined);
+  assert.equal(draft.value("power", "line_2_voltage", "shore_power"), "number.template_line2");
+  draft.setValue("power", "line_count", 2, "shore_power");
+  await draft.refreshSchema();
+  assert.equal(draft.payload().power.shore_power.line_2_voltage, "number.template_line2");
+  assert.equal(draft.payload().power.shore_power.energy, "sensor.shared_energy");
+  assert.equal(api.calls.filter((call) => call.type.endsWith("/apply")).length, 0);
+});
+
 test("one draft preserves fields across sections and source selections; discard restores all", async () => {
   const { draft } = await loaded();
   draft.setValue("profile", "coach_model", "Custom");

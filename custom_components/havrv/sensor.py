@@ -28,7 +28,10 @@ from homeassistant.util.unit_conversion import (
     DistanceConverter,
     ElectricCurrentConverter,
     ElectricPotentialConverter,
+    EnergyConverter,
+    FrequencyConverter,
     MassConverter,
+    PowerConverter,
     PressureConverter,
     SpeedConverter,
     TemperatureConverter,
@@ -70,6 +73,7 @@ from .power import (
     HavrvPowerSourceEntity,
     PowerSource,
     power_device_info,
+    power_numeric_metrics,
     power_settings,
     power_sources,
 )
@@ -335,28 +339,32 @@ class HavrvProfileSensor(SensorEntity):
 
 
 class HavrvPowerSensor(HavrvPowerSourceEntity, SensorEntity):
-    """Expose a declared electrical reading in volts or amperes."""
+    """Expose a declared electrical reading in its standard electrical unit."""
 
     def __init__(
         self, entry: HavrvConfigEntry, source: PowerSource, metric: str
     ) -> None:
         """Initialize a stable, read-only bank or AC output reading."""
         super().__init__(entry, source, metric)
-        self._converter = (
-            ElectricPotentialConverter
-            if metric == "voltage"
-            else ElectricCurrentConverter
-        )
-        unit = "V" if metric == "voltage" else "A"
+        kind = metric.removeprefix("line_2_")
+        self._converter, unit, device_class = {
+            "voltage": (ElectricPotentialConverter, "V", SensorDeviceClass.VOLTAGE),
+            "current": (ElectricCurrentConverter, "A", SensorDeviceClass.CURRENT),
+            "frequency": (FrequencyConverter, "Hz", SensorDeviceClass.FREQUENCY),
+            "power": (PowerConverter, "W", SensorDeviceClass.POWER),
+            "energy": (EnergyConverter, "kWh", SensorDeviceClass.ENERGY),
+        }[kind]
         self.entity_description = SensorEntityDescription(
             key=metric,
-            translation_key=f"power_{metric}",
-            device_class=(
-                SensorDeviceClass.VOLTAGE
-                if metric == "voltage"
-                else SensorDeviceClass.CURRENT
+            translation_key=(
+                f"shore_{metric}" if source.key == "shore_power" else f"power_{metric}"
             ),
-            state_class=SensorStateClass.MEASUREMENT,
+            device_class=device_class,
+            state_class=(
+                SensorStateClass.TOTAL_INCREASING
+                if kind == "energy"
+                else SensorStateClass.MEASUREMENT
+            ),
             native_unit_of_measurement=unit,
             suggested_unit_of_measurement=unit,
         )
@@ -368,7 +376,7 @@ class HavrvPowerSensor(HavrvPowerSourceEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        """Convert compatible source units; unitless helpers use declared V/A."""
+        """Convert compatible units; unitless helpers use the field's unit."""
         state = self._source_state
         if state is None:
             return None
@@ -387,6 +395,11 @@ class HavrvPowerSensor(HavrvPowerSourceEntity, SensorEntity):
         ):
             return None
         converted = self._converter.convert(value, source_unit, unit)
+        if (
+            self.entity_description.device_class == SensorDeviceClass.ENERGY
+            and converted < 0
+        ):
+            return None
         return converted if math.isfinite(converted) else None
 
 
@@ -950,7 +963,7 @@ async def async_setup_entry(
         settings = power_settings(entry, source)
         power_entities.extend(
             HavrvPowerSensor(entry, source, metric)
-            for metric in ("voltage", "current")
+            for metric in power_numeric_metrics(source, settings)
             if settings.get(metric) is not None
         )
         power_entities.extend(

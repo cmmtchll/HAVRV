@@ -47,7 +47,7 @@ from .const import (
     TANK_TYPES,
     UNIT_SYSTEM_METRIC,
 )
-from .power import power_sources
+from .power import power_sources, shore_line_count
 from .tank import defined_tanks
 from .tire import tire_entity_key, tire_positions
 
@@ -400,11 +400,22 @@ def validate_values(
         if not isinstance(raw, dict):
             error("power", source.key, "invalid_config")
             continue
-        allowed = {field["name"] for field in _fields(_power_source_schema(source, {}))}
+        allowed = {
+            field["name"]
+            for field in _fields(_power_source_schema(source, {"line_count": 2}))
+        }
         if set(raw) - allowed:
             error("power", source.key, "invalid_config")
             continue
-        normalized, power_error = _normalize_power_source(raw, source)
+        submitted = dict(raw)
+        if source.key == "shore_power":
+            submitted.setdefault(
+                "line_count",
+                shore_line_count(
+                    entry.options.get(CONF_POWER_SOURCES, {}).get(source.key, {})
+                ),
+            )
+        normalized, power_error = _normalize_power_source(submitted, source)
         if power_error:
             error("power", source.key, power_error)
         elif raw != baseline["power"].get(source.key, {}):
@@ -426,7 +437,11 @@ def validate_values(
     ]
     for section, before, after in (
         ("options", baseline["options"], typed_values["options"]),
-        ("power", baseline["power"], typed_values["power"]),
+        (
+            "power",
+            baseline["power"],
+            candidate.options.get(CONF_POWER_SOURCES, {}),
+        ),
     ):
         impacts += [
             f"{section}.{source}"

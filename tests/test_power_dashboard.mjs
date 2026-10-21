@@ -58,6 +58,82 @@ function fixture() {
   return { hass, rv };
 }
 
+function shoreFixture() {
+  const { hass, rv } = fixture();
+  for (const [metric, value, unit] of [
+    ["voltage", "118", "V"], ["current", "35", "A"], ["frequency", "60", "Hz"], ["power", "4160", "W"],
+    ["line_2_voltage", "119", "V"], ["line_2_current", "27", "A"],
+    ["line_2_frequency", "60", "Hz"], ["line_2_power", "3280", "W"], ["energy", "2.6", "kWh"],
+  ]) {
+    const entity_id = `sensor.renamed_shore_power_${metric}`;
+    hass.entities[entity_id] = {
+      entity_id, platform: "havrv", device_id: "device_shore_power", translation_key: `shore_${metric}`,
+    };
+    hass.states[entity_id] = { state: value, attributes: { unit_of_measurement: unit } };
+  }
+  return { hass, rv };
+}
+
+test("shore lines use registry roles and show one shared energy reading in both layouts", async () => {
+  const { hass, rv } = shoreFixture();
+  const model = buildModel(hass, rv);
+  const shore = model.powerSources.find((source) => source.key === "shore_power");
+  assert.equal(powerState(hass, shore).energy.value, 2.6);
+  assert.equal(powerState(hass, shore).line_2_power.value, 3280);
+  assert.ok(model.watched.includes(shore.line_2_frequency));
+  assert.equal(model.watched.filter((id) => id === shore.energy).length, 1);
+  for (const orientation of ["horizontal", "vertical"]) {
+    const layout = layoutPowerBoxes(hass, model, orientation);
+    const box = layout.boxes.find((box) => box.source === shore);
+    assert.equal(box.metrics.length, 9);
+    assert.equal(box.height, 204);
+    const svg = renderPowerBoxes(hass, layout);
+    for (const line of [1, 2]) {
+      for (const label of ["Voltage", "Amps", "Frequency", "Watts"]) {
+        assert.ok(svg.includes(`Line ${line} ${label}`));
+      }
+    }
+    assert.equal((svg.match(/>Energy<\/text>/g) || []).length, 1);
+    assert.match(svg, /kWh/);
+    assert.doesNotMatch(svg, /Reset|reset/);
+    for (const other of [...layout.boxes, ...layout.icons, ...layout.obstacles]) {
+      if (other === box) continue;
+      assert.ok(!(box.x < other.x + other.width && box.x + box.width > other.x
+        && box.y < other.y + other.height && box.y + box.height > other.y));
+    }
+    assert.doesNotMatch(renderVehicle(hass, model, orientation, 1, false), /Line 2|kWh|power-box/);
+  }
+  for (const result of [
+    rvView(hass, rv),
+    (await HavrvDashboardStrategy.generate({}, hass)).views[0],
+    await HavrvViewStrategy.generate({ device_id: rv.id }, hass),
+  ]) {
+    assert.equal(JSON.stringify(result).split(shore.energy).length - 1, 1);
+    assert.ok(JSON.stringify(result).includes(shore.line_2_frequency));
+  }
+  hass.states[shore.energy].state = "0";
+  assert.equal(powerState(hass, shore).energy.value, 0);
+  hass.states[shore.line_2_frequency].state = "unavailable";
+  assert.equal(powerState(hass, shore).line_2_frequency, undefined);
+});
+
+test("partial shore sources remain interactive without inventing unmapped line readings", () => {
+  const { hass, rv } = shoreFixture();
+  for (const [id, entry] of Object.entries(hass.entities)) {
+    if (entry.device_id === "device_shore_power"
+      && !["shore_energy", "power_location"].includes(entry.translation_key)) {
+      delete hass.entities[id];
+      delete hass.states[id];
+    }
+  }
+  const model = buildModel(hass, rv);
+  const layout = layoutPowerBoxes(hass, model, "vertical");
+  const box = layout.boxes.find((box) => box.source.key === "shore_power");
+  assert.deepEqual(box.metrics, ["energy"]);
+  assert.match(renderPowerBoxes(hass, layout), /data-entity="sensor.renamed_shore_power_energy" tabindex="0" role="button"/);
+  assert.doesNotMatch(renderPowerBoxes(hass, layout), /Line 1|Line 2/);
+});
+
 test("registry discovery uses stable identities and watches every mapped role", () => {
   const { hass, rv } = fixture();
   const model = buildModel(hass, rv);

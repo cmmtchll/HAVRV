@@ -45,6 +45,14 @@ The layout follows the RV profile:
   Separate battery, generator, inverter and plug graphics show the equipment
   itself on the coach; the shore plug is outside. Each bank has its own graphic.
   Select a reading or use Tab and Enter/Space to open its details.
+- Shore Power's box labels the mapped **Line 1** and **Line 2** voltage, amps,
+  frequency and watts, followed by one shared **Energy** reading in kWh.
+  Only mapped readings appear, and an unavailable reading does not hide other
+  readings. Larger boxes reserve enough space in both orientations without
+  overlapping other equipment. Generated Shore Power sections include the
+  same sensors. Energy resets are performed on the underlying meter, not from
+  a HAVRV dashboard button. `show_power: false` hides these readings along
+  with the other power sources.
 - Wide cards draw the RV horizontally, with the front on the right. Cards
   narrower than about 560 pixels, such as on phones, draw it vertically with
   the front at the top.

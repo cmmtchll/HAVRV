@@ -178,11 +178,35 @@ class HavrvOptionsFlow(config_entries.OptionsFlow):
         """Edit bank specifications, placements, and read-only mappings."""
         sources = power_sources(self.config_entry.data)
         source = sources[self._power_index]
+        existing = (
+            getattr(self, "_shore_settings", None)
+            if source.key == "shore_power"
+            else None
+        )
+        if existing is None:
+            existing = power_settings(self.config_entry, source)
         errors: dict[str, str] = {}
         if user_input is not None:
-            settings, error = _normalize_power_source(user_input, source)
+            submitted = dict(user_input)
+            if source.key == "shore_power":
+                submitted.setdefault("line_count", existing["line_count"])
+            settings, error = _normalize_power_source(submitted, source)
             if error:
                 errors["base"] = error
+            elif (
+                source.key == "shore_power"
+                and settings["line_count"] != existing["line_count"]
+            ):
+                line_draft = submitted if existing["line_count"] == 2 else existing
+                self._shore_settings = {
+                    **{
+                        key: value
+                        for key, value in line_draft.items()
+                        if key.startswith("line_2_")
+                    },
+                    **settings,
+                }
+                return await self.async_step_power_source()
             else:
                 self._power_settings[source.key] = settings
                 self._power_index += 1
@@ -199,9 +223,7 @@ class HavrvOptionsFlow(config_entries.OptionsFlow):
             step_id="power_source",
             data_schema=_power_source_schema(
                 source,
-                user_input
-                if user_input is not None
-                else power_settings(self.config_entry, source),
+                user_input if user_input is not None else existing,
             ),  # type: ignore[arg-type]
             description_placeholders={"source": source.name},
             errors=errors,

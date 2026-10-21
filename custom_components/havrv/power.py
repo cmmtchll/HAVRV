@@ -1,5 +1,7 @@
 """Independent RV power sources and their declared mappings."""
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -20,6 +22,31 @@ from .entity import HavrvSourceEntity
 NUMERIC_POWER_DOMAINS = ("sensor", "number", "input_number")
 BINARY_POWER_DOMAINS = ("binary_sensor", "switch", "input_boolean")
 POWER_BINARY_METRICS = ("enabled", "charging", "warning", "problem")
+DEFAULT_SHORE_LINE_COUNT = 2
+SHORE_LINE_METRICS = ("voltage", "current", "frequency", "power")
+
+
+def shore_line_count(settings: Mapping[str, Any]) -> int:
+    """Default new sources to two lines and existing mappings to one."""
+    count: int = settings.get("line_count", 1 if settings else DEFAULT_SHORE_LINE_COUNT)
+    return count
+
+
+def power_numeric_metrics(
+    source: PowerSource, settings: Mapping[str, Any]
+) -> tuple[str, ...]:
+    """Return the numeric mappings active for this independent source."""
+    if source.key != "shore_power":
+        return ("voltage", "current")
+    return (
+        *SHORE_LINE_METRICS,
+        *(
+            tuple(f"line_2_{metric}" for metric in SHORE_LINE_METRICS)
+            if shore_line_count(settings) == 2
+            else ()
+        ),
+        "energy",
+    )
 
 
 @dataclass(frozen=True)
@@ -57,6 +84,8 @@ def power_sources(profile: Mapping[str, Any]) -> list[PowerSource]:
 def power_settings(entry: ConfigEntry, source: PowerSource) -> dict[str, Any]:
     """Read declared settings, including defaults for legacy entries."""
     settings = dict(entry.options.get(CONF_POWER_SOURCES, {}).get(source.key, {}))
+    if source.key == "shore_power":
+        settings["line_count"] = shore_line_count(settings)
     settings.setdefault("location", "not_shown")
     if source.battery:
         settings.setdefault("nominal_voltage", DEFAULT_BATTERY_NOMINAL_VOLTAGE)

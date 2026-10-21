@@ -75,6 +75,33 @@
       "power_current": {
         "default": "mdi:flash"
       },
+      "shore_voltage": {
+        "default": "mdi:flash"
+      },
+      "shore_current": {
+        "default": "mdi:current-ac"
+      },
+      "shore_frequency": {
+        "default": "mdi:sine-wave"
+      },
+      "shore_power": {
+        "default": "mdi:flash"
+      },
+      "shore_line_2_voltage": {
+        "default": "mdi:flash"
+      },
+      "shore_line_2_current": {
+        "default": "mdi:current-ac"
+      },
+      "shore_line_2_frequency": {
+        "default": "mdi:sine-wave"
+      },
+      "shore_line_2_power": {
+        "default": "mdi:flash"
+      },
+      "shore_energy": {
+        "default": "mdi:lightning-bolt"
+      },
       "power_location": {
         "default": "mdi:map-marker"
       },

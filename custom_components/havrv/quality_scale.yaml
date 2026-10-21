@@ -145,7 +145,7 @@ rules:
     comment: HAVRV-owned profile and operation-mode icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py.
   reconfiguration-flow:
     status: done
-    comment: The reconfigure flow updates profile details while retaining identity and active mappings in custom_components/havrv/config_flow.py; reducing bank counts removes obsolete bank settings, tested in tests/test_config_flow.py and tests/test_power.py.
+    comment: The reconfigure flow updates profile details while retaining identity and active mappings in custom_components/havrv/config_flow.py; reducing bank counts removes obsolete bank settings. Shore line-count changes preserve Line 1 identities and remove inactive Line 2 entities, tested in tests/test_config_flow.py, tests/test_management.py and tests/test_power.py.
   repair-issues:
     status: exempt
     comment: There are no remote device, service, or credential conditions that require user-intervention repair issues.

@@ -187,9 +187,12 @@ export class ConfigDraft {
     if (!result.valid) return result;
     if (result.schema) this.schema = clone(result.schema);
     if (result.values) {
+      const activeFields = new Set(this.fields().map((field) =>
+        `${field.group}:${field.source || ""}:${field.name}`));
       // Normalized values include conversions on unit switches. Keep inactive
       // source drafts without resurrecting explicitly cleared active fields.
       for (const field of previousFields) {
+        if (!activeFields.has(`${field.group}:${field.source || ""}:${field.name}`)) continue;
         const target = field.group === "power"
           ? (this.values.power[field.source] ||= {}) : this.values[field.group];
         delete target[field.name];
@@ -202,7 +205,7 @@ export class ConfigDraft {
         this.values.options[name] = clone(value);
       }
       for (const [source, fields] of Object.entries(result.values.power || {})) {
-        this.values.power[source] = clone(fields);
+        Object.assign(this.values.power[source] ||= {}, clone(fields));
       }
       this.values.unit_system = result.values.unit_system;
     }

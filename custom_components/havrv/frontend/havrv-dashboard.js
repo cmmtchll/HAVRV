@@ -40,6 +40,15 @@ const POWER_ROLES = {
   power_warning: "warning",
   power_problem: "problem",
   power_location: "location",
+  shore_voltage: "voltage",
+  shore_current: "current",
+  shore_frequency: "frequency",
+  shore_power: "power",
+  shore_line_2_voltage: "line_2_voltage",
+  shore_line_2_current: "line_2_current",
+  shore_line_2_frequency: "line_2_frequency",
+  shore_line_2_power: "line_2_power",
+  shore_energy: "energy",
 };
 const POWER_LOCATION_LABELS = {
   left_front: "L-Front",
@@ -138,7 +147,7 @@ function watchedEntities(model) {
     ),
     ...model.tanks.flatMap((tank) => [tank.percentage, tank.status, tank.level]),
     ...(model.powerSources || []).flatMap((source) =>
-      Object.values(POWER_ROLES).map((role) => source[role]),
+      [...new Set(Object.values(POWER_ROLES))].map((role) => source[role]),
     ),
   ].filter(Boolean);
 }
@@ -351,14 +360,15 @@ export function powerState(hass, source) {
     return value === "on" ? true : value === "off" ? false : undefined;
   };
   const state = {
-    voltage: numeric(hass, source.voltage, 1),
-    current: numeric(hass, source.current, 1),
     enabled: binary(source.enabled),
     charging: binary(source.charging),
     warning: binary(source.warning),
     problem: binary(source.problem),
     location: stateOf(hass, source.location)?.state,
   };
+  for (const metric of SHORE_READING_METRICS) {
+    state[metric] = numeric(hass, source[metric], metric === "energy" ? 3 : 1);
+  }
   state.level = state.problem === true ? "problem"
     : state.warning === true ? "warning"
       : (source.problem && state.problem === undefined) || (source.warning && state.warning === undefined)
@@ -820,6 +830,18 @@ const powerTag = (source) =>
       : ({ inverter: "INV", generator: "GEN", shore_power: "SHORE" })[source.key] || source.name;
 
 const POWER_READING_METRICS = ["voltage", "current", "charging"];
+const SHORE_READING_METRICS = [
+  "voltage", "current", "frequency", "power",
+  "line_2_voltage", "line_2_current", "line_2_frequency", "line_2_power", "energy",
+];
+const powerMetricLabel = (metric, shore) => {
+  if (!shore) return metric[0].toUpperCase() + metric.slice(1);
+  if (metric === "energy") return "Energy";
+  const kind = metric.replace(/^line_2_/, "");
+  const label = ({ voltage: "Voltage", current: "Amps", frequency: "Frequency", power: "Watts" })[kind]
+    || kind[0].toUpperCase() + kind.slice(1);
+  return `Line ${metric.startsWith("line_2_") ? 2 : 1} ${label}`;
+};
 const POWER_STATUS_LABELS = {
   on: "On", off: "Off", warning: "Warning", problem: "Problem", unknown: "No status data",
 };
@@ -917,12 +939,16 @@ export function layoutPowerBoxes(hass, model, orientation) {
     const side = location.startsWith("left") ? -1 : 1;
     const external = location === "left" || location === "right";
     const u = location.endsWith("front") ? 680 : location.endsWith("rear") ? 110 : 430;
-    const metrics = POWER_READING_METRICS.filter((metric) => source[metric]);
+    const shore = source.key === "shore_power";
+    const metrics = (shore ? SHORE_READING_METRICS : POWER_READING_METRICS)
+      .filter((metric) => source[metric]);
     const columnWidth = Math.max(75, ...metrics.map((metric) =>
       (state[metric] && typeof state[metric] === "object"
-        ? `${state[metric].text} ${state[metric].unit}`.length * 8 + 12 : 75)));
+        ? `${state[metric].text} ${state[metric].unit}`.length * 8 + 12 : 75)),
+      ...(shore ? metrics.map((metric) => powerMetricLabel(metric, true).length * 6 + 12) : []));
     const width = columnWidth * 2 + 6;
-    const height = Math.max(52, 24 + Math.ceil(metrics.length / 2) * 20);
+    const rowHeight = shore ? 36 : 20;
+    const height = Math.max(52, 24 + Math.ceil(metrics.length / 2) * rowHeight);
     const depth = vertical ? width : height;
     const anchor = icons.find((icon) => icon.source === source).anchor;
     let distance = TIRE_OUTER + 14 + depth / 2;
@@ -948,9 +974,9 @@ export function layoutPowerBoxes(hass, model, orientation) {
   return { boxes, icons, obstacles, bounds: drawingBounds(geometry, [...boxes, ...icons, ...obstacles], model) };
 }
 
-function powerReadingText(metric, value) {
-  const label = metric[0].toUpperCase() + metric.slice(1);
-  const text = metric === "voltage" || metric === "current"
+function powerReadingText(metric, value, shore = false) {
+  const label = powerMetricLabel(metric, shore);
+  const text = metric !== "charging"
     ? value ? `${value.text} ${value.unit}` : "No data"
     : value === true ? "Yes" : value === false ? "No" : "No data";
   return `${label}: ${text}`;
@@ -959,7 +985,8 @@ function powerReadingText(metric, value) {
 /** Draw color-coded, keyboard-accessible source boxes instead of bottom tiles. */
 export function renderPowerBoxes(hass, layout) {
   const icons = layout.icons.map(({ source, state, x, y, width }) => {
-    const entity = powerStatusEntity(source, state) || source.voltage || source.current || source.charging;
+    const entity = powerStatusEntity(source, state) || source.voltage || source.current || source.charging
+      || SHORE_READING_METRICS.map((metric) => source[metric]).find(Boolean);
     const action = entity ? `data-entity="${escapeHtml(entity)}" tabindex="0" role="button"` : 'role="img"';
     const label = `${source.name}: ${POWER_STATUS_LABELS[state.level]}`;
     return `<g class="power-icon power-${state.level}" data-source="${escapeHtml(source.key)}" ${action} aria-label="${escapeHtml(label)}" transform="translate(${x} ${y}) scale(${width / 24})">
@@ -984,16 +1011,19 @@ export function renderPowerBoxes(hass, layout) {
         <circle class="dot" cx="${x + width - 11}" cy="${y + 10}" r="4"></circle>
       </g>
       ${metrics.map((metric, index) => {
-        const text = powerReadingText(metric, state[metric]);
-        const rowY = y + 32 + Math.floor(index / 2) * 20;
+        const shore = source.key === "shore_power";
+        const label = powerMetricLabel(metric, shore);
+        const text = powerReadingText(metric, state[metric], shore);
+        const rowY = y + (shore ? 47 : 32) + Math.floor(index / 2) * (shore ? 36 : 20);
         const rowX = x + 9 + (index % 2) * columnWidth;
-        const measurement = metric === "voltage" || metric === "current";
+        const measurement = metric !== "charging";
         const value = measurement && state[metric]
           ? `<tspan class="mid">${escapeHtml(state[metric].text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state[metric].unit)}</tspan>`
           : `<tspan class="small row-right">${escapeHtml(measurement ? STR.noData : text)}</tspan>`;
         return `<g data-entity="${escapeHtml(source[metric])}" tabindex="0" role="button" aria-label="${escapeHtml(`${source.name}: ${text}`)}">
           <title>${escapeHtml(text)}</title>
           <rect class="hit" x="${rowX - 4}" y="${rowY - 13}" width="${columnWidth - 2}" height="16"></rect>
+          ${shore ? `<text class="small" x="${rowX}" y="${rowY - 16}">${escapeHtml(label)}</text>` : ""}
           <text class="power-value" x="${rowX}" y="${rowY}">${value}</text>
         </g>`;
       }).join("")}

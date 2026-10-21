@@ -125,6 +125,7 @@ const fieldId = (field) => `field-${field.group}-${field.source || ""}-${field.n
 const printable = (value) => value === undefined || (Array.isArray(value) && !value.length)
   ? t("unset") : Array.isArray(value) ? value.join(", ") : String(value);
 const STRUCTURE_FIELDS = new Set([
+  "line_count",
   "measurement_system", "house_battery_bank_count", "chassis_battery_bank_count",
   "rear_axle_count", "main_rear_wheel_configuration", "tag_axle_present", "tag_axle_wheel_configuration",
 ]);
