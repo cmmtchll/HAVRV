@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.3
+
+- Support one or two shore-power AC lines with optional voltage, amps,
+  frequency and watts per line, plus one shared cumulative energy source.
+  Preserve existing Line 1 entity identities; energy resets remain owned by
+  the underlying meter.
+- Group shore dashboard readings into Line 1 and Line 2 columns, with shared
+  Enabled and Energy readings in a separate Combined section.
+
 ## 0.4.2
 
 - Remove HAVRV tank sensors and empty tank devices when both capacity and level
