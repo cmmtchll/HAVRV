@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.4.4
+
+- Bump the integration patch version; no runtime behavior changes.
+
 ## 0.4.3
 
 - Support one or two shore-power AC lines with optional voltage, amps,
