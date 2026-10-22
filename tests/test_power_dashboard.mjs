@@ -572,6 +572,125 @@ function completeFixture() {
   return { hass, rv, model: buildModel(hass, rv) };
 }
 
+function towFixture() {
+  const { hass, rv } = completeFixture();
+  hass.devices.renamed_tow = {
+    id: "renamed_tow", name: "Custom tow", identifiers: [["havrv", "entry_tow"]],
+  };
+  for (const [domain, key, value, unit] of [
+    ["switch", "towing", "off"], ["select", "tow_type", "car"],
+    ["number", "tow_weight", "2500", "kg"],
+  ]) {
+    const entity_id = `${domain}.renamed_${key}`;
+    hass.entities[entity_id] = {
+      entity_id, platform: "havrv", device_id: "renamed_tow", translation_key: key,
+    };
+    hass.states[entity_id] = { state: value, attributes: { unit_of_measurement: unit } };
+  }
+  hass.entities = { ...hass.entities };
+  return { hass, rv };
+}
+
+test("tow is discovered by registry roles and never leaks into generic system sections", async () => {
+  const { hass, rv } = towFixture();
+  const model = buildModel(hass, rv);
+  assert.deepEqual(model.tow, {
+    enabled: "switch.renamed_towing", type: "select.renamed_tow_type", weight: "number.renamed_tow_weight",
+  });
+  assert.ok(!model.systems.some((system) => system.key === "tow"));
+  for (const id of Object.values(model.tow)) assert.ok(model.watched.includes(id));
+  const hidden = visibleModel(model, { show_tow: false });
+  assert.equal(hidden.tow, undefined);
+  for (const id of Object.values(model.tow)) assert.ok(!hidden.watched.includes(id));
+  for (const view of [
+    rvView(hass, rv, { show_tow: false }),
+    await HavrvViewStrategy.generate({ device_id: rv.id, show_tow: false }, hass),
+    (await HavrvDashboardStrategy.generate({ show_tow: false }, hass)).views[0],
+  ]) {
+    assert.equal(view.sections[0].cards[0].show_tow, false);
+    assert.doesNotMatch(JSON.stringify(view), /renamed_tow/);
+  }
+});
+
+test("tow outlines respond live to towing, type, weight, missing data and visibility", () => {
+  const { hass, rv } = towFixture();
+  const card = new HavrvRvCard();
+  card.setConfig({ device_id: rv.id });
+  card.hass = hass;
+  const off = card.shadowRoot.innerHTML;
+  assert.doesNotMatch(off, /class="tow"/);
+  hass.states["switch.renamed_towing"].state = "on";
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /data-tow-type="car"/);
+  assert.match(card.shadowRoot.innerHTML, /2,500.0 kg/);
+  for (const id of Object.values(buildModel(hass, rv).tow)) {
+    assert.ok(card.shadowRoot.innerHTML.includes(`data-entity="${id}" tabindex="0" role="button"`));
+  }
+  hass.states["select.renamed_tow_type"].state = "trailer";
+  hass.states["number.renamed_tow_weight"] = { state: "1000", attributes: { unit_of_measurement: "lb" } };
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /data-tow-type="trailer"/);
+  assert.match(card.shadowRoot.innerHTML, /1,000.0 lb/);
+  hass.states["number.renamed_tow_weight"].state = "unknown";
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /Trailer · No data/);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /1,000.0 lb/);
+  for (const status of ["off", "unknown", "unavailable"]) {
+    hass.states["switch.renamed_towing"].state = status;
+    card.hass = hass;
+    assert.doesNotMatch(card.shadowRoot.innerHTML, /class="tow"/);
+  }
+  hass.states["switch.renamed_towing"].state = "on";
+  for (const type of ["boat", "unknown", "unavailable", '<script>alert("bad")</script>']) {
+    hass.states["select.renamed_tow_type"].state = type;
+    card.hass = hass;
+    assert.doesNotMatch(card.shadowRoot.innerHTML, /class="tow"|<script>/);
+  }
+  hass.states["select.renamed_tow_type"].state = "car";
+  card.setConfig({ show_tow: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="tow"/);
+  card.setConfig({});
+  assert.match(card.shadowRoot.innerHTML, /class="tow"/);
+  assert.deepEqual(summarize(hass, buildModel(hass, rv)), { alert: 2, watch: 0, offline: 0 });
+});
+
+test("tow reserves rear space only when active, beyond dense layouts in both orientations", () => {
+  const { hass, rv } = towFixture();
+  const model = buildModel(hass, rv);
+  const bounds = (svg) => /viewBox="([^"]+)"/.exec(svg)[1].split(" ").map(Number);
+  for (const orientation of ["horizontal", "vertical"]) {
+    for (const show_tires of [false, true]) {
+      const config = { show_tires };
+      const disabled = renderVehicle(hass, model, orientation, 9, config);
+      hass.states["switch.renamed_towing"].state = "on";
+      for (const type of ["car", "trailer"]) {
+        hass.states["select.renamed_tow_type"].state = type;
+        const active = renderVehicle(hass, model, orientation, 9, config);
+        const before = bounds(disabled);
+        const after = bounds(active);
+        if (orientation === "horizontal") {
+          assert.ok(after[0] < before[0] - 220);
+          assert.ok(after[2] > before[2] + 220);
+        } else {
+          assert.ok(after[3] > before[3] + 220);
+        }
+        assert.equal(renderVehicle(hass, model, orientation, 9, { ...config, show_tow: false }), disabled);
+        const noPower = renderVehicle(hass, model, orientation, 9, false);
+        assert.match(noPower, /class="tow"/);
+        assert.doesNotMatch(noPower, /class="power-box /);
+        const power = layoutPowerBoxes(hass, visibleModel(model, config), orientation);
+        for (const item of [...power.boxes, ...power.icons]) {
+          assert.ok(item.x >= after[0] && item.y >= after[1]);
+          assert.ok(item.x + item.width <= after[0] + after[2]);
+          assert.ok(item.y + item.height <= after[1] + after[3]);
+        }
+      }
+      hass.states["switch.renamed_towing"].state = "off";
+      assert.equal(renderVehicle(hass, model, orientation, 9, config), disabled);
+    }
+  }
+});
+
 test("empty tank devices disappear from the card and strategies, not unavailable tanks", async () => {
   const { hass, rv } = completeFixture();
   const card = new HavrvRvCard();
@@ -630,7 +749,7 @@ test("all display classes declare shared true defaults, readable labels and edit
     assert.match(form.computeLabel(field), /^Show .+/);
   }
   assert.deepEqual(Object.keys(DISPLAY_CLASSES), [
-    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_coach", "show_systems",
+    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_tow", "show_coach", "show_systems",
   ]);
   const card = new HavrvRvCard();
   card.setConfig({ show_tires: undefined, show_tanks: undefined });

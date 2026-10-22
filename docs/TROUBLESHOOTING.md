@@ -25,6 +25,20 @@ them expecting to share an unsaved panel draft.
 If the page reports that Home Assistant must restart, restart Home Assistant;
 an acknowledged retry alone does not mean the entry loaded successfully.
 
+## The tow vehicle is missing from the dashboard
+
+Open the always-present **Tow** device in **Settings → Devices & services →
+HAVRV** and turn **Towing** on. Choose Car or Trailer under **Type**, and ensure
+the card/strategy's **Show tow vehicle** (`show_tow`) option is not false.
+Off, unknown or unavailable towing status draws nothing; an unavailable Type
+also cannot select an outline. Weight can remain unknown without hiding the
+outline. Refresh the browser after updating HAVRV if the new toggle is absent.
+
+Tow values are runtime entity controls, not fields on the management page.
+They restore after normal restarts/reloads without applying profile changes.
+Turning Towing off retains the selected type and weight. The switch only
+records towing status; it does not operate a hitch or certify readiness.
+
 ## A mapped entity is missing
 
 Open HAVRV's gear page, choose **System mappings** and check that the intended entity is selected in the

@@ -3,11 +3,12 @@
 from collections.abc import Callable
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
 
+from . import HavrvConfigEntry
 from .entity import HavrvSourceEntity, async_add_source_entities
+from .tow import HavrvTowingSwitch
 
 PARALLEL_UPDATES = 0
 
@@ -54,8 +55,9 @@ class HavrvSwitch(HavrvSourceEntity, SwitchEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: HavrvConfigEntry,
     async_add_entities: Callable[[list[Entity]], None],
 ) -> None:
     """Set up mapped switch entities."""
     async_add_source_entities(entry, "switch", HavrvSwitch, async_add_entities)
+    async_add_entities([HavrvTowingSwitch(entry)])

@@ -47,6 +47,7 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .tire import tire_positions
+from .tow import HavrvTowWeightNumber
 
 PARALLEL_UPDATES = 0
 
@@ -274,4 +275,5 @@ async def async_setup_entry(
             HavrvConfigurationNumber(entry, description)
             for description in _descriptions(entry)
         ]
+        + [HavrvTowWeightNumber(entry)]
     )

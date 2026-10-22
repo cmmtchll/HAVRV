@@ -109,6 +109,36 @@ with editable capacity numbers on the main RV device. Read-only diagnostic
 profile sensor IDs are unchanged. Source selections are editable on the
 management page or through the native options fallback.
 
+## Tow device
+
+Every RV profile, including existing name-only profiles, automatically has a
+**Tow** child device. No setup field, source mapping or helper is required.
+Open the device in **Settings → Devices & services → HAVRV** to edit:
+
+| Entity | Behavior |
+| --- | --- |
+| Towing | Runtime on/off switch; defaults to off |
+| Type | Runtime dropdown: Car or Trailer; defaults to Car |
+| Weight | Runtime number, initially unknown; finite non-negative values in kg for metric profiles or lb for US customary |
+
+These are user-reported operational values, not hardware controls or measured
+loads. Standard `switch.turn_on`/`turn_off`/`toggle`, `select.select_option` and
+`number.set_value` actions work without saving configuration or reloading the
+integration. Type and weight remain editable and retained while towing is off.
+All three values restore after reloads and normal Home Assistant restarts.
+Changing profile units converts the restored weight; it does not reinterpret
+the old number. Explicit per-entity display-unit overrides are supported.
+
+The dashboard draws a car outline or trailer behind the RV only while Towing
+is on and Type is available. Off, unknown or unavailable towing status reserves
+no space. An unknown weight shows **No data**, not a guessed load. The
+`show_tow` dashboard option can hide the graphic without changing runtime state.
+The device controls remain available even when the graphic is hidden.
+
+Weight is the user-entered total towed weight, not tongue weight, a towing
+rating or a safe-load calculation. No manufacturer-specific limits, towing
+procedures, braking checks or compatibility claims are inferred.
+
 ## Power-source devices
 
 Each RV has independently numbered **House Batteries** and **Chassis Batteries**

@@ -359,6 +359,12 @@
     }
   },
   "exceptions": {
+    "invalid_tow_weight": {
+      "message": "Enter a finite, non-negative tow weight."
+    },
+    "invalid_tow_type": {
+      "message": "Choose car or trailer."
+    },
     "invalid_numeric_setting": {
       "message": "Enter a finite numeric value."
     },
@@ -380,6 +386,9 @@
   },
   "entity": {
     "number": {
+      "tow_weight": {
+        "name": "Weight"
+      },
       "overall_height": {
         "name": "Overall height"
       },
@@ -583,6 +592,13 @@
       }
     },
     "select": {
+      "tow_type": {
+        "name": "Type",
+        "state": {
+          "car": "Car",
+          "trailer": "Trailer"
+        }
+      },
       "operation_mode": {
         "name": "Operation mode",
         "state": {
@@ -592,6 +608,11 @@
           "campsite_minimal": "Campsite minimal",
           "maintenance": "Maintenance"
         }
+      }
+    },
+    "switch": {
+      "towing": {
+        "name": "Towing"
       }
     }
   }

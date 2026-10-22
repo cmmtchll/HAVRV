@@ -125,7 +125,9 @@ async def test_device_categories_and_profile_units(
         (DOMAIN, entry.entry_id), entry.entry_id
     )
     entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
-    controls = [ent for ent in entities if ent.domain == "number"]
+    controls = [
+        ent for ent in entities if ent.domain == "number" and ent.device_id == rv.id
+    ]
     assert len(controls) == 21
     assert all(ent.entity_category is EntityCategory.CONFIG for ent in controls)
     assert all(ent.device_id == rv.id for ent in controls)
