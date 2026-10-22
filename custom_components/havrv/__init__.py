@@ -182,6 +182,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
     platforms.add(Platform.SENSOR)
+    platforms.add(Platform.SWITCH)
     if positions or any(
         settings.get(metric)
         for settings in entry.options.get(CONF_POWER_SOURCES, {}).values()

@@ -113,6 +113,7 @@ export const DISPLAY_CLASSES = {
   show_tires: { default: true, label: "Show tires and tire analysis", fields: { axles: [], monitorEntities: [] } },
   show_tanks: { default: true, label: "Show tanks", fields: { tanks: [] } },
   show_power: { default: true, label: "Show placed power sources", fields: { powerSources: [] } },
+  show_tow: { default: true, label: "Show tow vehicle", fields: { tow: undefined } },
   show_coach: { default: true, label: "Show coach information and operation mode", fields: { profile: {}, profileEntities: [], operationMode: undefined } },
   show_systems: { default: true, label: "Show mapped system sections", fields: { systems: [] } },
 };
@@ -140,6 +141,7 @@ function watchedEntities(model) {
   return [
     ...Object.values(model.profile || {}),
     model.operationMode,
+    ...Object.values(model.tow || {}),
     ...model.axles.flatMap((axle) =>
       [...axle.left, ...axle.right].flatMap((tire) =>
         Object.values(TIRE_ROLES).map((role) => tire[role]),
@@ -238,6 +240,7 @@ export function buildModel(hass, rv) {
     monitorEntities: [],
     systems: [],
     powerSources: [],
+    tow: undefined,
   };
   const axles = new Map();
   for (const device of Object.values(hass.devices || {})) {
@@ -288,6 +291,10 @@ export function buildModel(hass, rv) {
       });
     } else if (part === "operations") {
       model.operationMode = entityRoles(entries, { operation_mode: "mode" }).mode;
+    } else if (part === "tow") {
+      model.tow = entityRoles(entries, {
+        towing: "enabled", tow_type: "type", tow_weight: "weight",
+      });
     } else {
       const entities = visible(device.id);
       if (entities.length) {
@@ -781,7 +788,49 @@ function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
   });
 }
 
-/** Render the plan-view SVG for the configured axles, wheels, and tanks. */
+function towDrawing(hass, model, geometry, bounds, vertical) {
+  const tow = model.tow;
+  const type = stateOf(hass, tow?.type)?.state;
+  if (!isOn(hass, tow?.enabled) || !["car", "trailer"].includes(type)) return undefined;
+  // Place behind the entire drawing, including dense electrical overflow lanes.
+  const front = Math.min(-40, vertical
+    ? geometry.map(0, 0)[1] - bounds.y - bounds.height - 24
+    : bounds.x - geometry.map(0, 0)[0] - 24);
+  const [x0, y0] = geometry.map(front - 220, -70);
+  const [x1, y1] = geometry.map(front, 70);
+  const box = {
+    x: Math.min(x0, x1), y: Math.min(y0, y1),
+    width: Math.abs(x1 - x0), height: Math.abs(y1 - y0),
+  };
+  const shape = type === "car"
+    ? `<rect x="-216" y="-56" width="208" height="112" rx="32"></rect>
+       <path d="M-64,-48 L-48,-34 L-48,34 L-64,48 Z M-170,-48 L-184,-34 L-184,34 L-170,48 Z"></path>
+       ${[-180, -64].flatMap((u) => [-70, 56].map((v) =>
+         `<rect x="${u}" y="${v}" width="32" height="14" rx="3"></rect>`)).join("")}`
+    : `<path d="M0,0 L-40,-46 M0,0 L-40,46"></path>
+       <rect x="-216" y="-58" width="176" height="116" rx="6"></rect>
+       <path d="M-144,-58 V-70 H-112 V-58 M-144,58 V70 H-112 V58"></path>`;
+  const weight = numeric(hass, tow.weight, 1);
+  const label = `${type === "car" ? "Car" : "Trailer"} · ${weight ? `${weight.text} ${weight.unit}` : STR.noData}`;
+  const [cx, cy] = geometry.map(front - 118, 0);
+  return {
+    box,
+    svg: `<g class="tow" data-tow-type="${type}">
+      <g class="tow-outline" transform="${geometry.transform}">
+        <path d="M0,0 H${front}"></path>
+        <g transform="translate(${front} 0)" data-entity="${tow.type}" tabindex="0" role="button" aria-label="${escapeHtml(label)}">
+          <title>${escapeHtml(label)}</title>${shape}
+        </g>
+      </g>
+      <text class="tow-label" x="${cx}" y="${cy - 20}" text-anchor="middle" data-entity="${tow.enabled}" tabindex="0" role="button">Towing</text>
+      <text class="tow-label" x="${cx}" y="${cy}" text-anchor="middle" data-entity="${tow.weight}" tabindex="0" role="button">${escapeHtml(type === "car" ? "Car" : "Trailer")}
+        <tspan x="${cx}" dy="18">${escapeHtml(weight ? `${weight.text} ${weight.unit}` : STR.noData)}</tspan>
+      </text>
+    </g>`,
+  };
+}
+
+/** Render the plan-view SVG for the RV and its currently towed vehicle. */
 export function renderVehicle(hass, model, orientation, uid, showPower = true) {
   model = visibleModel(model, typeof showPower === "object" ? showPower : { show_power: showPower, show_tires: model.tiresVisible });
   const geometry = ORIENTATIONS[orientation];
@@ -799,7 +848,9 @@ export function renderVehicle(hass, model, orientation, uid, showPower = true) {
     : tireChip(box.axle, box.side, box.sign, states, geometry, box));
   const power = model.powerSources?.length ? layoutPowerBoxes(hass, model, orientation) : undefined;
   const tankBand = TANK_BAND;
-  const bounds = power?.bounds || drawingBounds(geometry, tireBoxes, model);
+  let bounds = power?.bounds || drawingBounds(geometry, tireBoxes, model);
+  const tow = towDrawing(hass, model, geometry, bounds, vertical);
+  if (tow) bounds = drawingBounds(geometry, [bounds, tow.box], model);
   return `
     <svg class="vehicle" style="min-width:${bounds.width}px" viewBox="${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}" role="img" aria-label="${escapeHtml(model.name)}">
       <defs>
@@ -821,6 +872,7 @@ export function renderVehicle(hass, model, orientation, uid, showPower = true) {
       ${tankLabels(model, span, states, geometry, vertical, tankBand).join("")}
       ${chips.join("")}
       ${power ? renderPowerBoxes(hass, power) : ""}
+      ${tow?.svg || ""}
     </svg>`;
 }
 
@@ -1114,6 +1166,11 @@ const STYLES = `
     stroke: color-mix(in srgb, var(--hv-text) 12%, transparent); }
   .axle { stroke: color-mix(in srgb, var(--hv-text) 45%, var(--hv-card)); stroke-width: 6;
     stroke-linecap: round; }
+  .tow-outline { fill: none; stroke: var(--hv-text); stroke-width: 2; }
+  .tow-label { paint-order: stroke; stroke: var(--hv-card); stroke-width: 3px;
+    stroke-linejoin: round; }
+  .tow-outline [data-entity]:focus-visible { stroke: var(--primary-color, #03a9f4); stroke-width: 3; }
+  .tow-label:focus-visible { text-decoration: underline; }
   .tire rect, .equipment-shell { fill: color-mix(in srgb, var(--lvl) 82%, #000); stroke: color-mix(in srgb, var(--lvl) 60%, #000);
     stroke-width: 1.5; }
   .tire .tread { stroke: rgba(0, 0, 0, 0.28); stroke-width: 2; }
@@ -1325,6 +1382,7 @@ export class HavrvRvCard extends HTMLElement {
         axles: model.axles,
         tanks: model.tanks,
         powerSources: model.powerSources,
+        tow: model.tow,
         mode: model.operationMode,
       },
       model?.watched.map((id) => {

@@ -61,6 +61,15 @@ The layout follows the RV profile:
 - Wide cards draw the RV horizontally, with the front on the right. Cards
   narrower than about 560 pixels, such as on phones, draw it vertically with
   the front at the top.
+- The always-present **Tow** device supplies runtime Towing, Type and Weight
+  controls. Turn **Towing** on from the device page to draw a car outline or
+  trailer behind the RV, with its entered weight. Off/unknown/unavailable
+  towing status hides it completely and reserves no space. Unknown weight
+  shows **No data**. The rear drawing expands in either orientation, beyond
+  tire/electrical readouts. Select the outline to edit Type, the weight to edit
+  Weight, or **Towing** above the label to open the switch. Controls are always
+  available on the Tow device even while hidden; no generic Tow system section
+  is generated. These values do not verify tow readiness or safe loading.
 - The drawing keeps a readable minimum size, rather than squeezing a crowded
   diagram into the card. Small cards scroll horizontally when necessary; tall
   drawings scroll vertically within an 80%-of-viewport-height region. Tab to the
@@ -86,7 +95,7 @@ the generated dashboard can still include unplaced source-device sections.
 Colocated devices retain separate, nonoverlapping boxes associated with the same
 region. You do not enter physical positions in dashboard YAML.
 
-The card's visual editor has toggles for **tires and tire analysis**, **tanks**,
+The card's visual editor has toggles for **tow vehicle**, **tires and tire analysis**, **tanks**,
 **placed power sources**, **coach information and operation mode**, and **mapped
 system sections**, alongside **header** and **legend**. Every toggle defaults
 to on. Coach/system sections apply to the generated dashboard; hiding coach
@@ -319,6 +328,7 @@ In dashboard edit mode, select **Add card** and search for
 | `show_header` | `true` | Show the name, operation mode, and status summary |
 | `show_legend` | `true` | Show the status color legend |
 | `show_power` | `true` | Show individually placed power-source readout boxes |
+| `show_tow` | `true` | Show the selected car/trailer outline only while Towing is on; never changes towing state |
 | `show_tires` | `true` | Show tire shapes/readouts; also Tire analysis on strategies |
 | `show_tanks` | `true` | Show tank shapes/readouts; also Tanks on strategies |
 | `show_coach` | `true` | Show coach subtitle and operation-mode pill; also Coach on strategies |

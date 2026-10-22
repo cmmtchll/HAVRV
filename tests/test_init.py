@@ -116,11 +116,12 @@ async def test_setup_uses_home_assistant_units_when_profile_omits_units(
 
     assert await hass.config_entries.async_setup(entry.entry_id)
     assert entry.runtime_data.measurement_system == UNIT_SYSTEM_US_CUSTOMARY
-    assert [platform.value for platform in entry.runtime_data.platforms] == [
+    assert {platform.value for platform in entry.runtime_data.platforms} == {
         "select",
         "number",
         "sensor",
-    ]
+        "switch",
+    }
     profile_entities = {
         entity.unique_id.removeprefix(f"{entry.entry_id}_profile_"): entity
         for entity in er.async_entries_for_config_entry(
@@ -354,7 +355,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
 
     entity_registry = er.async_get(hass)
     mapped_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    assert len(mapped_entities) == 28
+    assert len(mapped_entities) == 31
     mapped_entity = next(
         entity
         for entity in mapped_entities
@@ -368,6 +369,7 @@ async def test_setup_creates_system_device_and_mirrors_source_sensor(
         *DEFAULT_POWER_DEVICE_NAMES,
         "Adventure RV",
         "Operations",
+        "Tow",
         "Power",
         "Water",
         "Chassis",
@@ -417,6 +419,7 @@ async def test_removed_system_mapping_removes_its_stale_device(
         *DEFAULT_POWER_DEVICE_NAMES,
         "Adventure RV",
         "Operations",
+        "Tow",
     }
     assert not any(
         entity.unique_id.endswith("sensor.house_battery_voltage")
@@ -470,6 +473,7 @@ async def test_reconfigure_removes_obsolete_tire_devices(
         *DEFAULT_POWER_DEVICE_NAMES,
         "Adventure RV",
         "Operations",
+        "Tow",
         "All Tire Monitor",
         "Front Left Tire",
         "Front Right Tire",
@@ -561,6 +565,7 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
         *DEFAULT_POWER_DEVICE_NAMES,
         "Tire RV",
         "Operations",
+        "Tow",
         "All Tire Monitor",
         "Front Left Tire",
         "Front Right Tire",
@@ -724,11 +729,12 @@ async def test_options_reload_adds_platform_to_existing_entry(
     entry.add_to_hass(hass)
 
     assert await hass.config_entries.async_setup(entry.entry_id)
-    assert [platform.value for platform in entry.runtime_data.platforms] == [
+    assert {platform.value for platform in entry.runtime_data.platforms} == {
         "select",
         "number",
         "sensor",
-    ]
+        "switch",
+    }
 
     form = await hass.config_entries.options.async_init(entry.entry_id)
     await hass.config_entries.options.async_configure(
@@ -752,7 +758,7 @@ async def test_options_reload_adds_platform_to_existing_entry(
         for device in dr.async_entries_for_config_entry(
             dr.async_get(hass), entry.entry_id
         )
-    } == {*DEFAULT_POWER_DEVICE_NAMES, "Adventure RV", "Operations", "Power"}
+    } == {*DEFAULT_POWER_DEVICE_NAMES, "Adventure RV", "Operations", "Tow", "Power"}
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -851,6 +857,7 @@ async def test_setup_creates_complete_tank_devices_without_sources(
         "Fresh-water tank",
         "Gray-water tank",
         "Operations",
+        "Tow",
         "Water",
     }
     rv_device = next(device for device in devices if device.name == "Adventure RV")

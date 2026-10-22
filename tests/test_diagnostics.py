@@ -45,7 +45,7 @@ async def test_diagnostics_redact_profile_and_entity_mapping_values(
     assert diagnostics["entry_data"][CONF_STORAGE_ZONE_ID] == REDACTED
     assert diagnostics["entry_data"][CONF_ENTITY_MAPPINGS] == REDACTED
     assert diagnostics["entry_options"][CONF_TIRE_ENTITY_MAPPINGS] == REDACTED
-    assert diagnostics["platforms"] == ["select", "number", "sensor"]
+    assert set(diagnostics["platforms"]) == {"select", "number", "sensor", "switch"}
     assert "private_voltage" not in str(diagnostics)
     assert "private_tire_pressure" not in str(diagnostics)
     assert await hass.config_entries.async_unload(entry.entry_id)

@@ -49,6 +49,10 @@ implemented integration behavior, not just repository configuration.
   sources do not remove configured tanks.
 - An Operations device with a restorable operation-mode selector. The mode
   does not yet change problem detection.
+- An always-present Tow device with restorable runtime towing, car/trailer and
+  weight controls. The dashboard draws the selected outline only while towing
+  is on; profile-unit weight conversion is independent of configuration writes.
+  No towing ratings, readiness checks or load safety calculations are inferred.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
 - Ruff, pytest, a 96% integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.

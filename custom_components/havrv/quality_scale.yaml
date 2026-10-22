@@ -43,10 +43,10 @@ rules:
     comment: Source state listeners are registered and removed with entity lifecycle in custom_components/havrv/entity.py.
   entity-unique-id:
     status: done
-    comment: Mapped, profile, configuration-number, and operation-mode entities define stable unique IDs in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, custom_components/havrv/number.py, and custom_components/havrv/select.py.
+    comment: Mapped, profile, configuration-number, operation-mode, and runtime tow entities define stable unique IDs in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, custom_components/havrv/number.py, custom_components/havrv/select.py, and custom_components/havrv/tow.py.
   has-entity-name:
     status: done
-    comment: Mapped, profile, configuration-number, and operation-mode entities set has_entity_name in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, custom_components/havrv/number.py, and custom_components/havrv/select.py.
+    comment: Mapped, profile, configuration-number, operation-mode, and runtime tow entities set has_entity_name in custom_components/havrv/entity.py, custom_components/havrv/sensor.py, custom_components/havrv/number.py, custom_components/havrv/select.py, and custom_components/havrv/tow.py.
   runtime-data:
     status: done
     comment: Typed config-entry runtime data is populated in custom_components/havrv/__init__.py.
@@ -91,7 +91,7 @@ rules:
     comment: CI enforces at least 96% coverage for custom_components/havrv in pyproject.toml.
   devices:
     status: done
-    comment: RV, mapped-system, and independent power-source devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py and tests/test_power.py; the Operations device is created in custom_components/havrv/select.py and tested in tests/test_operations.py.
+    comment: RV, mapped-system, and independent power-source devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py and tests/test_power.py; Operations is created in custom_components/havrv/select.py and Tow in custom_components/havrv/tow.py, covered by tests/test_operations.py and tests/test_tow.py.
   diagnostics:
     status: done
     comment: Diagnostics export redacted entry and entity data in custom_components/havrv/diagnostics.py, tested in tests/test_diagnostics.py.
@@ -127,22 +127,22 @@ rules:
     comment: Options changes add mapped system devices after setup, tested in tests/test_init.py.
   entity-category:
     status: done
-    comment: Mapped entities preserve source categories; profile and tire problem sensors are diagnostic, and editable quantities and limits use CONFIG in custom_components/havrv/number.py, verified in tests/test_configuration_numbers.py.
+    comment: Mapped entities preserve source categories; profile and tire problem sensors are diagnostic, and editable specifications and limits use CONFIG in custom_components/havrv/number.py. Runtime tow controls in custom_components/havrv/tow.py have no configuration category, verified in tests/test_configuration_numbers.py and tests/test_tow.py.
   entity-device-class:
     status: done
-    comment: Dimensions, capacities, pressure/temperature limits, and battery limits use applicable number device classes in custom_components/havrv/number.py; profile-unit defaults and explicit per-entity overrides are covered by tests/test_configuration_numbers.py.
+    comment: Dimensions, capacities, pressure/temperature limits, and battery limits use applicable number device classes in custom_components/havrv/number.py; runtime tow weight uses weight in custom_components/havrv/tow.py. Profile units and explicit per-entity overrides are covered by tests/test_configuration_numbers.py and tests/test_tow.py.
   entity-disabled-by-default:
     status: exempt
     comment: Entities are explicitly configured or profile values entered by the user; no optional noisy entity set is generated.
   entity-translations:
     status: done
-    comment: Profile and configuration-number entity names and operation-mode states are translated in custom_components/havrv/strings.json, verified by tests/test_configuration_numbers.py and tests/test_operations.py.
+    comment: Profile, configuration-number and tow entity names and operation-mode/tow-type states are translated in custom_components/havrv/strings.json, verified by tests/test_configuration_numbers.py, tests/test_operations.py and tests/test_tow.py.
   exception-translations:
     status: done
-    comment: Configuration-number validation raises translated ServiceValidationError messages defined in custom_components/havrv/strings.json and tested in tests/test_configuration_numbers.py.
+    comment: Configuration-number and runtime tow validation raise translated ServiceValidationError messages defined in custom_components/havrv/strings.json and tested in tests/test_configuration_numbers.py and tests/test_tow.py.
   icon-translations:
     status: done
-    comment: HAVRV-owned profile and operation-mode icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py.
+    comment: HAVRV-owned profile, operation-mode and tow icons are translated in custom_components/havrv/icons.json and checked in tests/test_init.py and tests/test_tow.py.
   reconfiguration-flow:
     status: done
     comment: The reconfigure flow updates profile details while retaining identity and active mappings in custom_components/havrv/config_flow.py; reducing bank counts removes obsolete bank settings. Shore line-count changes preserve Line 1 identities and remove inactive Line 2 entities, tested in tests/test_config_flow.py, tests/test_management.py and tests/test_power.py.

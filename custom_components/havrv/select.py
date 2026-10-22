@@ -10,6 +10,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import HavrvConfigEntry
 from .const import DOMAIN, OPERATION_MODES
+from .tow import HavrvTowTypeSelect
 
 PARALLEL_UPDATES = 0
 
@@ -66,4 +67,4 @@ async def async_setup_entry(
     async_add_entities: Callable[[list[Entity]], None],
 ) -> None:
     """Set up the Operations device entities."""
-    async_add_entities([HavrvOperationModeSelect(entry)])
+    async_add_entities([HavrvOperationModeSelect(entry), HavrvTowTypeSelect(entry)])

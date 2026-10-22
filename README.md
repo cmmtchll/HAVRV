@@ -51,6 +51,9 @@ choose existing entities, and configure optional tank and tire monitoring.
   comparative tire analysis.
 - Adds an Operations device with an operation-mode selector (Storage,
   Driving, Campsite full service, Campsite minimal, or Maintenance).
+- Always adds a **Tow** device with runtime-editable Towing, Car/Trailer,
+  and Weight controls. The overview shows the matching outline only while
+  towing is on. See [tow controls](docs/FEATURES.md#tow-device).
 - Creates independent house/chassis battery-bank devices (one of each by
   default), plus Inverter, Generator, and Shore Power. Configure bank voltage
   and capacity, read-only voltage/current/Enabled/Charging and optional

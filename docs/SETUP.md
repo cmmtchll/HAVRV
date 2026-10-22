@@ -244,6 +244,10 @@ its child devices. Confirm that:
 - Source units and any configured limits are appropriate for your equipment.
 - The **Operations** device shows an **Operation mode** selector. It is unset
   until you choose a mode; the mode does not change problem detection.
+- The **Tow** device is always present, with **Towing** initially off,
+  **Type** initially Car, and **Weight** unknown. Edit these directly on the
+  device at runtime; no profile setup or source mapping is needed.
+  Weight uses the profile's kg/lb units. See [tow controls](FEATURES.md#tow-device).
 
 For a missing or unavailable reading, check the original source entity in Home
 Assistant first. The [troubleshooting guide](TROUBLESHOOTING.md) covers common

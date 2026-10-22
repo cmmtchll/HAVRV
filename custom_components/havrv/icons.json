@@ -1,6 +1,9 @@
 {
   "entity": {
     "number": {
+      "tow_weight": {
+        "default": "mdi:weight"
+      },
       "fresh_water_tank_warning": {
         "default": "mdi:water-percent"
       },
@@ -113,6 +116,13 @@
       }
     },
     "select": {
+      "tow_type": {
+        "default": "mdi:car-outline",
+        "state": {
+          "car": "mdi:car-outline",
+          "trailer": "mdi:truck-trailer"
+        }
+      },
       "operation_mode": {
         "default": "mdi:rv-truck",
         "state": {
@@ -122,6 +132,11 @@
           "campsite_minimal": "mdi:tent",
           "maintenance": "mdi:wrench"
         }
+      }
+    },
+    "switch": {
+      "towing": {
+        "default": "mdi:tow-truck"
       }
     },
     "binary_sensor": {
