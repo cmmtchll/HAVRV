@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.5.0
+
+- Add an always-present Tow device with restorable runtime Towing, Car/Trailer
+  and Weight controls, without profile configuration or source mappings.
+- Use profile-selected kg/lb units for tow weight, preserving entity unit
+  overrides and converting restored values when profile units change.
+- Draw the selected car or trailer outline behind the RV only while towing
+  is on, with a shared Show tow vehicle dashboard toggle and no reserved
+  space when hidden. No towing ratings or safety limits are inferred.
+
 ## 0.4.4
 
 - Bump the integration patch version; no runtime behavior changes.
