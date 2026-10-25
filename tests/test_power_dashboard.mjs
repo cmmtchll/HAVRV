@@ -23,6 +23,7 @@ const {
   buildModel, powerState, layoutPowerBoxes, renderPowerBoxes, renderVehicle, summarize,
   rvView, HavrvDashboardStrategy, HavrvViewStrategy, HavrvRvCard,
   DISPLAY_CLASSES, dashboardOptions, visibleModel,
+  rememberReadings, missingReadingText,
 } = await import(`data:text/javascript;base64,${Buffer.from(text).toString("base64")}`);
 
 function fixture() {
@@ -1099,4 +1100,169 @@ test("all equipment at R-Rear retains independent unclipped readouts and graphic
     }
     assert.doesNotMatch(renderVehicle(hass, model, orientation, 1), /power-leader/);
   }
+});
+
+test("vertical tanks/power use the tire-card width instead of an extra shore column", () => {
+  const { hass, model } = completeFixture();
+  model.axles = model.axles.filter((axle) => ["front", "rear_axle_1", "tag_axle"].includes(axle.key));
+  model.tanks = model.tanks.filter((tank) => tank.type !== "gray_water");
+  model.powerSources = model.powerSources.filter((source) =>
+    ["house_bank_1", "chassis_bank_1", "generator", "shore_power"].includes(source.key));
+  for (const source of model.powerSources) {
+    hass.states[source.location].state = source.key === "shore_power" ? "left" : "left_mid";
+  }
+  const bounds = (svg) => /viewBox="([^"]+)"/.exec(svg)[1].split(" ").map(Number);
+  const driving = bounds(renderVehicle(hass, model, "vertical", 1, {
+    show_tanks: false, show_power: false,
+  }));
+  for (const unmapped of [false, true]) {
+    if (unmapped) {
+      model.powerSources = model.powerSources.map((source) => ({
+        key: source.key, name: source.name, location: source.location,
+      }));
+    }
+    const parked = visibleModel(model, { show_tires: false });
+    const layout = layoutPowerBoxes(hass, parked, "vertical");
+    assert.ok(layout.bounds.width <= driving[2], `${layout.bounds.width} exceeds ${driving[2]}`);
+    assert.ok(layout.bounds.height <= driving[3] && layout.bounds.height >= driving[3] - 24);
+    assert.equal(layout.boxes.length, 4);
+    const left = layout.boxes.filter((box) => box.side === -1);
+    assert.equal(new Set(left.map((box) => box.x)).size, 1);
+  }
+});
+
+test("equipment tags have their own badge below the complete symbol and within its footprint", () => {
+  const { hass, rv } = fixture();
+  const layout = layoutPowerBoxes(hass, buildModel(hass, rv), "vertical");
+  const svg = renderPowerBoxes(hass, layout);
+  assert.match(svg, /class="equipment-badge" x="0" y="25" width="24" height="8"/);
+  assert.match(svg, /class="equipment-tag" x="12" y="31"/);
+  assert.match(svg, /class="equipment-energy"/);
+  for (const icon of layout.icons) {
+    assert.ok(33 * icon.width / 24 <= icon.height);
+    assert.ok(icon.y + icon.height <= layout.bounds.y + layout.bounds.height);
+  }
+  assert.match(text, /\.equipment-detail \{ fill: none; stroke: var\(--hv-text\)/);
+});
+
+test("last data tracks valid reports, not outage timestamps, and uses the oldest missing channel", () => {
+  const now = Date.parse("2026-10-25T12:00:00Z");
+  const hass = { states: {
+    "sensor.zero": { state: "0", last_reported: "2026-10-25T10:00:00Z" },
+    "sensor.second": { state: "12", last_updated: "2026-10-25T11:59:00Z" },
+    "binary_sensor.off": { state: "off", last_changed: "2026-10-25T11:00:00Z" },
+  } };
+  const ids = Object.keys(hass.states);
+  const history = new Map();
+  rememberReadings(hass, ids, history, now);
+  assert.equal(missingReadingText(hass, ids, now), "");
+  for (const id of ids) {
+    hass.states[id] = { state: "unavailable", last_updated: "2026-10-25T12:00:00Z" };
+  }
+  rememberReadings(hass, ids, history, now);
+  assert.equal(missingReadingText(hass, ids, now), "Last data 2h ago");
+  assert.equal(missingReadingText(hass, ["binary_sensor.off"], now), "Last data 1h ago");
+  assert.equal(missingReadingText(hass, ["sensor.second"], now), "Last data 1m ago");
+  assert.equal(missingReadingText(hass, ["sensor.second"], now + 2 * 86400000), "Last data 2d ago");
+  delete hass.states["sensor.zero"];
+  assert.equal(missingReadingText(hass, ["sensor.zero"], now), "Last data 2h ago");
+  assert.equal(missingReadingText(hass, ["sensor.zero", "sensor.never"], now), "Last data unknown");
+  hass.states["sensor.second"] = { state: "1", last_reported: "2026-10-25T11:59:45Z" };
+  rememberReadings(hass, ids, history, now);
+  assert.equal(missingReadingText(hass, ["sensor.second"], now), "");
+  hass.states["sensor.second"].state = "unknown";
+  assert.equal(missingReadingText(hass, ["sensor.second"], now), "Last data 15s ago");
+});
+
+test("missing, malformed, blank and future reports never invent last-good timestamps", () => {
+  const now = Date.parse("2026-10-25T12:00:00Z");
+  const hass = { states: {
+    "sensor.never": { state: "unavailable", last_updated: "2026-10-25T11:00:00Z" },
+    "sensor.bad": { state: "not a number", last_updated: "2026-10-25T11:00:00Z" },
+    "sensor.blank": { state: " ", last_updated: "2026-10-25T11:00:00Z" },
+    "sensor.timestamp": { state: "1", last_updated: "invalid" },
+    "sensor.future": { state: "1", last_updated: "2026-10-26T12:00:00Z" },
+  } };
+  const history = new Map();
+  rememberReadings(hass, Object.keys(hass.states), history, now);
+  assert.equal(history.size, 0);
+  assert.equal(missingReadingText(hass, ["sensor.never"], now), "Last data unknown");
+  assert.equal(missingReadingText(hass, ["sensor.missing"], now), "Last data unknown");
+  assert.equal(missingReadingText(hass, [], now), "");
+});
+
+test("each tire row, tank and electrical box reports missing-channel age and recovers", () => {
+  const { hass, model } = completeFixture();
+  const now = Date.now();
+  const before = new Date(now - 2 * 3600000).toISOString();
+  const ids = [
+    ...model.axles.flatMap((axle) => [...axle.left, ...axle.right].map((tire) => tire.pressure)),
+    ...model.tanks.map((tank) => tank.percentage),
+    ...model.powerSources.filter((source) => source.key !== "generator").map((source) => source.voltage),
+  ];
+  for (const id of ids) hass.states[id].last_updated = before;
+  rememberReadings(hass, ids, new Map(), now);
+  for (const id of ids) hass.states[id].state = "unavailable";
+  for (const orientation of ["horizontal", "vertical"]) {
+    const svg = renderVehicle(hass, model, orientation, 1);
+    assert.equal((svg.match(/class="data-age" role="img" aria-label="Last data 2h ago"/g) || []).length, 24);
+    const labels = [...svg.matchAll(/<g class="data-age"[\s\S]*?<\/g>/g)].map(([label]) => label);
+    assert.equal(labels.length, 24);
+    for (const label of labels) {
+      assert.match(label, /<title>Last data 2h ago<\/title>/);
+      assert.match(label, /class="age-clock"/);
+      assert.match(label, /<text x="11" y="0">2h<\/text>/);
+      assert.doesNotMatch(label, /<tspan|<text[^>]*>Last data/);
+    }
+    assert.doesNotMatch(svg, /Last data unknown/);
+    for (const chip of layoutPowerBoxes(hass, model, orientation).obstacles) {
+      assert.ok(chip.height >= 60);
+      assert.equal(chip.rowHeight, 36);
+    }
+  }
+  for (const id of ids) hass.states[id].state = "1";
+  assert.doesNotMatch(renderVehicle(hass, model, "vertical", 1), /class="data-age"/);
+});
+
+test("card ages refresh without state changes, release timers and discard removed mappings", () => {
+  const { hass } = fixture();
+  const card = new HavrvRvCard();
+  const id = "sensor.renamed_house_bank_1_voltage";
+  hass.states[id].last_updated = new Date(Date.now() - 3600000).toISOString();
+  card.setConfig({});
+  card.hass = hass;
+  hass.states[id].state = "unavailable";
+  card.hass = { ...hass };
+  assert.match(card.shadowRoot.innerHTML, /Last data 1h ago/);
+  const set = globalThis.setInterval;
+  const clear = globalThis.clearInterval;
+  const clock = Date.now;
+  let tick;
+  let cleared;
+  const timer = { unref() {} };
+  try {
+    globalThis.setInterval = (callback, delay) => {
+      assert.equal(delay, 30000);
+      tick = callback;
+      return timer;
+    };
+    globalThis.clearInterval = (value) => { cleared = value; };
+    card.connectedCallback();
+    assert.equal(typeof tick, "function");
+    Date.now = () => clock() + 2 * 3600000;
+    tick();
+    assert.match(card.shadowRoot.innerHTML, /Last data 3h ago/);
+    card.disconnectedCallback();
+    assert.equal(cleared, timer);
+    assert.equal(card._ageTimer, undefined);
+  } finally {
+    globalThis.setInterval = set;
+    globalThis.clearInterval = clear;
+    Date.now = clock;
+  }
+  card.setConfig({ show_power: false });
+  assert.equal(card._readingHistory.has(id), false);
+  card.setConfig({ show_power: true });
+  assert.match(card.shadowRoot.innerHTML, /Last data unknown/);
+  assert.match(card.shadowRoot.innerHTML, /<title>Last data unknown<\/title>[\s\S]*?<text x="11" y="0">\?<\/text>/);
 });

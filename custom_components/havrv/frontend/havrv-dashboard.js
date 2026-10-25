@@ -341,7 +341,7 @@ function formatNumber(hass, value, precision) {
 
 function numeric(hass, entityId, defaultPrecision = 0) {
   const state = stateOf(hass, entityId);
-  if (!state || UNAVAILABLE.has(state.state)) return undefined;
+  if (!state || UNAVAILABLE.has(state.state) || !String(state.state).trim()) return undefined;
   const value = Number(state.state);
   if (!Number.isFinite(value)) return undefined;
   const precision = hass.entities?.[entityId]?.display_precision ?? defaultPrecision;
@@ -358,6 +358,41 @@ function formatState(hass, entityId) {
   return typeof hass.formatEntityState === "function"
     ? hass.formatEntityState(state)
     : state.state;
+}
+
+const readingHistory = new WeakMap();
+
+function validReading(hass, entityId) {
+  const state = stateOf(hass, entityId);
+  if (!state || UNAVAILABLE.has(state.state) || !String(state.state).trim()) return false;
+  return entityId.startsWith("binary_sensor.")
+    ? state.state === "on" || state.state === "off"
+    : Number.isFinite(Number(state.state));
+}
+
+/** Use only observed valid reports, never the timestamp of an unavailable state. */
+export function rememberReadings(hass, entityIds, history, now = Date.now()) {
+  for (const id of entityIds) {
+    if (!validReading(hass, id)) continue;
+    const state = stateOf(hass, id);
+    const timestamp = Date.parse(state.last_reported || state.last_updated || state.last_changed);
+    if (Number.isFinite(timestamp) && timestamp <= now) {
+      history.set(id, Math.max(history.get(id) || 0, timestamp));
+    }
+  }
+  readingHistory.set(hass, history);
+}
+
+export function missingReadingText(hass, entityIds, now = Date.now()) {
+  const missing = entityIds.filter((id) => id && !validReading(hass, id));
+  if (!missing.length) return "";
+  const timestamps = missing.map((id) => readingHistory.get(hass)?.get(id));
+  if (timestamps.some((timestamp) => !Number.isFinite(timestamp))) return "Last data unknown";
+  // Use the oldest missing channel so a newer channel cannot hide a long outage.
+  const seconds = Math.max(0, Math.floor((now - Math.min(...timestamps)) / 1000));
+  const age = seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m`
+    : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86400)}d`;
+  return `Last data ${age} ago`;
 }
 
 /** Report only declared measurements and definite binary statuses. */
@@ -497,6 +532,19 @@ const ORIENTATIONS = {
 
 const r1 = (value) => Math.round(value * 10) / 10;
 
+function dataAgeLabel(age, x, y, centered = false) {
+  if (!age) return "";
+  const compact = age === "Last data unknown" ? "?" : age.replace(/^Last data | ago$/g, "");
+  const width = 11 + compact.length * (centered ? 5 : 6);
+  const left = centered ? x - width / 2 : x;
+  return `<g class="data-age" role="img" aria-label="${escapeHtml(age)}" transform="translate(${left} ${y})">
+    <title>${escapeHtml(age)}</title>
+    <circle class="age-clock" cx="4" cy="-3.5" r="3.5"></circle>
+    <path class="age-clock" d="M4 -6 V-3.5 L6 -2.5"></path>
+    <text x="11" y="0">${escapeHtml(compact)}</text>
+  </g>`;
+}
+
 function axleLabel(axle, driveCount) {
   if (axle.kind === "front") return "Front";
   if (axle.kind === "tag") return "Tag";
@@ -600,7 +648,7 @@ function flagText(state) {
     .join(" ");
 }
 
-function tireChip(axle, side, sign, states, geometry, box) {
+function tireChip(hass, axle, side, sign, states, geometry, box) {
   const tires = axle[side];
   const dual = tires.length > 1;
   const { height, width, x, y } = box;
@@ -620,6 +668,7 @@ function tireChip(axle, side, sign, states, geometry, box) {
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
       : `<tspan class="mid muted">—</tspan>`;
     const flags = flagText(state);
+    const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
     parts.push(
       `<g class="row">
         <text class="row-pressure" x="${x + 9}" y="${y + 34}">${pressure}</text>
@@ -632,6 +681,7 @@ function tireChip(axle, side, sign, states, geometry, box) {
       flags
         ? `<text class="flag ${level}" x="${x + width - 9}" y="${y + 46}" text-anchor="end">${flags}</text>`
         : "",
+      dataAgeLabel(age, x + 9, y + height - 8),
     );
     return `<g class="chip ${level}" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
@@ -645,7 +695,7 @@ function tireChip(axle, side, sign, states, geometry, box) {
   const rows = rowOrder.map((i, rowIndex) => {
     const tire = tires[i];
     const state = tireStates[i];
-    const rowY = y + 32 + rowIndex * 20;
+    const rowY = y + 32 + rowIndex * box.rowHeight;
     const entity = tire.pressure || tire.temperature || "";
     const pressure = state.pressure
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
@@ -656,6 +706,7 @@ function tireChip(axle, side, sign, states, geometry, box) {
     const right = temperature
       ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperature)}</tspan>`
       : `<tspan>${escapeHtml(STR.noData)}</tspan>`;
+    const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
     return `<g class="row" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
     )}">
@@ -663,6 +714,7 @@ function tireChip(axle, side, sign, states, geometry, box) {
       <text class="wheel ${state.level}" x="${x + 9}" y="${rowY}">${tire.wheel === "inner" ? STR.inner : STR.outer}</text>
       <text class="row-pressure" x="${x + 22}" y="${rowY}">${pressure}</text>
       <text class="small row-right" x="${x + width - 9}" y="${rowY}" text-anchor="end">${right}</text>
+      ${dataAgeLabel(age, x + 22, rowY + 13)}
     </g>`;
   });
   const headerFlags = [
@@ -687,7 +739,10 @@ function layoutTireChips(hass, axles, geometry) {
   for (const axle of axles) {
     for (const [side, sign] of [["left", -1], ["right", 1]]) {
       if (!axle[side].length) continue;
-      const height = axle.ghost ? 52 : Math.max(52, 24 + axle[side].length * 20);
+      const hasMissing = axle[side].some((tire) =>
+        missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]));
+      const rowHeight = hasMissing ? 36 : 20;
+      const height = axle.ghost ? 52 : Math.max(52, 24 + axle[side].length * rowHeight);
       const width = Math.max(geometry.chipWidth, ...axle[side].map((tire) => {
         const pressure = numeric(hass, tire.pressure);
         const temperature = numeric(hass, tire.temperature);
@@ -700,7 +755,7 @@ function layoutTireChips(hass, axles, geometry) {
       let box;
       do {
         const [cx, cy] = geometry.map(axle.u, sign * distance);
-        box = { axle, side, sign, x: r1(cx - width / 2), y: r1(cy - height / 2), width, height };
+        box = { axle, side, sign, rowHeight, x: r1(cx - width / 2), y: r1(cy - height / 2), width, height };
         distance += depth + CHIP_GAP;
       } while (boxes.some((other) => overlaps(box, other)));
       boxes.push(box);
@@ -750,7 +805,7 @@ function truncate(text, length) {
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
 }
 
-function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
+function tankLabels(hass, model, span, states, geometry, vertical, band = TANK_BAND) {
   const [start, end] = span;
   const count = model.tanks.length;
   const gap = 8;
@@ -761,6 +816,7 @@ function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
     const entity = tank.percentage || tank.level || "";
     const percent = state.percent ? `${state.percent.text}%` : vertical ? "—" : STR.noData;
     const volume = state.volume ? `${state.volume.text} ${state.volume.unit}` : "";
+    const age = missingReadingText(hass, [tank.percentage, tank.level]);
     const title = `<title>${escapeHtml(
       [tank.name, state.statusText].filter(Boolean).join(" · "),
     )}</title>`;
@@ -771,6 +827,7 @@ function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
       body = `
         <text class="tank-pct" x="${x}" y="${yTop}" text-anchor="middle">${escapeHtml(percent)}</text>
         ${volume ? `<text class="tiny" x="${x}" y="${yTop + 13}" text-anchor="middle">${escapeHtml(volume)}</text>` : ""}
+        ${dataAgeLabel(age, x, yTop + 28, true)}
         <text class="tank-name" x="${x}" y="${yName}" text-anchor="middle">${escapeHtml(truncate(tank.name, 7))}</text>`;
     } else {
       const [xs, y] = geometry.map(start + 12, vc);
@@ -778,6 +835,7 @@ function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
       const fontSize = lane < 32 ? "small-lane" : "";
       body = `
         <text class="tank-name ${fontSize}" x="${xs}" y="${y - 5}">${escapeHtml(truncate(tank.name, Math.floor((end - start - 24) / 7)))}</text>
+        ${dataAgeLabel(age, xs, y + 11)}
         <text class="tank-pct ${fontSize}" x="${xe}" y="${y + 12}" text-anchor="end">${
           volume ? `<tspan class="tank-vol">${escapeHtml(volume)}</tspan><tspan dx="6">${escapeHtml(percent)}</tspan>` : escapeHtml(percent)
         }</text>`;
@@ -845,7 +903,7 @@ export function renderVehicle(hass, model, orientation, uid, showPower = true) {
   const span = tankSpan(rearFront);
   const tireBoxes = layoutTireChips(hass, axles, geometry);
   const chips = tireBoxes.map((box) => box.axle.ghost ? ghostChip(box)
-    : tireChip(box.axle, box.side, box.sign, states, geometry, box));
+    : tireChip(hass, box.axle, box.side, box.sign, states, geometry, box));
   const power = model.powerSources?.length ? layoutPowerBoxes(hass, model, orientation) : undefined;
   const tankBand = TANK_BAND;
   let bounds = power?.bounds || drawingBounds(geometry, tireBoxes, model);
@@ -869,7 +927,7 @@ export function renderVehicle(hass, model, orientation, uid, showPower = true) {
         ${axles.map((axle) => tireRects(axle, states)).join("")}
         ${tankShapes(model, span, states, tankBand).join("")}
       </g>
-      ${tankLabels(model, span, states, geometry, vertical, tankBand).join("")}
+      ${tankLabels(hass, model, span, states, geometry, vertical, tankBand).join("")}
       ${chips.join("")}
       ${power ? renderPowerBoxes(hass, power) : ""}
       ${tow?.svg || ""}
@@ -914,16 +972,19 @@ function powerSymbol(source) {
   const shell = (x, y, width, height) =>
     `<rect class="equipment-shell" x="${x}" y="${y}" width="${width}" height="${height}" rx="2"></rect>`;
   if (source.key.includes("_bank_")) {
-    return shell(2, 5, 20, 16)
-      + '<path class="equipment-detail" d="M5 5 V2 H9 V5 M15 5 V2 H19 V5 M5 11 H11 M8 8 V14 M15 11 H19"></path>';
+    return shell(2, 5, 20, 17)
+      + '<path class="equipment-detail" d="M5 5 V2 H9 V5 M15 5 V2 H19 V5 M5 10 H9 M7 8 V12 M16 10 H19"></path>'
+      + '<path class="equipment-energy" d="M13 8 L8 16 H12 L11 21 L17 13 H13 Z"></path>';
   }
   if (source.key === "generator") {
     return shell(1, 6, 22, 16)
-      + '<path class="equipment-detail" d="M6 6 V2 H18 V6 M5 11 H11 M5 15 H11 M5 19 H11 M15 10 V18 H20 V10 Z"></path>';
+      + '<path class="equipment-detail" d="M6 6 V2 H18 V6 M4 11 H10 M4 15 H10 M4 19 H10"></path>'
+      + '<circle class="equipment-detail" cx="16" cy="14" r="4"></circle>'
+      + '<path class="equipment-energy" d="M16 10 L13 15 H16 L15 19 L19 13 H16 Z"></path>';
   }
   if (source.key === "inverter") {
     return shell(1, 3, 22, 18)
-      + '<path class="equipment-detail" d="M4 8 H9 M6.5 5.5 V10.5 M4 16 H9 M12 12 C14 5 16 5 17 12 S21 19 22 12"></path>';
+      + '<path class="equipment-detail" d="M4 8 H9 M4 11 H9 M4 16 H9 M12 12 C14 5 16 5 17 12 S21 19 22 12"></path>';
   }
   return shell(6, 7, 12, 10)
     + '<path class="equipment-detail" d="M8 7 V1 M16 7 V1 M12 17 V21 Q12 23 7 23"></path>';
@@ -957,7 +1018,7 @@ export function layoutPowerBoxes(hass, model, orientation) {
     const external = location === "left" || location === "right";
     const regionU = location.endsWith("front") ? 680 : location.endsWith("rear") ? 110 : 430;
     let chosen;
-    for (let offset = 0; offset <= L && !chosen; offset += size * 1.4) {
+    for (let offset = 0; offset <= L && !chosen; offset += 12) {
       for (const direction of offset ? [-1, 1] : [1]) {
         const u = regionU + offset * direction;
         if (u < size / 2 || u > L - size / 2) continue;
@@ -967,7 +1028,7 @@ export function layoutPowerBoxes(hass, model, orientation) {
         for (const [laneIndex, lane] of lanes.entries()) {
           if (!external && tireCollision && laneIndex === 0) continue;
           const [cx, cy] = geometry.map(u, side * lane);
-          const icon = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size };
+          const icon = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size + 18 };
           if ([...obstacles, ...icons].some((other) => overlaps(icon, other, size / 5))
             || tankObstacles.some((other) => overlaps(icon, other, 4))) continue;
           chosen = icon;
@@ -980,7 +1041,7 @@ export function layoutPowerBoxes(hass, model, orientation) {
       let distance = BODY + size + 14;
       do {
         const [cx, cy] = geometry.map(regionU, side * distance);
-        chosen = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size };
+        chosen = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size + 18 };
         distance += size + 14;
       } while ([...obstacles, ...icons, ...tankObstacles].some((other) => overlaps(chosen, other)));
     }
@@ -1016,11 +1077,14 @@ export function layoutPowerBoxes(hass, model, orientation) {
     const width = Math.max(156, columnWidth * (shore ? Math.max(1, lines.length, sharedMetrics.length) : 2) + 6);
     const rowHeight = shore ? 36 : 20;
     const headerHeight = lines.length ? 16 : 0;
-    const height = Math.max(52, 24 + headerHeight + rows.length * rowHeight + (sharedMetrics.length ? 20 : 0));
+    const age = missingReadingText(hass, [...metrics, ...sharedMetrics, "enabled", "warning", "problem"]
+      .map((metric) => source[metric]));
+    const height = Math.max(52, 24 + headerHeight + rows.length * rowHeight + (sharedMetrics.length ? 20 : 0))
+      + (age ? 16 : 0);
     const depth = vertical ? width : height;
     const anchor = icons.find((icon) => icon.source === source).anchor;
     let distance = TIRE_OUTER + 14 + depth / 2;
-    if (external) {
+    if (external && !vertical) {
       const center = geometry.map(0, 0)[vertical ? 0 : 1];
       distance = Math.max(distance, ...boxes.filter((box) => box.side === side).map((box) =>
         Math.abs((vertical ? box.x + box.width / 2 : box.y + box.height / 2) - center)
@@ -1028,11 +1092,15 @@ export function layoutPowerBoxes(hass, model, orientation) {
       ));
     }
     let box;
+    const offsets = vertical
+      ? [0, ...Array.from({ length: Math.ceil(L / 18) }, (_, i) => [-(i + 1) * 18, (i + 1) * 18]).flat()]
+      : [0, -36, 36, -72, 72, -108, 108];
     // Try nearby slots within the region before adding an outward lane.
     do {
-      for (const offset of [0, -36, 36, -72, 72, -108, 108]) {
+      for (const offset of offsets) {
+        if (vertical && (u + offset < height / 2 || u + offset > L - height / 2)) continue;
         const [cx, cy] = geometry.map(u + offset, side * distance);
-        box = { source, state, metrics, rows, lines, sharedMetrics, headerHeight, side, anchor, x: cx - width / 2, y: cy - height / 2, width, height, columnWidth, vertical };
+        box = { source, state, metrics, rows, lines, sharedMetrics, headerHeight, age, side, anchor, x: cx - width / 2, y: cy - height / 2, width, height, columnWidth, vertical };
         if (![...obstacles, ...icons, ...boxes].some((other) => overlaps(box, other))) break;
       }
       distance += depth + 12;
@@ -1061,7 +1129,8 @@ export function renderPowerBoxes(hass, layout) {
     const label = `${source.name}: ${POWER_STATUS_LABELS[state.level]}`;
     return `<g class="power-icon power-${state.level}" data-source="${escapeHtml(source.key)}" ${action} aria-label="${escapeHtml(label)}" transform="translate(${x} ${y}) scale(${width / 24})">
       <title>${escapeHtml(label)}</title>${powerSymbol(source)}
-      <text class="equipment-tag" x="12" y="14" text-anchor="middle">${escapeHtml(powerTag(source))}</text>
+      <rect class="equipment-badge" x="0" y="25" width="24" height="8" rx="3"></rect>
+      <text class="equipment-tag" x="12" y="31" text-anchor="middle">${escapeHtml(powerTag(source))}</text>
     </g>`;
   }).join("");
   return icons + layout.boxes.map((box) => {
@@ -1087,6 +1156,7 @@ export function renderPowerBoxes(hass, layout) {
       ${sharedMetrics.length ? `<path class="shore-divider" d="M${x + 9} ${sharedY} H${x + width - 9}"></path>
         <text class="chip-label" x="${x + 9}" y="${sharedY + 14}">Combined</text>` : ""}
       ${!metrics.length && !sharedMetrics.length ? `<text class="small" x="${x + 9}" y="${y + 34}">No readings mapped</text>` : ""}
+      ${dataAgeLabel(box.age, x + 9, y + height - 8)}
       ${rows.map((row, rowIndex) => row.map((metric, column) => {
         if (!metric) return "";
         const label = powerMetricLabel(metric, shore).replace(/^Line [12] /, "");
@@ -1192,6 +1262,10 @@ const STYLES = `
   .unit { fill: var(--hv-muted); font-size: 9.5px; font-weight: 500; }
   .small { fill: var(--hv-muted); font-size: 10.5px; }
   .tiny { fill: var(--hv-muted); font-size: 9px; }
+  .data-age { color: var(--hv-muted); }
+  .data-age text { fill: var(--hv-muted); font-size: 9px; }
+  .tank-label .data-age text { font-size: 7px; }
+  .age-clock { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
   .muted { fill: var(--hv-muted); }
   .flag { fill: var(--lvl); font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; }
   .wheel { fill: var(--lvl); font-size: 9.5px; font-weight: 700; }
@@ -1238,14 +1312,16 @@ const STYLES = `
   .power-warning { --lvl: var(--hv-watch); }
   .power-problem { --lvl: var(--hv-alert); }
   .power-icon.power-on { --lvl: var(--hv-ok); }
-  .equipment-detail { fill: none; stroke: rgba(0, 0, 0, 0.45); stroke-width: 1.5;
+  .equipment-shell { fill: color-mix(in srgb, var(--lvl) 24%, var(--hv-card)); stroke: var(--lvl); }
+  .equipment-energy { fill: var(--lvl); stroke: none; }
+  .equipment-detail { fill: none; stroke: var(--hv-text); stroke-width: 1.5;
     stroke-linecap: round; stroke-linejoin: round; }
   .power-unknown .equipment-detail { stroke: var(--hv-muted); }
   .power-icon:focus-visible .equipment-shell { stroke: var(--primary-color); stroke-width: 2.5; }
   .power-unknown .power-bg { stroke-dasharray: 4 3; }
   .power-unknown .dot { fill: none; stroke: var(--lvl); stroke-width: 1.5; stroke-dasharray: 2 1; }
-  .equipment-tag { fill: var(--hv-text); font-size: 5px; font-weight: 700;
-    paint-order: stroke; stroke: var(--hv-card); stroke-width: 1.5; stroke-linejoin: round; }
+  .equipment-badge { fill: var(--hv-card); stroke: var(--lvl); stroke-width: 0.6; }
+  .equipment-tag { fill: var(--hv-text); font-size: 5px; font-weight: 700; }
   .power-legend i { border: 1px solid var(--hv-line); }
   .power-legend.power-unknown i { border-style: dashed; border-color: var(--hv-text); }
   .power-box [data-entity]:focus-visible .hit { stroke: var(--primary-color); stroke-width: 2; }
@@ -1268,6 +1344,7 @@ export class HavrvRvCard extends HTMLElement {
     super();
     this._uid = ++instanceCounter;
     this._width = 0;
+    this._readingHistory = new Map();
     this.attachShadow({ mode: "open" });
     const activate = (event) => {
       const target = event
@@ -1353,11 +1430,17 @@ export class HavrvRvCard extends HTMLElement {
       });
     }
     this._resizeObserver?.observe(this);
+    if (!this._ageTimer) {
+      this._ageTimer = setInterval(() => this._update(), 30000);
+      this._ageTimer.unref?.();
+    }
     this._scheduleFit();
   }
 
   disconnectedCallback() {
     this._resizeObserver?.disconnect();
+    clearInterval(this._ageTimer);
+    this._ageTimer = undefined;
     cancelAnimationFrame(this._fitFrame);
   }
 
@@ -1371,12 +1454,27 @@ export class HavrvRvCard extends HTMLElement {
     const hass = this._hass;
     const rv = resolveRvDevice(hass, this._config.device_id);
     const model = rv ? visibleModel(buildModel(hass, rv), this._config) : undefined;
+    if (model) {
+      const readings = [
+        ...model.axles.flatMap((axle) => [...axle.left, ...axle.right]
+          .flatMap((tire) => [tire.pressure, tire.temperature, tire.battery])),
+        ...model.tanks.flatMap((tank) => [tank.percentage, tank.level]),
+        ...model.powerSources.flatMap((source) => [...SHORE_READING_METRICS,
+          "enabled", "charging", "warning", "problem"].map((metric) => source[metric])),
+      ].filter(Boolean);
+      const current = new Set(readings);
+      for (const id of this._readingHistory.keys()) {
+        if (!current.has(id)) this._readingHistory.delete(id);
+      }
+      rememberReadings(hass, readings, this._readingHistory);
+    }
     const orientation = this._resolveOrientation();
     const key = JSON.stringify([
       orientation,
       this._config,
       hass.locale?.language,
       hass.themes?.darkMode,
+      Math.floor(Date.now() / 30000),
       model && {
         name: model.name,
         axles: model.axles,
@@ -1387,7 +1485,7 @@ export class HavrvRvCard extends HTMLElement {
       },
       model?.watched.map((id) => {
         const state = hass.states[id];
-        return state ? [state.state, state.attributes.unit_of_measurement] : null;
+        return state ? [state.state, state.attributes.unit_of_measurement, state.last_reported, state.last_updated] : null;
       }),
     ]);
     if (key === this._renderKey) return;

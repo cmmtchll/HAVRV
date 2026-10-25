@@ -73,8 +73,11 @@ choose existing entities, and configure optional tank and tire monitoring.
   tints, fonts, and status dots: green/gray for on/off, amber/red for optional
   mapped Warning/Problem, and dashed no-data outlines. Colored battery,
   inverter and generator graphics sit on the coach; the shore plug is outside.
-  Equipment graphics are comparable to tire sizes; matching tags replace
-  crossing callout lines. One common legend covers tires, tanks and electrical,
+  Equipment graphics have high-contrast details and separate tag badges below
+  them, rather than labels over the symbols. Vertical electrical readouts stack
+  along the coach before widening the diagram, including the shore readout.
+  Missing mapped readings show their last observed valid-data age, or explicitly
+  report an unknown age. One common legend covers tires, tanks and electrical,
   and Enabled is indicated by color rather than a Yes/No row. Shore Power
   groups Line 1 on the left and Line 2 on the right, with shared Enabled and
   Energy readings in a separate Combined section. See

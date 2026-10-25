@@ -33,7 +33,11 @@ implemented integration behavior, not just repository configuration.
   combined Enabled/Energy readings below a divider.
 - Individually placed, collision-aware electrical readout boxes with colors
   from explicit Warning/Problem/Enabled mappings and distinct unavailable status,
-  plus colored equipment graphics on the coach and an external shore plug.
+  plus high-contrast equipment graphics with separate identity badges on the
+  coach and an external shore plug. Vertical readouts use longitudinal space
+  before outward columns. Tire, tank and electrical labels show last-observed
+  valid-report ages for missing mapped channels, explicitly unknown when the
+  current card has not observed a valid timestamp; this is not Recorder history.
 - Editable dimensions, tank capacities, and tank/tire limits exposed as number
   entities in Configuration on the main RV device, with other profile values
   exposed as read-only diagnostic sensors. Settings persist in the same

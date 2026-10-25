@@ -36,8 +36,10 @@ The layout follows the RV profile:
   crossing callout lines. Shore Power is outside the
   RV on the selected side. **HB1/CB1** identify bank 1, **INV** the logical
   inverter, **GEN** the generator, and **SHORE** the external shore connection.
-  Each source retains its own box, including colocated banks. Boxes use nearby
-  slots or additional outward lanes to avoid other boxes and tire labels;
+  Each source retains its own box, including colocated banks. Vertical readouts,
+  including Shore, use the nearest free slot along the coach on their selected
+  side before adding outward columns. Horizontal readouts use nearby slots
+  or additional outward lanes to avoid other boxes and tire labels;
   the drawing expands to keep every box visible. Mapped voltage, current,
   Bank Charging appears inside the box. Enabled is shown through the overall
   tint and status dot, not a redundant Yes/No row. A status dot in its title
@@ -105,6 +107,30 @@ an older module: update/restart HAVRV, remove any old manually added HAVRV
 dashboard resource, and reset the browser/app cache. See the
 [troubleshooting steps](TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).
 
+### Missing readings and last-data age
+
+Tire labels (one age per wheel on duals), tank labels and electrical boxes show
+a small clock followed by **15s / 8m / 2h / 3d** when a mapped reading is missing,
+invalid, unknown or unavailable. The indicator stays on one line, including on
+narrow tanks; hover for the full **Last data 2h ago** tooltip. Screen readers
+receive the same full wording. Electrical ages also include mapped Enabled, Charging,
+Warning and Problem statuses. Healthy readings stay visible independently of
+missing channels; ages do not change advisory colors or invent replacement values.
+When several channels are missing, the oldest known last-valid timestamp is used.
+If any missing channel has no known valid timestamp, the label instead reads
+**clock + ?**, with **Last data unknown** in its tooltip and accessible label.
+Unmapped optional channels do not count as missing.
+An electrical box without measurements still says **No readings mapped**.
+
+The card remembers valid Home Assistant reports while that card is open, using
+`last_reported` (falling back to `last_updated`/`last_changed` when necessary).
+It never treats the timestamp of an unavailable state as the last valid reading.
+Ages refresh every 30 seconds while connected. This is an observation cache, not
+Recorder history: refreshing the page, recreating the card or hiding/removing a
+mapping clears the affected timestamps. An already-unavailable entity therefore
+has an unknown last-valid age until a valid report is observed. These timestamps
+describe HAVRV entity reports, not guaranteed physical-device communication.
+
 Readings use the units shown by the HAVRV entities, so they follow your RV
 profile's measurement system and any unit you set on an entity. Select a wheel,
 tank, or the operation mode to open its details.
@@ -142,7 +168,8 @@ not front/mid/rear; it remains centered on that outside side.
 
 Each device keeps an independent tagged graphic and readout. Equipment uses
 additional interior slots around the rear region, avoiding tires and tanks.
-Readouts try neighboring slots first, then additional outward rows/columns;
+Vertical readouts search along the coach first; horizontal readouts try
+neighboring slots first, then additional outward rows/columns;
 the drawing expands instead of overlapping or clipping them. A crowded region
 therefore takes more space. Matching tags replace connecting lines.
 
@@ -176,13 +203,17 @@ Electrical boxes share the tire labels' 7% tinted background, translucent
 border, theme-aware text, header style, and font sizes. Voltage/current use
 the dual-tire reading style, with smaller units and secondary status readings.
 Problem outlines pulse like tire alerts, respecting reduced-motion settings.
-Equipment graphics use the tire shapes' color treatment: **green** for known
+Equipment graphics use tinted shells, high-contrast internal details and
+accented energy symbols: **green** for known
 Enabled on, **gray** for off, **amber** for Warning and **red** for Problem.
-Unknown status has a dashed unfilled graphic. The readout's normal on dot/tint
+Unknown status has a dashed unfilled graphic. Identity tags sit in separate
+outlined badges below the symbols, never over their internal details.
+The readout's normal on dot/tint
 is green too. Charging does not select an active source or override
 these statuses.
 
-Graphics avoid tires, tanks and each other. They use a 44-unit footprint,
+Graphics avoid tires, tanks and each other. They use a 44-unit-wide footprint
+with a separate label area below,
 comparable to the tire shapes rather than tiny markers. Matching **HB1**, **CB1**,
 **INV**, **GEN**, and **SHORE** tags associate equipment and readouts with no
 callout lines crossing labels. Very dense bank configurations use outward
