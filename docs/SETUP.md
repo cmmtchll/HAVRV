@@ -217,12 +217,17 @@ creates front and rear tire devices according to the configured axle and
 wheel layouts. A tag axle is included when the count is greater than one.
 
 In **Tires**, choose an existing pressure, temperature, and/or battery
-sensor for each tire position. Sources may be `sensor`, `number`, or
+source for each tire position. Sources may be `sensor`, `number`, or
 `input_number` entities. These are read-only mirrors; HAVRV does not discover
-or control TPMS hardware.
+or control TPMS hardware. The same battery selector also accepts `binary_sensor`,
+`input_boolean`, and `switch`, including template binary sensors. Use a battery-OK
+signal: on/true means OK; off/false means a battery problem. A low-battery alarm
+with opposite polarity needs an inverted template binary sensor. Boolean
+batteries are mirrored as on/off, not percentages, and remain read-only.
 
 You can set optional low/high pressure limits for front, rear, and tag tires,
-plus a shared high-temperature limit and low-battery limit. Configure limits
+plus a shared high-temperature limit and numeric low-battery limit (default 20%;
+ignored for boolean sources). Configure limits
 only when they are appropriate for your vehicle. Pressure and temperature
 limits use the profile's measurement system (kPa and °C for metric; psi and °F
 for US customary); recognized source units are converted before comparison.

@@ -41,6 +41,8 @@ from .const import (
     WHEEL_CONFIGURATION_SINGLE,
 )
 
+TIRE_BATTERY_BOOLEAN_DOMAINS = ("binary_sensor", "input_boolean", "switch")
+
 
 @dataclass(frozen=True)
 class TirePosition:
@@ -359,6 +361,15 @@ def source_entity_id(entry: Any, position: TirePosition, metric: str) -> str | N
     return entity_id if isinstance(entity_id, str) else None
 
 
+def is_boolean_battery_source(entry: Any, position: TirePosition) -> bool:
+    """Return whether the battery mapping supplies an on/off health status."""
+    entity_id = source_entity_id(entry, position, TIRE_BATTERY)
+    return (
+        entity_id is not None
+        and entity_id.partition(".")[0] in TIRE_BATTERY_BOOLEAN_DOMAINS
+    )
+
+
 def configured_threshold(
     entry: Any, position: TirePosition, threshold: str
 ) -> float | None:
@@ -386,7 +397,11 @@ def tire_data_present(hass: HomeAssistant, entry: Any, position: TirePosition) -
     """Return whether all three configured source readings are available."""
     return all(
         (entity_id := source_entity_id(entry, position, metric)) is not None
-        and _numeric_state(hass, entity_id) is not None
+        and (
+            tire_problem(hass, entry, position, metric) is not None
+            if metric == TIRE_BATTERY and is_boolean_battery_source(entry, position)
+            else _numeric_state(hass, entity_id) is not None
+        )
         for metric in TIRE_METRICS
     )
 
@@ -489,6 +504,12 @@ def tire_problem(
     """Return whether a configured tire limit is crossed."""
     if problem not in TIRE_METRICS:
         raise ValueError(f"Unsupported tire problem type: {problem}")
+    if problem == TIRE_BATTERY and is_boolean_battery_source(entry, position):
+        entity_id = source_entity_id(entry, position, TIRE_BATTERY)
+        state = hass.states.get(entity_id) if entity_id is not None else None
+        if state is None or state.state not in ("on", "off"):
+            return None
+        return state.state == "off"
     value = _source_value(hass, entry, position, problem)
     if value is None:
         return None

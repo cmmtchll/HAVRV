@@ -140,6 +140,13 @@ require recognized units when a source supplies a unit. Check that configured
 limits are appropriate for the vehicle and the profile's selected measurement
 system.
 
+Boolean tire batteries (`binary_sensor`, `input_boolean`, or `switch`) must
+report on for OK and off for a problem. HAVRV does not infer polarity from
+the source's battery device class. Invert a low-battery alarm with a template
+binary sensor before selecting it. The percentage threshold applies only to
+numeric sources. Unknown, unavailable, missing, or invalid boolean readings
+do not count as data present and keep the overall tire problem on.
+
 Pressure-trend predictors can report unknown when the source is unavailable or
 they do not yet have enough history. Their history is held in memory, so it
 starts over after a Home Assistant restart or integration reload. Slow-loss

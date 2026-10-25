@@ -39,7 +39,7 @@ from custom_components.havrv.const import (
     UNIT_SYSTEM_US_CUSTOMARY,
 )
 from custom_components.havrv.light import HavrvLight
-from custom_components.havrv.sensor import HavrvSensor
+from custom_components.havrv.sensor import HavrvSensor, HavrvTireSensor
 from custom_components.havrv.switch import HavrvSwitch
 from custom_components.havrv.tire import (
     TirePosition,
@@ -520,3 +520,54 @@ async def test_tire_problem_limits_default_battery_threshold(
 
     hass.states.async_set("sensor.tire_battery", "15", {"unit_of_measurement": "%"})
     assert tire_problem(hass, entry, position, TIRE_BATTERY) is True
+
+
+@pytest.mark.parametrize("domain", ["binary_sensor", "input_boolean", "switch"])
+@pytest.mark.parametrize("threshold", [None, 0, 100])
+async def test_tire_boolean_battery_health(
+    hass: HomeAssistant, domain: str, threshold: float | None
+) -> None:
+    """Mirror boolean health without percentages, thresholds, or numeric metadata."""
+    position = TirePosition("front_left", "Front Left Tire", TIRE_FRONT)
+    entity_id = f"{domain}.battery_ok"
+    entry = _entry(
+        options={
+            CONF_TIRE_ENTITY_MAPPINGS: {
+                "front_left_pressure": "sensor.pressure",
+                "front_left_temperature": "sensor.temperature",
+                "front_left_battery": entity_id,
+            },
+            **({CONF_TIRE_BATTERY_LOW: threshold} if threshold is not None else {}),
+        }
+    )
+    entry.runtime_data = SimpleNamespace(
+        measurement_system=UNIT_SYSTEM_METRIC, device_id="rv"
+    )
+    battery = HavrvTireSensor(entry, position, TIRE_BATTERY)
+    _attach_to_hass(battery, hass)
+    hass.states.async_set("sensor.pressure", "500")
+    hass.states.async_set("sensor.temperature", "20")
+
+    for state in (None, "unknown", "unavailable", "invalid", "50"):
+        if state is not None:
+            hass.states.async_set(entity_id, state)
+        assert not battery.available
+        assert battery.native_value is None
+        assert tire_problem(hass, entry, position, TIRE_BATTERY) is None
+        assert not tire_data_present(hass, entry, position)
+        assert overall_tire_problem(hass, entry, position)
+
+    for state, problem in (("on", False), ("off", True), ("on", False)):
+        hass.states.async_set(
+            entity_id,
+            state,
+            {"device_class": "battery", "state_class": "measurement"},
+        )
+        assert battery.available
+        assert battery.native_value == state
+        assert battery.native_unit_of_measurement is None
+        assert battery.device_class is None
+        assert battery.state_class is None
+        assert tire_problem(hass, entry, position, TIRE_BATTERY) is problem
+        assert tire_data_present(hass, entry, position)
+        assert overall_tire_problem(hass, entry, position) is problem

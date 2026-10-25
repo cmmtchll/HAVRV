@@ -326,7 +326,7 @@
       "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system.",
       "invalid_tank_entity_mapping": "Choose a sensor, number entity, or input number helper for each tank level.",
       "duplicate_tank_entity_mapping": "A tank level source entity can only be assigned once.",
-      "invalid_tire_entity_mapping": "Choose a sensor, number entity, or input number helper for each tire reading.",
+      "invalid_tire_entity_mapping": "Choose a sensor, number entity, or input number helper for tire readings. Battery sources also accept binary sensors, input booleans, and switches (on means OK; off means a problem).",
       "duplicate_tire_entity_mapping": "A tire source entity can only be assigned once.",
       "incomplete_tire_pressure_threshold": "Enter both low and high pressure limits, or leave both blank.",
       "invalid_tire_pressure_threshold": "Pressure limits must be non-negative, and the high limit must be greater than the low limit.",

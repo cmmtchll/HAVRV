@@ -89,6 +89,7 @@ from .tire import (
     TireMonitorGroup,
     TireMonitorHistory,
     TirePosition,
+    is_boolean_battery_source,
     pressure_in_profile_units,
     source_entity_id,
     temperature_in_profile_units,
@@ -643,11 +644,15 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_tire_{position.key}_{metric}"
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | str | None:
         """Return the source reading converted to the RV profile unit."""
         state = self._source_state(self._metric)
         if state is None or state.state in ("unknown", "unavailable"):
             return None
+        if self._metric == "battery" and is_boolean_battery_source(
+            self._entry, self._position
+        ):
+            return state.state if state.state in ("on", "off") else None
         try:
             value = float(state.state)
         except ValueError:
@@ -664,7 +669,7 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return whether the configured source has a usable numeric reading."""
+        """Return whether the configured source has a usable reading."""
         return self.native_value is not None
 
     @property
@@ -675,6 +680,8 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
             return "kPa" if metric else "psi"
         if self._metric == "temperature":
             return "°C" if metric else "°F"
+        if is_boolean_battery_source(self._entry, self._position):
+            return None
         return self._source_attributes(self._metric).get("unit_of_measurement")
 
     @property
@@ -687,12 +694,20 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
     @property
     def device_class(self) -> SensorDeviceClass | None:
         """Forward the configured source device class."""
+        if self._metric == "battery" and is_boolean_battery_source(
+            self._entry, self._position
+        ):
+            return None
         value = self._source_attributes(self._metric).get("device_class")
         return None if value is None else SensorDeviceClass(value)
 
     @property
     def state_class(self) -> SensorStateClass | None:
         """Forward the configured source state class."""
+        if self._metric == "battery" and is_boolean_battery_source(
+            self._entry, self._position
+        ):
+            return None
         value = self._source_attributes(self._metric).get("state_class")
         return None if value is None else SensorStateClass(value)
 

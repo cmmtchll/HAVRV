@@ -618,8 +618,10 @@ async def test_setup_creates_tire_devices_readings_and_problem_sensors(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+@pytest.mark.parametrize("battery_domain", ["binary_sensor", "input_boolean", "switch"])
 async def test_tire_sources_and_threshold_changes_reload_and_follow_state(
     hass: HomeAssistant,
+    battery_domain: str,
 ) -> None:
     """Apply edited source selections and limits, then follow each new source."""
     hass.states.async_set("sensor.old_pressure", "60", {"unit_of_measurement": "psi"})
@@ -674,6 +676,10 @@ async def test_tire_sources_and_threshold_changes_reload_and_follow_state(
     battery_problem = registered_entity(
         "binary_sensor", f"{entry.entry_id}_tire_front_left_battery"
     )
+    battery = registered_entity("sensor", f"{entry.entry_id}_tire_front_left_battery")
+    data_present = registered_entity(
+        "binary_sensor", f"{entry.entry_id}_tire_front_left_data_present"
+    )
     tire_problem = registered_entity(
         "binary_sensor", f"{entry.entry_id}_tire_front_left_problem"
     )
@@ -710,6 +716,64 @@ async def test_tire_sources_and_threshold_changes_reload_and_follow_state(
 
     hass.states.async_set("input_number.tire_battery", "10")
     await hass.async_block_till_done()
+    assert hass.states.get(battery_problem.entity_id).state == "on"
+
+    hass.states.async_set(
+        "sensor.template_temperature", "30", {"unit_of_measurement": "°C"}
+    )
+    source = f"{battery_domain}.battery_ok"
+    hass.states.async_set(source, "on", {"device_class": "battery"})
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={"tire_front_left_battery": source, CONF_TIRE_BATTERY_LOW: 100},
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert registered_entity("sensor", battery.unique_id).entity_id == battery.entity_id
+    assert hass.states.get(battery.entity_id).state == "on"
+    assert "unit_of_measurement" not in hass.states.get(battery.entity_id).attributes
+    assert "device_class" not in hass.states.get(battery.entity_id).attributes
+    assert hass.states.get(battery_problem.entity_id).state == "off"
+    assert hass.states.get(data_present.entity_id).state == "on"
+    assert hass.states.get(tire_problem.entity_id).state == "off"
+
+    hass.states.async_set("input_number.tire_battery", "5")
+    await hass.async_block_till_done()
+    assert hass.states.get(battery.entity_id).state == "on"
+    hass.states.async_set(source, "off", {"device_class": "battery"})
+    await hass.async_block_till_done()
+    assert hass.states.get(battery.entity_id).state == "off"
+    assert hass.states.get(battery_problem.entity_id).state == "on"
+    assert hass.states.get(data_present.entity_id).state == "on"
+    assert hass.states.get(tire_problem.entity_id).state == "on"
+
+    hass.states.async_remove(source)
+    await hass.async_block_till_done()
+    assert hass.states.get(battery.entity_id).state == "unavailable"
+    assert hass.states.get(battery_problem.entity_id).state == "unknown"
+    assert hass.states.get(data_present.entity_id).state == "off"
+    assert hass.states.get(tire_problem.entity_id).state == "on"
+    hass.states.async_set(source, "on", {"device_class": "battery"})
+    await hass.async_block_till_done()
+    assert hass.states.get(battery_problem.entity_id).state == "off"
+    assert hass.states.get(data_present.entity_id).state == "on"
+    assert hass.states.get(tire_problem.entity_id).state == "off"
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(battery.entity_id).state == "on"
+    assert hass.states.get(battery_problem.entity_id).state == "off"
+
+    hass.states.async_set("input_number.tire_battery", "50")
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={"tire_front_left_battery": "input_number.tire_battery"},
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert hass.states.get(battery.entity_id).state == "50.0"
     assert hass.states.get(battery_problem.entity_id).state == "on"
     assert await hass.config_entries.async_unload(entry.entry_id)
 
