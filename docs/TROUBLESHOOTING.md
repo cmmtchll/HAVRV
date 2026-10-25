@@ -207,6 +207,15 @@ old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
   those groups and their generated sections.
 - A gray wheel or tank has no pressure or percentage reading. Check its source
   entity, as described in the sections above.
+- The small **clock + age** reports a valid report previously observed by this
+  card; hover for the full **Last data** tooltip. **Clock + ?** (**Last data unknown**
+  in the tooltip) means at least one missing channel has no cached
+  valid timestamp, often because the page opened after the outage or was
+  refreshed. It does not mean the outage just began. The card does not query
+  Recorder history; use the source entity's History for earlier reports.
+- Vertical electrical readouts now use free slots along the coach, rather than
+  always pushing Shore into a second outside column. Very crowded layouts or
+  unusually long readings can still widen the drawing and require scrolling.
 
 ### The power toggle or placed electrical devices are missing
 

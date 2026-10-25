@@ -341,7 +341,7 @@ function formatNumber(hass, value, precision) {
 
 function numeric(hass, entityId, defaultPrecision = 0) {
   const state = stateOf(hass, entityId);
-  if (!state || UNAVAILABLE.has(state.state)) return undefined;
+  if (!state || UNAVAILABLE.has(state.state) || !String(state.state).trim()) return undefined;
   const value = Number(state.state);
   if (!Number.isFinite(value)) return undefined;
   const precision = hass.entities?.[entityId]?.display_precision ?? defaultPrecision;
@@ -358,6 +358,41 @@ function formatState(hass, entityId) {
   return typeof hass.formatEntityState === "function"
     ? hass.formatEntityState(state)
     : state.state;
+}
+
+const readingHistory = new WeakMap();
+
+function validReading(hass, entityId) {
+  const state = stateOf(hass, entityId);
+  if (!state || UNAVAILABLE.has(state.state) || !String(state.state).trim()) return false;
+  return entityId.startsWith("binary_sensor.")
+    ? state.state === "on" || state.state === "off"
+    : Number.isFinite(Number(state.state));
+}
+
+/** Use only observed valid reports, never the timestamp of an unavailable state. */
+export function rememberReadings(hass, entityIds, history, now = Date.now()) {
+  for (const id of entityIds) {
+    if (!validReading(hass, id)) continue;
+    const state = stateOf(hass, id);
+    const timestamp = Date.parse(state.last_reported || state.last_updated || state.last_changed);
+    if (Number.isFinite(timestamp) && timestamp <= now) {
+      history.set(id, Math.max(history.get(id) || 0, timestamp));
+    }
+  }
+  readingHistory.set(hass, history);
+}
+
+export function missingReadingText(hass, entityIds, now = Date.now()) {
+  const missing = entityIds.filter((id) => id && !validReading(hass, id));
+  if (!missing.length) return "";
+  const timestamps = missing.map((id) => readingHistory.get(hass)?.get(id));
+  if (timestamps.some((timestamp) => !Number.isFinite(timestamp))) return "Last data unknown";
+  // Use the oldest missing channel so a newer channel cannot hide a long outage.
+  const seconds = Math.max(0, Math.floor((now - Math.min(...timestamps)) / 1000));
+  const age = seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m`
+    : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86400)}d`;
+  return `Last data ${age} ago`;
 }
 
 /** Report only declared measurements and definite binary statuses. */
@@ -497,6 +532,26 @@ const ORIENTATIONS = {
 
 const r1 = (value) => Math.round(value * 10) / 10;
 
+function compactDataAge(age) {
+  const compact = age === "Last data unknown" ? "?" : age.replace(/^Last data | ago$/g, "");
+  return /^\d+d$/.test(compact) && Number.parseInt(compact, 10) >= 365
+    ? `${Math.floor(Number.parseInt(compact, 10) / 365)}y` : compact;
+}
+
+function dataAgeWidth(age, small = false) {
+  return age ? 11 + compactDataAge(age).length * (small ? 4.2 : 6) : 0;
+}
+
+function dataAgeLabel(age, x, y) {
+  if (!age) return "";
+  return `<g class="data-age" role="img" aria-label="${escapeHtml(age)}" transform="translate(${x} ${y})">
+    <title>${escapeHtml(age)}</title>
+    <circle class="age-clock" cx="4" cy="-3.5" r="3.5"></circle>
+    <path class="age-clock" d="M4 -6 V-3.5 L6 -2.5"></path>
+    <text x="11" y="0">${escapeHtml(compactDataAge(age))}</text>
+  </g>`;
+}
+
 function axleLabel(axle, driveCount) {
   if (axle.kind === "front") return "Front";
   if (axle.kind === "tag") return "Tag";
@@ -552,10 +607,7 @@ function bodyShapes(uid) {
     ${frame}
     <path class="glass" fill="url(#hv-glass-${uid})" d="M790,-76 Q838,-72 844,0 Q838,72 790,76 Q806,0 790,-76 Z"></path>
     <rect class="mirror" x="782" y="-104" width="10" height="16" rx="3"></rect>
-    <rect class="mirror" x="782" y="88" width="10" height="16" rx="3"></rect>
-    <rect class="roof-unit" x="560" y="-22" width="54" height="44" rx="8"></rect>
-    <rect class="roof-unit" x="250" y="-22" width="54" height="44" rx="8"></rect>
-    <rect class="roof-unit vent" x="430" y="-14" width="28" height="28" rx="5"></rect>`;
+    <rect class="mirror" x="782" y="88" width="10" height="16" rx="3"></rect>`;
 }
 
 function tireRects(axle, states) {
@@ -600,7 +652,7 @@ function flagText(state) {
     .join(" ");
 }
 
-function tireChip(axle, side, sign, states, geometry, box) {
+function tireChip(hass, axle, side, sign, states, geometry, box) {
   const tires = axle[side];
   const dual = tires.length > 1;
   const { height, width, x, y } = box;
@@ -620,14 +672,20 @@ function tireChip(axle, side, sign, states, geometry, box) {
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
       : `<tspan class="mid muted">—</tspan>`;
     const flags = flagText(state);
+    const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
+    const pressureAge = !state.pressure && state.temperature ? age : "";
+    const rightAge = pressureAge ? "" : age;
+    const rightEnd = x + width - 9;
     parts.push(
       `<g class="row">
         <text class="row-pressure" x="${x + 9}" y="${y + 34}">${pressure}</text>
-        <text class="small row-right" x="${x + width - 9}" y="${y + 34}" text-anchor="end">${
+        ${dataAgeLabel(pressureAge, x + 25, y + 34)}
+        <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${y + 34}" text-anchor="end">${
           state.temperature
             ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperatureText(state.temperature, false))}</tspan>`
             : `<tspan>${escapeHtml(STR.noData)}</tspan>`
         }</text>
+        ${dataAgeLabel(rightAge, rightEnd - dataAgeWidth(rightAge), y + 34)}
       </g>`,
       flags
         ? `<text class="flag ${level}" x="${x + width - 9}" y="${y + 46}" text-anchor="end">${flags}</text>`
@@ -645,7 +703,7 @@ function tireChip(axle, side, sign, states, geometry, box) {
   const rows = rowOrder.map((i, rowIndex) => {
     const tire = tires[i];
     const state = tireStates[i];
-    const rowY = y + 32 + rowIndex * 20;
+    const rowY = y + 32 + rowIndex * box.rowHeight;
     const entity = tire.pressure || tire.temperature || "";
     const pressure = state.pressure
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
@@ -656,13 +714,19 @@ function tireChip(axle, side, sign, states, geometry, box) {
     const right = temperature
       ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperature)}</tspan>`
       : `<tspan>${escapeHtml(STR.noData)}</tspan>`;
+    const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
+    const pressureAge = !state.pressure && state.temperature ? age : "";
+    const rightAge = pressureAge ? "" : age;
+    const rightEnd = x + width - 9;
     return `<g class="row" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
     )}">
       <rect class="hit" x="${x}" y="${rowY - 15}" width="${width}" height="20"></rect>
       <text class="wheel ${state.level}" x="${x + 9}" y="${rowY}">${tire.wheel === "inner" ? STR.inner : STR.outer}</text>
       <text class="row-pressure" x="${x + 22}" y="${rowY}">${pressure}</text>
-      <text class="small row-right" x="${x + width - 9}" y="${rowY}" text-anchor="end">${right}</text>
+      ${dataAgeLabel(pressureAge, x + 38, rowY)}
+      <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${rowY}" text-anchor="end">${right}</text>
+      ${dataAgeLabel(rightAge, rightEnd - dataAgeWidth(rightAge), rowY)}
     </g>`;
   });
   const headerFlags = [
@@ -687,20 +751,23 @@ function layoutTireChips(hass, axles, geometry) {
   for (const axle of axles) {
     for (const [side, sign] of [["left", -1], ["right", 1]]) {
       if (!axle[side].length) continue;
-      const height = axle.ghost ? 52 : Math.max(52, 24 + axle[side].length * 20);
+      const rowHeight = 20;
+      const height = axle.ghost ? 52 : Math.max(52, 24 + axle[side].length * rowHeight);
       const width = Math.max(geometry.chipWidth, ...axle[side].map((tire) => {
         const pressure = numeric(hass, tire.pressure);
         const temperature = numeric(hass, tire.temperature);
         const pressureText = pressure ? `${pressure.text} ${pressure.unit}` : "—";
         const rightText = temperatureText(temperature, false) || STR.noData;
-        return Math.ceil(pressureText.length * 8.5 + rightText.length * 7 + 51);
+        const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
+        return Math.ceil(pressureText.length * 8.5 + rightText.length * 7 + 51
+          + (age ? dataAgeWidth(age) + 4 : 0));
       }));
       const depth = geometry === ORIENTATIONS.horizontal ? height : width;
       let distance = TIRE_OUTER + CHIP_GAP + depth / 2;
       let box;
       do {
         const [cx, cy] = geometry.map(axle.u, sign * distance);
-        box = { axle, side, sign, x: r1(cx - width / 2), y: r1(cy - height / 2), width, height };
+        box = { axle, side, sign, rowHeight, x: r1(cx - width / 2), y: r1(cy - height / 2), width, height };
         distance += depth + CHIP_GAP;
       } while (boxes.some((other) => overlaps(box, other)));
       boxes.push(box);
@@ -750,7 +817,7 @@ function truncate(text, length) {
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
 }
 
-function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
+function tankLabels(hass, model, span, states, geometry, vertical, band = TANK_BAND) {
   const [start, end] = span;
   const count = model.tanks.length;
   const gap = 8;
@@ -761,6 +828,7 @@ function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
     const entity = tank.percentage || tank.level || "";
     const percent = state.percent ? `${state.percent.text}%` : vertical ? "—" : STR.noData;
     const volume = state.volume ? `${state.volume.text} ${state.volume.unit}` : "";
+    const age = missingReadingText(hass, [tank.percentage, tank.level]);
     const title = `<title>${escapeHtml(
       [tank.name, state.statusText].filter(Boolean).join(" · "),
     )}</title>`;
@@ -768,8 +836,12 @@ function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
     if (vertical) {
       const [x, yTop] = geometry.map(end - 18, vc);
       const [, yName] = geometry.map(start + 10, vc);
+      const ageWidth = dataAgeWidth(age, true);
+      const percentWidth = percent === "—" ? 12 : percent.length * (age ? 6 : 7);
+      const readingStart = x - (percentWidth + (age ? ageWidth + 3 : 0)) / 2;
       body = `
-        <text class="tank-pct" x="${x}" y="${yTop}" text-anchor="middle">${escapeHtml(percent)}</text>
+        <text class="tank-pct${age ? " aged" : ""}" x="${age ? readingStart : x}" y="${yTop}" text-anchor="${age ? "start" : "middle"}">${escapeHtml(percent)}</text>
+        ${dataAgeLabel(age, readingStart + percentWidth + 3, yTop)}
         ${volume ? `<text class="tiny" x="${x}" y="${yTop + 13}" text-anchor="middle">${escapeHtml(volume)}</text>` : ""}
         <text class="tank-name" x="${x}" y="${yName}" text-anchor="middle">${escapeHtml(truncate(tank.name, 7))}</text>`;
     } else {
@@ -778,9 +850,10 @@ function tankLabels(model, span, states, geometry, vertical, band = TANK_BAND) {
       const fontSize = lane < 32 ? "small-lane" : "";
       body = `
         <text class="tank-name ${fontSize}" x="${xs}" y="${y - 5}">${escapeHtml(truncate(tank.name, Math.floor((end - start - 24) / 7)))}</text>
-        <text class="tank-pct ${fontSize}" x="${xe}" y="${y + 12}" text-anchor="end">${
+        <text class="tank-pct ${fontSize}" x="${xe - (age ? dataAgeWidth(age, true) + 4 : 0)}" y="${y + 12}" text-anchor="end">${
           volume ? `<tspan class="tank-vol">${escapeHtml(volume)}</tspan><tspan dx="6">${escapeHtml(percent)}</tspan>` : escapeHtml(percent)
         }</text>`;
+      body += dataAgeLabel(age, xe - dataAgeWidth(age, true), y + 12);
     }
     return `<g class="tank-label ${state.level}${vertical && lane < 26 ? " compact-tank" : ""}" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
       `${tank.name}: ${percent} ${state.statusText || ""}`,
@@ -845,7 +918,7 @@ export function renderVehicle(hass, model, orientation, uid, showPower = true) {
   const span = tankSpan(rearFront);
   const tireBoxes = layoutTireChips(hass, axles, geometry);
   const chips = tireBoxes.map((box) => box.axle.ghost ? ghostChip(box)
-    : tireChip(box.axle, box.side, box.sign, states, geometry, box));
+    : tireChip(hass, box.axle, box.side, box.sign, states, geometry, box));
   const power = model.powerSources?.length ? layoutPowerBoxes(hass, model, orientation) : undefined;
   const tankBand = TANK_BAND;
   let bounds = power?.bounds || drawingBounds(geometry, tireBoxes, model);
@@ -869,7 +942,7 @@ export function renderVehicle(hass, model, orientation, uid, showPower = true) {
         ${axles.map((axle) => tireRects(axle, states)).join("")}
         ${tankShapes(model, span, states, tankBand).join("")}
       </g>
-      ${tankLabels(model, span, states, geometry, vertical, tankBand).join("")}
+      ${tankLabels(hass, model, span, states, geometry, vertical, tankBand).join("")}
       ${chips.join("")}
       ${power ? renderPowerBoxes(hass, power) : ""}
       ${tow?.svg || ""}
@@ -888,6 +961,7 @@ const SHORE_READING_METRICS = [
   "line_2_voltage", "line_2_current", "line_2_frequency", "line_2_power", "energy",
 ];
 const powerMetricLabel = (metric, shore) => {
+  if (metric === "current" && !shore) return "Amps";
   if (!shore) return metric[0].toUpperCase() + metric.slice(1);
   if (metric === "energy" || metric === "enabled") return metric === "energy" ? "Energy" : "Enabled";
   const kind = metric.replace(/^line_2_/, "");
@@ -914,16 +988,19 @@ function powerSymbol(source) {
   const shell = (x, y, width, height) =>
     `<rect class="equipment-shell" x="${x}" y="${y}" width="${width}" height="${height}" rx="2"></rect>`;
   if (source.key.includes("_bank_")) {
-    return shell(2, 5, 20, 16)
-      + '<path class="equipment-detail" d="M5 5 V2 H9 V5 M15 5 V2 H19 V5 M5 11 H11 M8 8 V14 M15 11 H19"></path>';
+    return shell(2, 5, 20, 17)
+      + '<path class="equipment-detail" d="M5 5 V2 H9 V5 M15 5 V2 H19 V5 M5 10 H9 M7 8 V12 M16 10 H19"></path>'
+      + '<path class="equipment-energy" d="M13 8 L8 16 H12 L11 21 L17 13 H13 Z"></path>';
   }
   if (source.key === "generator") {
     return shell(1, 6, 22, 16)
-      + '<path class="equipment-detail" d="M6 6 V2 H18 V6 M5 11 H11 M5 15 H11 M5 19 H11 M15 10 V18 H20 V10 Z"></path>';
+      + '<path class="equipment-detail" d="M6 6 V2 H18 V6 M4 11 H10 M4 15 H10 M4 19 H10"></path>'
+      + '<circle class="equipment-detail" cx="16" cy="14" r="4"></circle>'
+      + '<path class="equipment-energy" d="M16 10 L13 15 H16 L15 19 L19 13 H16 Z"></path>';
   }
   if (source.key === "inverter") {
     return shell(1, 3, 22, 18)
-      + '<path class="equipment-detail" d="M4 8 H9 M6.5 5.5 V10.5 M4 16 H9 M12 12 C14 5 16 5 17 12 S21 19 22 12"></path>';
+      + '<path class="equipment-detail" d="M4 8 H9 M4 11 H9 M4 16 H9 M12 12 C14 5 16 5 17 12 S21 19 22 12"></path>';
   }
   return shell(6, 7, 12, 10)
     + '<path class="equipment-detail" d="M8 7 V1 M16 7 V1 M12 17 V21 Q12 23 7 23"></path>';
@@ -957,7 +1034,7 @@ export function layoutPowerBoxes(hass, model, orientation) {
     const external = location === "left" || location === "right";
     const regionU = location.endsWith("front") ? 680 : location.endsWith("rear") ? 110 : 430;
     let chosen;
-    for (let offset = 0; offset <= L && !chosen; offset += size * 1.4) {
+    for (let offset = 0; offset <= L && !chosen; offset += 12) {
       for (const direction of offset ? [-1, 1] : [1]) {
         const u = regionU + offset * direction;
         if (u < size / 2 || u > L - size / 2) continue;
@@ -967,7 +1044,7 @@ export function layoutPowerBoxes(hass, model, orientation) {
         for (const [laneIndex, lane] of lanes.entries()) {
           if (!external && tireCollision && laneIndex === 0) continue;
           const [cx, cy] = geometry.map(u, side * lane);
-          const icon = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size };
+          const icon = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size + 18 };
           if ([...obstacles, ...icons].some((other) => overlaps(icon, other, size / 5))
             || tankObstacles.some((other) => overlaps(icon, other, 4))) continue;
           chosen = icon;
@@ -980,7 +1057,7 @@ export function layoutPowerBoxes(hass, model, orientation) {
       let distance = BODY + size + 14;
       do {
         const [cx, cy] = geometry.map(regionU, side * distance);
-        chosen = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size };
+        chosen = { source, state, side, anchor: [cx, cy], x: cx - size / 2, y: cy - size / 2, width: size, height: size + 18 };
         distance += size + 14;
       } while ([...obstacles, ...icons, ...tankObstacles].some((other) => overlaps(chosen, other)));
     }
@@ -1002,25 +1079,27 @@ export function layoutPowerBoxes(hass, model, orientation) {
       ? AC_LINE_METRICS.map((metric) =>
         lines.map((prefix) => source[`${prefix}${metric}`] ? `${prefix}${metric}` : undefined))
         .filter((row) => row.some(Boolean))
-      : metrics.reduce((result, metric, index) => {
-        if (index % 2 === 0) result.push([]);
-        result.at(-1).push(metric);
-        return result;
-      }, []);
+      : metrics.map((metric) => [metric]);
     const sharedMetrics = shore ? ["enabled", "energy"].filter((metric) => source[metric]) : [];
-    if (sharedMetrics.length) rows.push(sharedMetrics);
+    rows.push(...sharedMetrics.map((metric) => [metric]));
+    const labelWidth = Math.max(45, ...[...metrics, ...sharedMetrics].map((metric) =>
+      powerMetricLabel(metric, shore).replace(/^Line [12] /, "").length * 5.5 + 8));
     const columnWidth = Math.max(75, ...metrics.map((metric) =>
       (state[metric] && typeof state[metric] === "object"
         ? `${state[metric].text} ${state[metric].unit}`.length * 8 + 12 : 75)),
-      ...(shore ? metrics.map((metric) => powerMetricLabel(metric, true).replace(/^Line [12] /, "").length * 6 + 12) : []));
-    const width = Math.max(156, columnWidth * (shore ? Math.max(1, lines.length, sharedMetrics.length) : 2) + 6);
-    const rowHeight = shore ? 36 : 20;
+      ...[...metrics, ...sharedMetrics].map((metric) => {
+        const age = missingReadingText(hass, [source[metric]]);
+        return age ? STR.noData.length * 5.5 + dataAgeWidth(age) + 16 : 0;
+      }));
+    const width = Math.max(156, labelWidth + columnWidth * Math.max(1, lines.length) + 18);
+    const rowHeight = 20;
     const headerHeight = lines.length ? 16 : 0;
+    const statusAge = missingReadingText(hass, ["enabled", "warning", "problem"].map((metric) => source[metric]));
     const height = Math.max(52, 24 + headerHeight + rows.length * rowHeight + (sharedMetrics.length ? 20 : 0));
     const depth = vertical ? width : height;
     const anchor = icons.find((icon) => icon.source === source).anchor;
     let distance = TIRE_OUTER + 14 + depth / 2;
-    if (external) {
+    if (external && !vertical) {
       const center = geometry.map(0, 0)[vertical ? 0 : 1];
       distance = Math.max(distance, ...boxes.filter((box) => box.side === side).map((box) =>
         Math.abs((vertical ? box.x + box.width / 2 : box.y + box.height / 2) - center)
@@ -1028,11 +1107,15 @@ export function layoutPowerBoxes(hass, model, orientation) {
       ));
     }
     let box;
+    const offsets = vertical
+      ? [0, ...Array.from({ length: Math.ceil(L / 18) }, (_, i) => [-(i + 1) * 18, (i + 1) * 18]).flat()]
+      : [0, -36, 36, -72, 72, -108, 108];
     // Try nearby slots within the region before adding an outward lane.
     do {
-      for (const offset of [0, -36, 36, -72, 72, -108, 108]) {
+      for (const offset of offsets) {
+        if (vertical && (u + offset < height / 2 || u + offset > L - height / 2)) continue;
         const [cx, cy] = geometry.map(u + offset, side * distance);
-        box = { source, state, metrics, rows, lines, sharedMetrics, headerHeight, side, anchor, x: cx - width / 2, y: cy - height / 2, width, height, columnWidth, vertical };
+        box = { source, state, metrics, rows, lines, sharedMetrics, headerHeight, statusAge, side, anchor, x: cx - width / 2, y: cy - height / 2, width, height, columnWidth, labelWidth, vertical };
         if (![...obstacles, ...icons, ...boxes].some((other) => overlaps(box, other))) break;
       }
       distance += depth + 12;
@@ -1061,13 +1144,14 @@ export function renderPowerBoxes(hass, layout) {
     const label = `${source.name}: ${POWER_STATUS_LABELS[state.level]}`;
     return `<g class="power-icon power-${state.level}" data-source="${escapeHtml(source.key)}" ${action} aria-label="${escapeHtml(label)}" transform="translate(${x} ${y}) scale(${width / 24})">
       <title>${escapeHtml(label)}</title>${powerSymbol(source)}
-      <text class="equipment-tag" x="12" y="14" text-anchor="middle">${escapeHtml(powerTag(source))}</text>
+      <rect class="equipment-badge" x="0" y="25" width="24" height="8" rx="3"></rect>
+      <text class="equipment-tag" x="12" y="31" text-anchor="middle">${escapeHtml(powerTag(source))}</text>
     </g>`;
   }).join("");
   return icons + layout.boxes.map((box) => {
-    const { source, state, metrics, rows, lines, sharedMetrics, headerHeight, x, y, width, height, columnWidth } = box;
+    const { source, state, metrics, rows, lines, sharedMetrics, headerHeight, x, y, width, height, columnWidth, labelWidth } = box;
     const shore = source.key === "shore_power";
-    const sharedY = y + 24 + headerHeight + (rows.length - 1) * 36;
+    const sharedY = y + 24 + headerHeight + (rows.length - sharedMetrics.length) * 20;
     const name = `${powerTag(source)}: ${source.name}`;
     const status = POWER_STATUS_LABELS[state.level];
     const statusEntity = powerStatusEntity(source, state);
@@ -1076,35 +1160,42 @@ export function renderPowerBoxes(hass, layout) {
     return `<g class="power-box power-${state.level}" data-source="${escapeHtml(source.key)}">
       <title>${escapeHtml(`${name} (${POWER_LOCATION_LABELS[state.location]}): ${status}`)}</title>
       <rect class="power-bg" x="${x}" y="${y}" width="${width}" height="${height}" rx="10"></rect>
-      <text class="chip-label" x="${x + 9}" y="${y + 13}">${escapeHtml(truncate(name, 22))}</text>
+      <text class="chip-label" x="${x + 9}" y="${y + 13}">${escapeHtml(truncate(name,
+        Math.min(22, Math.floor((width - 35 - (box.statusAge ? dataAgeWidth(box.statusAge) + 4 : 0)) / 5.5))))}</text>
+      ${dataAgeLabel(box.statusAge, x + width - 26 - dataAgeWidth(box.statusAge), y + 13)}
       <g class="power-status" ${statusAction} aria-label="${escapeHtml(`${source.name}: ${status}`)}">
         <title>${escapeHtml(status)}</title>
         <rect class="hit" x="${x + width - 22}" y="${y}" width="22" height="22"></rect>
         <circle class="dot" cx="${x + width - 11}" cy="${y + 10}" r="4"></circle>
       </g>
       ${lines.map((prefix, column) =>
-        `<text class="chip-label" x="${x + 9 + column * columnWidth}" y="${y + 30}">Line ${prefix ? 2 : 1}</text>`).join("")}
+        `<text class="chip-label" x="${x + 9 + labelWidth + column * columnWidth}" y="${y + 30}">Line ${prefix ? 2 : 1}</text>`).join("")}
       ${sharedMetrics.length ? `<path class="shore-divider" d="M${x + 9} ${sharedY} H${x + width - 9}"></path>
         <text class="chip-label" x="${x + 9}" y="${sharedY + 14}">Combined</text>` : ""}
       ${!metrics.length && !sharedMetrics.length ? `<text class="small" x="${x + 9}" y="${y + 34}">No readings mapped</text>` : ""}
-      ${rows.map((row, rowIndex) => row.map((metric, column) => {
-        if (!metric) return "";
-        const label = powerMetricLabel(metric, shore).replace(/^Line [12] /, "");
-        const text = powerReadingText(metric, state[metric], shore);
-        const rowY = y + (shore ? 47 : 32) + headerHeight + rowIndex * (shore ? 36 : 20)
-          + (sharedMetrics.includes(metric) ? 20 : 0);
-        const rowX = x + 9 + column * columnWidth;
-        const measurement = metric !== "charging" && metric !== "enabled";
-        const value = measurement && state[metric]
-          ? `<tspan class="mid">${escapeHtml(state[metric].text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state[metric].unit)}</tspan>`
-          : `<tspan class="small row-right">${escapeHtml(measurement ? STR.noData : shore ? powerReadingValue(metric, state[metric]) : text)}</tspan>`;
-        return `<g data-entity="${escapeHtml(source[metric])}" tabindex="0" role="button" aria-label="${escapeHtml(`${source.name}: ${text}`)}">
-          <title>${escapeHtml(text)}</title>
-          <rect class="hit" x="${rowX - 4}" y="${rowY - (shore ? 29 : 13)}" width="${columnWidth - 2}" height="${shore ? 34 : 16}"></rect>
-          ${shore ? `<text class="small" x="${rowX}" y="${rowY - 16}">${escapeHtml(label)}</text>` : ""}
-          <text class="power-value" x="${rowX}" y="${rowY}">${value}</text>
-        </g>`;
-      }).join("")).join("")}
+      ${rows.map((row, rowIndex) => {
+        const firstMetric = row.find(Boolean);
+        const rowY = y + 32 + headerHeight + rowIndex * 20
+          + (sharedMetrics.includes(firstMetric) ? 20 : 0);
+        return `<text class="small power-label" x="${x + 9}" y="${rowY}">${escapeHtml(
+          powerMetricLabel(firstMetric, shore).replace(/^Line [12] /, ""))}</text>`
+          + row.map((metric, column) => {
+            if (!metric) return "";
+            const text = powerReadingText(metric, state[metric], shore);
+            const rowX = x + 9 + labelWidth + column * columnWidth;
+            const age = missingReadingText(hass, [source[metric]]);
+            const measurement = metric !== "charging" && metric !== "enabled";
+            const value = measurement && state[metric]
+              ? `<tspan class="mid">${escapeHtml(state[metric].text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state[metric].unit)}</tspan>`
+              : `<tspan class="small row-right">${escapeHtml(powerReadingValue(metric, state[metric]))}</tspan>`;
+            return `<g data-entity="${escapeHtml(source[metric])}" tabindex="0" role="button" aria-label="${escapeHtml(`${source.name}: ${text}`)}">
+              <title>${escapeHtml(text)}</title>
+              <rect class="hit" x="${rowX - 4}" y="${rowY - 13}" width="${columnWidth - 2}" height="16"></rect>
+              <text class="power-value" x="${rowX}" y="${rowY}">${value}</text>
+              ${dataAgeLabel(age, rowX + STR.noData.length * 5.5 + 4, rowY)}
+            </g>`;
+          }).join("");
+      }).join("")}
     </g>`;
   }).join("");
 }
@@ -1162,8 +1253,6 @@ const STYLES = `
   .frame { stroke: color-mix(in srgb, var(--hv-text) 12%, transparent); stroke-width: 3;
     stroke-dasharray: 2 6; stroke-linecap: round; }
   .mirror { fill: color-mix(in srgb, var(--hv-text) 35%, var(--hv-card)); }
-  .roof-unit { fill: color-mix(in srgb, var(--hv-text) 6%, transparent);
-    stroke: color-mix(in srgb, var(--hv-text) 12%, transparent); }
   .axle { stroke: color-mix(in srgb, var(--hv-text) 45%, var(--hv-card)); stroke-width: 6;
     stroke-linecap: round; }
   .tow-outline { fill: none; stroke: var(--hv-text); stroke-width: 2; }
@@ -1192,6 +1281,10 @@ const STYLES = `
   .unit { fill: var(--hv-muted); font-size: 9.5px; font-weight: 500; }
   .small { fill: var(--hv-muted); font-size: 10.5px; }
   .tiny { fill: var(--hv-muted); font-size: 9px; }
+  .data-age { color: var(--hv-muted); }
+  .data-age text { fill: var(--hv-muted); font-size: 9px; }
+  .tank-label .data-age text { font-size: 7px; }
+  .age-clock { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
   .muted { fill: var(--hv-muted); }
   .flag { fill: var(--lvl); font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; }
   .wheel { fill: var(--lvl); font-size: 9.5px; font-weight: 700; }
@@ -1214,6 +1307,7 @@ const STYLES = `
     stroke-linejoin: round; }
   .tank-name { font-size: 11px; font-weight: 600; }
   .tank-pct { font-size: 13px; font-weight: 700; }
+  .tank-pct.aged { font-size: 10px; }
   .tank-vol { fill: var(--hv-muted); font-size: 10px; font-weight: 500; }
   .compact-tank .tank-name { font-size: 8px; }
   .compact-tank .tank-pct { font-size: 9px; }
@@ -1238,14 +1332,16 @@ const STYLES = `
   .power-warning { --lvl: var(--hv-watch); }
   .power-problem { --lvl: var(--hv-alert); }
   .power-icon.power-on { --lvl: var(--hv-ok); }
-  .equipment-detail { fill: none; stroke: rgba(0, 0, 0, 0.45); stroke-width: 1.5;
+  .equipment-shell { fill: color-mix(in srgb, var(--lvl) 24%, var(--hv-card)); stroke: var(--lvl); }
+  .equipment-energy { fill: var(--lvl); stroke: none; }
+  .equipment-detail { fill: none; stroke: var(--hv-text); stroke-width: 1.5;
     stroke-linecap: round; stroke-linejoin: round; }
   .power-unknown .equipment-detail { stroke: var(--hv-muted); }
   .power-icon:focus-visible .equipment-shell { stroke: var(--primary-color); stroke-width: 2.5; }
   .power-unknown .power-bg { stroke-dasharray: 4 3; }
   .power-unknown .dot { fill: none; stroke: var(--lvl); stroke-width: 1.5; stroke-dasharray: 2 1; }
-  .equipment-tag { fill: var(--hv-text); font-size: 5px; font-weight: 700;
-    paint-order: stroke; stroke: var(--hv-card); stroke-width: 1.5; stroke-linejoin: round; }
+  .equipment-badge { fill: var(--hv-card); stroke: var(--lvl); stroke-width: 0.6; }
+  .equipment-tag { fill: var(--hv-text); font-size: 5px; font-weight: 700; }
   .power-legend i { border: 1px solid var(--hv-line); }
   .power-legend.power-unknown i { border-style: dashed; border-color: var(--hv-text); }
   .power-box [data-entity]:focus-visible .hit { stroke: var(--primary-color); stroke-width: 2; }
@@ -1268,6 +1364,7 @@ export class HavrvRvCard extends HTMLElement {
     super();
     this._uid = ++instanceCounter;
     this._width = 0;
+    this._readingHistory = new Map();
     this.attachShadow({ mode: "open" });
     const activate = (event) => {
       const target = event
@@ -1353,11 +1450,17 @@ export class HavrvRvCard extends HTMLElement {
       });
     }
     this._resizeObserver?.observe(this);
+    if (!this._ageTimer) {
+      this._ageTimer = setInterval(() => this._update(), 30000);
+      this._ageTimer.unref?.();
+    }
     this._scheduleFit();
   }
 
   disconnectedCallback() {
     this._resizeObserver?.disconnect();
+    clearInterval(this._ageTimer);
+    this._ageTimer = undefined;
     cancelAnimationFrame(this._fitFrame);
   }
 
@@ -1371,12 +1474,27 @@ export class HavrvRvCard extends HTMLElement {
     const hass = this._hass;
     const rv = resolveRvDevice(hass, this._config.device_id);
     const model = rv ? visibleModel(buildModel(hass, rv), this._config) : undefined;
+    if (model) {
+      const readings = [
+        ...model.axles.flatMap((axle) => [...axle.left, ...axle.right]
+          .flatMap((tire) => [tire.pressure, tire.temperature, tire.battery])),
+        ...model.tanks.flatMap((tank) => [tank.percentage, tank.level]),
+        ...model.powerSources.flatMap((source) => [...SHORE_READING_METRICS,
+          "enabled", "charging", "warning", "problem"].map((metric) => source[metric])),
+      ].filter(Boolean);
+      const current = new Set(readings);
+      for (const id of this._readingHistory.keys()) {
+        if (!current.has(id)) this._readingHistory.delete(id);
+      }
+      rememberReadings(hass, readings, this._readingHistory);
+    }
     const orientation = this._resolveOrientation();
     const key = JSON.stringify([
       orientation,
       this._config,
       hass.locale?.language,
       hass.themes?.darkMode,
+      Math.floor(Date.now() / 30000),
       model && {
         name: model.name,
         axles: model.axles,
@@ -1387,7 +1505,7 @@ export class HavrvRvCard extends HTMLElement {
       },
       model?.watched.map((id) => {
         const state = hass.states[id];
-        return state ? [state.state, state.attributes.unit_of_measurement] : null;
+        return state ? [state.state, state.attributes.unit_of_measurement, state.last_reported, state.last_updated] : null;
       }),
     ]);
     if (key === this._renderKey) return;
