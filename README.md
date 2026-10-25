@@ -76,8 +76,9 @@ choose existing entities, and configure optional tank and tire monitoring.
   Equipment graphics have high-contrast details and separate tag badges below
   them, rather than labels over the symbols. Vertical electrical readouts stack
   along the coach before widening the diagram, including the shore readout.
-  Missing mapped readings show their last observed valid-data age, or explicitly
-  report an unknown age. One common legend covers tires, tanks and electrical,
+  Electrical boxes use consistent, labeled single-line readings. Missing data
+  is followed inline by a clock and last-valid age (or `?` for an unknown age),
+  without extra age rows. One common legend covers tires, tanks and electrical,
   and Enabled is indicated by color rather than a Yes/No row. Shore Power
   groups Line 1 on the left and Line 2 on the right, with shared Enabled and
   Energy readings in a separate Combined section. See

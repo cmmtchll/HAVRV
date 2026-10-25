@@ -16,6 +16,8 @@ independently mapped; the example includes a battery warning and inverter proble
 
 The card draws your RV from above. It shows every configured wheel with its
 pressure and temperature, and every configured water tank with its fill level.
+The silhouette has no decorative roof units or vents that could be mistaken
+for configured equipment.
 The layout follows the RV profile:
 
 - A front axle, then one to three rear axles, each with single or dual wheels.
@@ -40,19 +42,23 @@ The layout follows the RV profile:
   including Shore, use the nearest free slot along the coach on their selected
   side before adding outward columns. Horizontal readouts use nearby slots
   or additional outward lanes to avoid other boxes and tire labels;
-  the drawing expands to keep every box visible. Mapped voltage, current,
-  Bank Charging appears inside the box. Enabled is shown through the overall
+  the drawing expands to keep every box visible. All electrical boxes use the
+  same compact rows: a label on the left and its value on the same baseline.
+  Voltage, Amps and bank Charging are labeled consistently, with no separate
+  line for a value or its missing-data age. Enabled is shown through the overall
   tint and status dot, not a redundant Yes/No row. A status dot in its title
   reflects Enabled/Warning/Problem, just like the tire-label dots.
   Separate battery, generator, inverter and plug graphics show the equipment
   itself on the coach; the shore plug is outside. Each bank has its own graphic.
   Select a reading or use Tab and Enter/Space to open its details.
-- Shore Power's box stacks voltage, amps, frequency and watts in a **Line 1**
-  left column and a **Line 2** right column. Missing mappings leave their
+- Shore Power's box shares one left-hand label column for Voltage, Amps,
+  Frequency and Watts, with aligned values in a **Line 1** column and a
+  **Line 2** column on the same rows. Missing mappings leave their
   positions empty rather than moving readings into the other line's column.
   A divider separates a **Combined** section below the line readings, with
   the mapped **Enabled** status (On/Off/No data) and one shared **Energy**
-  reading in kWh. Enabled is independent of the Warning/Problem status dot:
+  reading in kWh, each on its own compact label/value row. Enabled is
+  independent of the Warning/Problem status dot:
   a known problem can color the box red while Enabled still reports On.
   Only mapped readings appear, and an unavailable reading does not hide other
   readings. Larger boxes reserve enough space in both orientations without
@@ -111,13 +117,17 @@ dashboard resource, and reset the browser/app cache. See the
 
 Tire labels (one age per wheel on duals), tank labels and electrical boxes show
 a small clock followed by **15s / 8m / 2h / 3d** when a mapped reading is missing,
-invalid, unknown or unavailable. The indicator stays on one line, including on
-narrow tanks; hover for the full **Last data 2h ago** tooltip. Screen readers
+invalid, unknown or unavailable. It follows **No data** on the same baseline,
+not on an extra row. Narrow tanks use **dash + clock + age** beside the missing
+percentage; tire rows use the dash when pressure alone is missing.
+Hover for the full **Last data 2h ago** tooltip. Screen readers
 receive the same full wording. Electrical ages also include mapped Enabled, Charging,
 Warning and Problem statuses. Healthy readings stay visible independently of
 missing channels; ages do not change advisory colors or invent replacement values.
-When several channels are missing, the oldest known last-valid timestamp is used.
-If any missing channel has no known valid timestamp, the label instead reads
+Electrical measurements show their own ages, while a header indicator covers
+missing mapped Enabled/Warning/Problem statuses. Tire and tank indicators use
+the oldest known timestamp among their missing channels.
+If a missing channel has no known valid timestamp, its indicator instead reads
 **clock + ?**, with **Last data unknown** in its tooltip and accessible label.
 Unmapped optional channels do not count as missing.
 An electrical box without measurements still says **No readings mapped**.
@@ -200,8 +210,11 @@ no-data outline. Select the status dot to open the applicable mapped entity.
 Warning and Problem remain available in the generated source-device sections.
 
 Electrical boxes share the tire labels' 7% tinted background, translucent
-border, theme-aware text, header style, and font sizes. Voltage/current use
-the dual-tire reading style, with smaller units and secondary status readings.
+border, theme-aware text, header style, and font sizes. All use labeled,
+20-unit reading rows, with values and missing-data ages on the same baseline.
+Shore's two lines share metric labels rather than repeating them above each
+value. Voltage/current use the dual-tire reading style, with smaller units
+and secondary status readings.
 Problem outlines pulse like tire alerts, respecting reduced-motion settings.
 Equipment graphics use tinted shells, high-contrast internal details and
 accented energy symbols: **green** for known

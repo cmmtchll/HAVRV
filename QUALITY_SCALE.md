@@ -30,7 +30,8 @@ implemented integration behavior, not just repository configuration.
   to two lines; legacy single-line identities remain stable. Energy resets
   are owned by the underlying meter, with no HAVRV reset or trip counter.
   The overview stacks Line 1/Line 2 in separate columns and distinguishes
-  combined Enabled/Energy readings below a divider.
+  combined Enabled/Energy readings below a divider. All electrical sources use
+  compact label/value rows with inline missing-data ages.
 - Individually placed, collision-aware electrical readout boxes with colors
   from explicit Warning/Problem/Enabled mappings and distinct unavailable status,
   plus high-contrast equipment graphics with separate identity badges on the

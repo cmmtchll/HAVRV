@@ -213,6 +213,8 @@ are green when Enabled is on, gray when off, amber/red for Warning/Problem,
 and dashed/unfilled for unknown. They do not infer wiring or supply priority.
 Graphics normally have a tire-comparable 44-unit footprint. The overview omits
 Enabled Yes/No rows and uses one common legend for electrical, tires and tanks.
+Electrical boxes use consistent compact label/value rows, with any missing-data
+clock and age inline after **No data**, not on a separate line.
 Shore Power additionally separates its readings into Line 1 (left) and Line 2
 (right) columns, with mapped Enabled and shared Energy in a divided Combined
 section below. Enabled reports its own source, not the Warning/Problem color.
