@@ -78,6 +78,27 @@ def test_noop_does_not_populate_defaults(minimal):
     assert values == before
 
 
+@pytest.mark.parametrize("domain", ["binary_sensor", "input_boolean", "switch"])
+def test_editor_accepts_boolean_tire_battery_sources(domain):
+    """Use the native battery selector and validation in the management panel."""
+    entry = profile_entry()
+    schema = editor_schema(Candidate(dict(entry.data), dict(entry.options)), "metric")
+    field = next(
+        field
+        for field in schema["options"]
+        if field["name"] == "tire_front_left_battery"
+    )
+    assert domain in field["selector"]["entity"]["domain"]
+    values = editable_values(entry, "metric")
+    values["options"]["tire_front_left_battery"] = f"{domain}.battery_ok"
+    candidate, _, errors, _ = validate_values(entry, values, "metric")
+    assert not errors
+    assert (
+        candidate.options["tire_entity_mappings"]["front_left_battery"]
+        == f"{domain}.battery_ok"
+    )
+
+
 @pytest.mark.parametrize("legacy", [False, True])
 def test_shore_editor_default_and_line_count_changes(legacy):
     """Share defaults, active fields and removal semantics with native options."""

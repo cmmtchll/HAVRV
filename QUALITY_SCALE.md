@@ -47,6 +47,10 @@ implemented integration behavior, not just repository configuration.
   devices when capacity and source are both cleared, including old leftovers
   on setup. Capacity-only/source-only tanks remain supported, and unavailable
   sources do not remove configured tanks.
+- Tire battery mappings accept numeric levels or boolean battery-OK sources in
+  the same selector, with read-only on/off mirrors and explicit on=OK/off=problem
+  semantics. Boolean sources bypass percentage thresholds; unavailable sources
+  remain unknown and fail data-presence checks.
 - An Operations device with a restorable operation-mode selector. The mode
   does not yet change problem detection.
 - An always-present Tow device with restorable runtime towing, car/trailer and

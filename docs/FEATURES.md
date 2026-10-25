@@ -265,9 +265,18 @@ main rear wheel configuration.
 Each tire can map pressure, temperature, and battery sources. Tire sources
 may be `sensor`, `number`, or `input_number` entities. HAVRV exposes readings,
 pressure/temperature/battery problem states, data-present state, and an
-overall tire problem state. Battery problem uses a default low-battery limit of
-20%, configurable in the options. That overall state turns on for missing
-readings or when a configured limit is exceeded or cannot be evaluated.
+overall tire problem state. The same battery selector also accepts
+`binary_sensor`, `input_boolean`, and `switch` entities, including template
+binary sensors. For these sources, on/true means battery OK and off/false means
+a battery problem, regardless of device class. Select an **OK** signal, not a
+low-battery alarm with the opposite polarity. The read-only battery mirror
+preserves on/off without inventing a percentage or forwarding toggle actions.
+Numeric battery sources use a default low-battery limit of
+20%, configurable in the options; this limit does not apply to boolean sources.
+Existing numeric mappings need no migration. The overall state turns on for
+missing readings or when a configured limit is exceeded or cannot be evaluated.
+Unavailable or invalid boolean states stay unknown, not OK, and do not count
+as data present.
 Pressure and temperature limits are optional and use the RV profile's units;
 recognized source units are converted before comparison.
 

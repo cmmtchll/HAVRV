@@ -79,7 +79,7 @@ from .power import (
     shore_line_count,
 )
 from .tank import thresholds_valid
-from .tire import tire_entity_key, tire_positions
+from .tire import TIRE_BATTERY_BOOLEAN_DOMAINS, tire_entity_key, tire_positions
 
 _PROFILE_TEXT_FIELDS = (
     CONF_MANUFACTURER,
@@ -103,6 +103,10 @@ _WHEEL_CONFIGURATIONS = {
     WHEEL_CONFIGURATION_DUAL,
 }
 _NUMERIC_ENTITY_DOMAINS = ("sensor", "number", "input_number")
+_TIRE_BATTERY_ENTITY_DOMAINS = (
+    *_NUMERIC_ENTITY_DOMAINS,
+    *TIRE_BATTERY_BOOLEAN_DOMAINS,
+)
 
 
 class ConfigurationEntry(Protocol):
@@ -395,6 +399,11 @@ def _options_schema(
     tire_mappings = existing_options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
     for position in tire_positions(entry.data):
         for metric in ("pressure", "temperature", "battery"):
+            domains = (
+                _TIRE_BATTERY_ENTITY_DOMAINS
+                if metric == "battery"
+                else _NUMERIC_ENTITY_DOMAINS
+            )
             key = tire_entity_key(position, metric)
             field = f"tire_{key}"
             marker = (
@@ -403,7 +412,7 @@ def _options_schema(
                 else vol.Optional(field)
             )
             fields[marker] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=list(_NUMERIC_ENTITY_DOMAINS))
+                selector.EntitySelectorConfig(domain=list(domains))
             )
 
     number_selector = selector.NumberSelector(
@@ -521,6 +530,11 @@ def _normalize_options(
     selected_entities: set[str] = set()
     for position in positions:
         for metric in ("pressure", "temperature", "battery"):
+            domains = (
+                _TIRE_BATTERY_ENTITY_DOMAINS
+                if metric == "battery"
+                else _NUMERIC_ENTITY_DOMAINS
+            )
             key = tire_entity_key(position, metric)
             entity_id = user_input.get(f"tire_{key}", existing_tire_mappings.get(key))
             if entity_id is None:
@@ -532,7 +546,7 @@ def _normalize_options(
                 not valid_entity_id(entity_id)
                 or not separator
                 or not object_id
-                or entity_domain not in _NUMERIC_ENTITY_DOMAINS
+                or entity_domain not in domains
             ):
                 return {}, "invalid_tire_entity_mapping"
             if entity_id in selected_entities:

@@ -372,6 +372,38 @@ def test_tire_options_accept_numeric_entity_domains(entity_id: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "domain",
+    ["sensor", "number", "input_number", "binary_sensor", "input_boolean", "switch"],
+)
+def test_tire_battery_selector_and_validation_match(domain: str) -> None:
+    """Accept numeric readings and boolean health sources in one selector."""
+    entry = _tire_profile_entry()
+    schema = _options_schema(entry)
+    selectors = {marker.schema: value for marker, value in schema.schema.items()}
+    for position in tire_positions(entry.data):
+        assert domain in selectors[f"tire_{position.key}_battery"].config["domain"]
+    entity_id = f"{domain}.tire_battery"
+    options, error = _normalize_options({"tire_front_left_battery": entity_id}, entry)
+    assert error is None
+    assert options[CONF_TIRE_ENTITY_MAPPINGS]["front_left_battery"] == entity_id
+
+
+@pytest.mark.parametrize("metric", ["pressure", "temperature"])
+@pytest.mark.parametrize("domain", ["binary_sensor", "input_boolean", "switch"])
+def test_tire_numeric_readings_reject_boolean_domains(metric: str, domain: str) -> None:
+    """Keep pressure and temperature selectors and validation numeric-only."""
+    entry = _tire_profile_entry()
+    selectors = {
+        marker.schema: value for marker, value in _options_schema(entry).schema.items()
+    }
+    field = f"tire_front_left_{metric}"
+    assert domain not in selectors[field].config["domain"]
+    options, error = _normalize_options({field: f"{domain}.tire"}, entry)
+    assert options == {}
+    assert error == "invalid_tire_entity_mapping"
+
+
+@pytest.mark.parametrize(
     ("user_input", "expected_error"),
     [
         (
