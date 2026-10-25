@@ -5,18 +5,22 @@ entities into a consistent RV profile. It does not connect to or discover RV
 hardware; you select the Home Assistant entities that already represent your
 systems.
 
-> **Project status:** Early foundation. HAVRV supports RV profiles, system
-entity mappings, optional tank-level monitoring, and configurable tire
-monitoring, and an RV overview dashboard. Notifications, integration-specific triggers and conditions, and
-physical-device discovery are not implemented.
+> **Project status:** In active development. Implemented features include RV
+profiles, entity mappings, tank and tire monitoring, independent power-source
+devices, runtime tow controls, a management page, and an RV overview dashboard.
+Notifications, integration-specific triggers and conditions, and physical-device
+discovery are not implemented. No Home Assistant quality tier is claimed.
 
-**0.4.2:** Clearing a water tank's capacity and level source now removes its
-HAVRV sensors and empty device on reload, including old leftovers, so the
-dashboard shows only defined tanks. Capacity-only tanks and configured tanks
-with unavailable sources remain visible. Original source entities are untouched.
-Update HAVRV, restart Home Assistant, and refresh the browser. Remove old
-manually installed HAVRV dashboard Resources; no separate frontend installation
-is needed. See [dashboard upgrade troubleshooting](docs/TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).
+**Current release: 0.5.2.** Refreshed guides and dashboard illustrations reflect
+the current implementation. Every RV has a **Tow** device with restorable
+Towing, Car/Trailer, and Weight controls. The overview draws the selected tow
+vehicle only while Towing is on. Recent updates also add two-line shore-power
+readings and remove tank devices when both capacity and source are cleared.
+See the [changelog](CHANGELOG.md) for release history.
+
+After an update, restart Home Assistant and refresh the browser. The integration
+installs its frontend automatically; remove old manually installed HAVRV
+dashboard Resources. See [dashboard upgrade troubleshooting](docs/TROUBLESHOOTING.md#the-power-toggle-or-placed-electrical-devices-are-missing).
 
 ## Get started
 
@@ -65,33 +69,29 @@ choose existing entities, and configure optional tank and tire monitoring.
   energy source. Existing single-line mappings stay on Line 1 until expanded.
   Hughes Watchdog readings can come from its existing Home Assistant entities;
   HAVRV does not connect to the meter or reset its energy counter.
-- Includes an RV overview card and a generated RV dashboard. They draw the
-  configured axles, single or dual wheels, and water tanks with live readings
-  and status colors.
-  Single and dual tire labels keep pressure and temperature on the same line.
-  Electrical readout boxes follow your selected locations, like tire labels,
-  without overlapping colocated sources. They use tire-style translucent
-  tints, fonts, and status dots: green/gray for on/off, amber/red for optional
-  mapped Warning/Problem, and dashed no-data outlines. Colored battery,
-  inverter and generator graphics sit on the coach; the shore plug is outside.
-  Equipment graphics have high-contrast details and separate tag badges below
-  them, rather than labels over the symbols. Vertical electrical readouts stack
-  along the coach before widening the diagram, including the shore readout.
-  Electrical boxes use consistent, labeled single-line readings. Missing data
-  is followed inline by a clock and last-valid age (or `?` for an unknown age),
-  without extra age rows. One common legend covers tires, tanks and electrical,
-  and Enabled is indicated by color rather than a Yes/No row. Shore Power
-  groups Line 1 on the left and Line 2 on the right, with shared Enabled and
-  Energy readings in a separate Combined section. See
-  [dashboard configuration and colors](docs/DASHBOARD.md).
-  The guide also includes [crowded R-Rear placement examples](docs/DASHBOARD.md#placement-stress-example).
-  Shared, default-on show/hide options cover tires, tanks, power, coach
-  information, mapped system sections, header and legend. Reuse
-  [driving/parked presets](docs/DASHBOARD.md#reuse-driving-and-parked-layouts) in
-  small or large horizontal/vertical views. Hidden classes leave no alert
-  counts or layout reservations; crowded drawings scroll instead of shrinking.
+- Includes an RV overview card and a generated dashboard, with horizontal and
+  vertical layouts, compact live readings, explicit status colors, and inline
+  last-observed data ages when readings are missing. Placed electrical devices
+  have independent tagged graphics and readout boxes; these illustrate
+  placement, not wiring or active supply.
+- Shares default-on visibility options across the card and dashboard strategies,
+  including tow, tires, tanks, power, coach information, mapped systems, header,
+  and legend. Hidden groups leave no alert counts or layout reservations.
+  Crowded drawings scroll instead of shrinking without limit. See
+  [dashboard configuration, colors, and layout presets](docs/DASHBOARD.md).
 
-![HAVRV RV overview card](docs/images/dashboard-horizontal.png)
+## Dashboard examples
+
+The current card rendered with synthetic readings, not real vehicle data or
+recommended specifications. These examples show a car while Towing is on,
+two-line shore power, a mapped battery warning, and a mapped inverter problem.
+
+![Horizontal HAVRV overview with a towed car and two-line shore power](docs/images/dashboard-horizontal.png)
+
+<img src="docs/images/dashboard-vertical.png" alt="Vertical HAVRV overview with a towed car, water tanks, tires and independent electrical readouts" width="420">
+
+See the [dashboard guide](docs/DASHBOARD.md#placement-stress-example) for crowded
+placement examples and the [setup guide](docs/SETUP.md) to configure your own RV.
 
 Entity IDs and system layouts differ between RVs. HAVRV does not assume a
 particular manufacturer, fixed entity set, or source naming convention.

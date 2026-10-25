@@ -10,16 +10,17 @@ implemented integration behavior, not just repository configuration.
   configuration, with one draft, validated config-entry updates and conflict
   detection. Native setup is short; options/reconfigure recovery paths remain.
 - HACS-compatible single-integration repository layout and metadata.
-- UI config flow for adding uniquely named RV profiles with optional coach
-  identity, storage zone, dimensions, tank capacities, axle/wheel details, and
-  mappings from existing Home Assistant entities to RV system groups.
+- Short UI config flow for adding uniquely named RV profiles with a measurement
+  system. The management page edits optional coach identity, storage zone,
+  dimensions, tank capacities, axle/wheel details, and mappings from existing
+  Home Assistant entities to RV system groups; native recovery flows remain.
 - Config-entry setup and unload lifecycle.
 - Typed runtime data for new profiles, with support for existing name-only
   entries.
 - RV and mapped-system devices, with mirrored sensors and binary sensors and
   action-forwarding switches, lights, and climate controls. Existing entries
   without mappings remain supported; entity configuration is editable through
-  the options flow.
+  the management page and native options fallback.
 - Independent house/chassis battery-bank devices (one each by default) and
   logical Inverter, Generator, and Shore Power devices, with declared
   read-only voltage/current/Enabled mappings, optional Warning/Problem and bank Charging,
