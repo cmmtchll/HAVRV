@@ -7,14 +7,14 @@ control RV hardware directly.
 
 ## Before you start
 
-- For 0.4.2 updates, restart Home Assistant and refresh the browser after
-  installing. Remove old manually added HAVRV dashboard Resources; the
+- After installing any HAVRV update, restart Home Assistant and refresh the
+  browser. Remove old manually added HAVRV dashboard Resources; the
   integration supplies the frontend automatically.
 - Make sure Home Assistant is running and the integrations that provide your
   RV-related entities have been set up.
-- Identify the sensors, binary sensors, switches, lights, and climate entities
-  you want to group. For tanks and tires, note the exact source entity and its
-  unit, if it has one.
+- Identify the sensors, numbers, input-number helpers, binary sensors, switches,
+  lights, and climate entities you want to group. For tanks and tires, note the
+  exact source entity and its unit, if it has one.
 - Have reliable coach specifications available for any profile fields you
   intend to fill in. Dimensions and capacities are saved as provided; HAVRV
   does not verify them.
@@ -205,10 +205,13 @@ referencing removed HAVRV entities or devices may need updating. This is not
 a recorder-history purge.
 
 You may set warning and problem percentages for a tank, but both thresholds
-must be set together. Fresh water warns as the level falls; gray and black
-water warn as the level rises. A configured tank gets a **Status** sensor with
-`ok`, `warning`, or `problem`. Fuel-level monitoring is not implemented, even
-though a fuel capacity can be stored on the profile.
+must be set together. Without an override, advisory defaults are **50% warning /
+25% problem** for fresh water and **50% warning / 75% problem** for gray and
+black water. Fresh water warns as the level falls; gray and black water warn as
+the level rises. A configured tank gets a **Status** sensor with `ok`, `warning`,
+or `problem`; without a usable percentage it remains unavailable. These defaults
+are not vehicle-specific safety limits. Fuel-level monitoring is not
+implemented, even though a fuel capacity can be stored on the profile.
 
 ## 5. Optionally configure tire monitoring
 
@@ -275,11 +278,15 @@ Assistant and refresh your browser. Then follow the
   saved; setting one pressure limit initializes an unset companion with its
   suggested default. See the [feature guide](FEATURES.md#rv-profile-specifications)
   for defaults, units, validation, and upgrade entity-ID changes.
-- Use the config entry's **Reconfigure** action to update saved coach details.
-  The profile name stays the same, and system and tire mappings are not changed.
-- Use **Options** to change system mappings, tank selections and thresholds,
-  tire sources, and tire limits. Changes to mappings, tire sources, or tire
-  limits reload the entry.
+- Use the integration entry's **gear button** to open the management page.
+  Edit coach details in **RV profile**, source devices in **Power**, and other
+  mappings and limits in **Tanks**, **Tires**, and **System mappings**.
+  **Apply changes** saves the shared draft and reloads the entry. The profile
+  name stays the same.
+- Native **Reconfigure** and the options flow remain recovery alternatives.
+  Reconfigure edits coach details; options edit mappings and monitoring limits.
+  Complete every screen of a native wizard to save; cancelling leaves saved
+  settings unchanged.
 - Power-source settings also reload the entry. Clearing a source removes its
   HAVRV reading, while remapping a bank's source keeps the HAVRV entity identity.
 - Remove the HAVRV config entry to remove its devices and exposed entities.

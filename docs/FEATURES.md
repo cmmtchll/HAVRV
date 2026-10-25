@@ -11,7 +11,7 @@ RV profile, Power, Tanks, Tires and System mappings. It edits the same config
 entry as native forms and configuration-number entities. All sections share one
 in-memory draft and one **Apply changes** operation, with validation, removal
 review and stale-draft detection. Existing IDs and source ownership are retained.
-The monitoring dashboard is separate and unchanged. Native options/reconfigure
+The monitoring dashboard is a separate view. Native options/reconfigure
 flows remain available as recovery paths.
 
 Inputs place their clear action alongside the control. Source names appear
@@ -211,8 +211,9 @@ associated with its box by matching tags. Banks and AC equipment are on
 the coach; the shore plug is outside. Like tire shapes, equipment graphics
 are green when Enabled is on, gray when off, amber/red for Warning/Problem,
 and dashed/unfilled for unknown. They do not infer wiring or supply priority.
-Graphics normally have a tire-comparable 44-unit footprint. The overview omits
-Enabled Yes/No rows and uses one common legend for electrical, tires and tanks.
+Graphics normally have a tire-comparable 44-unit footprint. Bank, inverter and
+generator boxes show Enabled through color and a status dot instead of a
+Yes/No row. One common legend covers electrical, tires and tanks.
 Electrical boxes use consistent compact label/value rows, with any missing-data
 clock and age inline after **No data**, not on a separate line.
 Shore Power additionally separates its readings into Line 1 (left) and Line 2
@@ -274,7 +275,8 @@ a battery problem, regardless of device class. Select an **OK** signal, not a
 low-battery alarm with the opposite polarity. The read-only battery mirror
 preserves on/off without inventing a percentage or forwarding toggle actions.
 Numeric battery sources use a default low-battery limit of
-20%, configurable in the options; this limit does not apply to boolean sources.
+20%, configurable under **Tires** or in the native options fallback; this limit
+does not apply to boolean sources.
 Existing numeric mappings need no migration. The overall state turns on for
 missing readings or when a configured limit is exceeded or cannot be evaluated.
 Unavailable or invalid boolean states stay unknown, not OK, and do not count

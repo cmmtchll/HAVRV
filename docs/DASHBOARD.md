@@ -8,11 +8,15 @@ HAVRV includes an RV overview card and a dashboard generated from your RV
 profile. Both are installed with the integration. You do not need a separate
 HACS frontend download or a Lovelace resource.
 
-![Horizontal HAVRV overview with tires, tanks, placed battery banks and AC sources](images/dashboard-horizontal.png)
+![Horizontal HAVRV overview with a towed car, tires, tanks, battery banks and two-line shore power](images/dashboard-horizontal.png)
 
 These rendered examples use synthetic source readings, not a particular RV's
 specifications or wiring. Enabled, Charging, Warning, and Problem are
 independently mapped; the example includes a battery warning and inverter problem.
+Towing is on with Car selected and an example weight of 3,500 lb. Shore Power
+has both AC lines and one shared energy reading mapped. The images are rendered
+from the bundled card, not screenshots of a connected vehicle or a complete
+Home Assistant dashboard.
 
 The card draws your RV from above. It shows every configured wheel with its
 pressure and temperature, and every configured water tank with its fill level.
@@ -84,19 +88,23 @@ The layout follows the RV profile:
   diagram region to scroll with the keyboard. The same card works in small or
   large dashboard sections, in either orientation.
 
-<img src="images/dashboard-vertical.png" alt="Vertical HAVRV card in a dark theme" width="320">
+<img src="images/dashboard-vertical.png" alt="Vertical HAVRV card with a towed car and two-line shore power in a dark theme" width="420">
 
 ## Configure electrical placement on an existing RV
 
-1. Open **Settings → Devices & services → HAVRV** and the RV entry's
-   **Configure/Options** action.
-2. Select **Edit power-source mappings, specifications and placement** on
-   the initial options form, then submit.
-3. Set **Dashboard placement** on each bank, Inverter, Generator, and Shore
-   Power screen. Choose one of the six interior regions; shore uses left/right
-   outside. Left/right are viewed facing forward.
-4. Submit every screen to save. Cancelling the wizard leaves prior settings
-   unchanged. **Reconfigure** changes bank counts, not placement.
+1. Open **Settings → Devices & services → HAVRV** and select the RV entry's
+   **gear button** to open the management page.
+2. Open **Power** and select a bank, Inverter, Generator, or Shore Power.
+3. Set **Dashboard placement**. Choose one of the six interior regions; shore
+   uses left/right outside. Left/right are viewed facing forward.
+4. Repeat for other devices, then **Apply changes** and confirm. Switching
+   devices or tabs keeps the shared draft; it does not save.
+
+The native options flow remains a recovery alternative: select **Edit
+power-source mappings, specifications and placement**, set placement on each
+screen, and submit every screen to save. Cancelling the wizard leaves prior
+settings unchanged. Bank counts are edited under **RV profile** or native
+**Reconfigure**, not in dashboard YAML.
 
 Placement defaults to **Not shown**. The overview only draws placed sources;
 the generated dashboard can still include unplaced source-device sections.
@@ -173,8 +181,12 @@ it does not change the RV profile, entities, monitoring, or source readings.
 ### Placement stress example
 
 These synthetic examples put Generator, Inverter, CB1, HB1 **and HB2** at
-**R-Rear**, with Shore Power on **R** outside. Shore currently accepts a side,
-not front/mid/rear; it remains centered on that outside side.
+**R-Rear**, with Shore Power on **R** outside. Shore accepts a side, not
+front/mid/rear; its graphic stays outside and its readout can move along that
+side to avoid other boxes. Towing is off to focus these examples on placement.
+One mapped rear tire temperature and HB2's current are unavailable, illustrating
+inline **clock + ?** indicators when the card has not observed a valid report.
+Other readings remain visible; no replacement values are invented.
 
 Each device keeps an independent tagged graphic and readout. Equipment uses
 additional interior slots around the rear region, avoiding tires and tanks.
@@ -185,11 +197,12 @@ therefore takes more space. Matching tags replace connecting lines.
 
 ![Horizontal right-rear electrical placement stress example](images/dashboard-stress-horizontal.png)
 
-<img src="images/dashboard-stress-vertical.png" alt="Vertical right-rear electrical stress example with independent readouts" width="320">
+<img src="images/dashboard-stress-vertical.png" alt="Vertical right-rear electrical stress example with independent readouts and missing-data indicators" width="420">
 
 ### Electrical box colors
 
-Optionally map **Warning** and **Problem** on each power-source options screen.
+Optionally map **Warning** and **Problem** for each source in **Power** on the
+management page, or on its native power-source options screen.
 These accept `binary_sensor`, `switch`, or `input_boolean`, just like Enabled;
 they are read-only. HAVRV does not derive them from voltage or current.
 
@@ -258,7 +271,8 @@ and electrical sources hidden with `show_power: false` do not contribute.
 The dashboard creates one view for each RV profile. Each view contains:
 
 - The RV overview card.
-- **Coach**: the operation-mode selector and the RV profile sensors.
+- **Coach**: the operation-mode selector, editable profile numbers, and
+  read-only diagnostic profile sensors.
 - **Tanks**: fill percentage and the last filled or emptied time for each tank.
 - **Tire analysis**: All Tire Monitor comparisons, when tires are configured.
 - One section for each system device with mapped entities.

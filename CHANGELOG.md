@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.2
+
+- Bump the integration version to 0.5.2; no runtime behavior changes.
+- Refresh the README and user guides for the management-page workflow, current
+  tow controls, tank defaults, and shore-power status presentation.
+- Replace all four dashboard illustrations with current-card renders using
+  synthetic readings, including towing, two-line shore power, crowded placement,
+  and independent missing-data indicators.
+
 ## 0.5.0
 
 - Add an always-present Tow device with restorable runtime Towing, Car/Trailer

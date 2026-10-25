@@ -63,6 +63,10 @@ lifecycle behavior as applicable.
   failures; a retry runs the original commit, not a newly pushed fix.
 - Describe the user-visible behavior and any configuration or migration impact.
 - Include tests and update documentation for behavior changes.
+- For dashboard picture updates, render the current bundled card with synthetic
+  data and review both orientations. Keep captions and the
+  [image scenarios](docs/images/README.md) synchronized; do not use private
+  vehicle data or hand-edit screenshots to imply unimplemented behavior.
 - Keep entity IDs stable and use Home Assistant registries and translation
   patterns rather than hard-coded presentation strings.
 - Do not claim a quality-scale tier until every rule for that tier and all

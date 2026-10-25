@@ -89,8 +89,9 @@ separate boxes beside the selected region, packed to avoid overlap. Reducing ban
 removes the highest-numbered banks and their saved mappings; increasing
 the count again does not restore removed configurations.
 
-For yellow/red electrical boxes, map explicit **Warning**/**Problem** sources
-in the same options wizard. Problem takes precedence over Warning, then Enabled.
+For yellow/red electrical boxes, check the explicit **Warning**/**Problem**
+sources in **Power** on the management page (or the native options fallback).
+Problem takes precedence over Warning, then Enabled.
 If a box is dashed with a hollow dot and **No status data** tooltip, check Enabled and any mapped
 alert sources for missing/unknown/unavailable states. An unavailable mapped
 alert is not assumed off. Unmapped optional alerts do not require data.
@@ -100,8 +101,10 @@ not solid status-colored tiles. Hover/focus the dot for its status label.
 Equipment graphics additionally use green for Enabled on, like tire shapes;
 the normal-on box indicator is green too. Each placed source has its own
 graphic and box; neither charging nor current direction changes its color.
-Enabled is shown by color and the status dot, not a Yes/No row. Matching
-equipment tags replace callout lines, and the single legend covers all devices.
+Enabled is shown by color and the status dot on bank, inverter and generator
+boxes. Shore Power also shows its own Enabled reading in **Combined**,
+independently of the box's warning/problem color. Matching equipment tags
+replace callout lines, and the single legend covers all devices.
 
 ## A tank reading, percentage, or status is missing
 
@@ -166,7 +169,8 @@ every configured tire.
 
 Edit dimensions and capacities in **Configuration** on the main RV device.
 Other saved profile values appear read-only in **Diagnostics**; use the config
-entry's **Reconfigure** action to update those vehicle details.
+entry's gear page, **RV profile**, or native **Reconfigure** to update those
+vehicle details.
 The profile name cannot be changed there; remove and recreate the profile if
 it needs a new name. Existing mappings are not changed by reconfiguration.
 
@@ -219,8 +223,8 @@ old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
 
 ### The power toggle or placed electrical devices are missing
 
-The current card editor includes toggles for tires, tanks, placed power sources,
-coach information, mapped system sections, header and legend. If these are
+The current card editor includes toggles for tow vehicle, tires, tanks, placed
+power sources, coach information, mapped system sections, header and legend. If these are
 missing (for example, only header and legend appear), the browser
 is running an older dashboard module, even if backend power configuration works.
 
@@ -238,7 +242,8 @@ The repository-root JavaScript is a compatibility loader, not a second card.
 
 With the current editor visible, confirm `show_power: true`, the selected
 RV's device ID, and each device's saved **Dashboard placement**. Complete all
-power-source options screens to save. Colocated devices retain separate
+power edits with **Apply changes** (or complete every screen in the native
+options fallback). Colocated devices retain separate
 nonoverlapping readout boxes; **Not shown** omits a source from the
 overview, not its generated device section.
 
@@ -250,10 +255,11 @@ card width; `horizontal`/`vertical` pin it. See the
 
 ## You need to change or remove a source mapping
 
-Use the integration's **Options** to change system mappings, tank selections,
-tire sources, or tire limits. Removing the HAVRV config entry removes HAVRV's
-devices and exposed entities, but does not remove source entities or their
-integrations.
+Open the integration entry's **gear button**, edit **System mappings**,
+**Tanks**, **Tires**, or **Power**, then **Apply changes**. The native options
+flow remains a recovery alternative. Removing the HAVRV config entry removes
+HAVRV's devices and exposed entities, but does not remove source entities or
+their integrations.
 
 For configuration steps, see [Set up HAVRV](SETUP.md). For details about
 entity behavior and thresholds, see [Features and behavior](FEATURES.md).
