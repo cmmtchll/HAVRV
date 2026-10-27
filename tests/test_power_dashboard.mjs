@@ -1192,6 +1192,34 @@ test("last data tracks valid reports, not outage timestamps, and uses the oldest
   assert.equal(missingReadingText(hass, ["sensor.second"], now), "Last data 15s ago");
 });
 
+test("boolean tire battery mirrors count as valid data and retain their last report", () => {
+  const { hass, model } = completeFixture();
+  const now = Date.parse("2026-10-25T12:00:00Z");
+  const ids = model.axles.flatMap((axle) => [...axle.left, ...axle.right].map((tire, i) => {
+    const id = `sensor.${axle.key}_${tire.key || i}_battery`;
+    tire.battery = id;
+    hass.entities[id] = { entity_id: id, platform: "havrv", translation_key: "tire_battery" };
+    return id;
+  }));
+  assert.ok(ids.length > 0);
+  const history = new Map();
+  for (const state of ["off", "on"]) {
+    for (const id of ids) {
+      hass.states[id] = { state, attributes: {}, last_updated: "2026-10-25T11:00:00Z" };
+    }
+    rememberReadings(hass, ids, history, now);
+    assert.equal(missingReadingText(hass, ids, now), "");
+    for (const orientation of ["horizontal", "vertical"]) {
+      assert.doesNotMatch(renderVehicle(hass, model, orientation, 1), /class="data-age"/);
+    }
+  }
+  for (const id of ids) hass.states[id].state = "unavailable";
+  rememberReadings(hass, ids, history, now);
+  assert.equal(missingReadingText(hass, ids, now), "Last data 1h ago");
+  hass.states["sensor.invalid_pressure"] = { state: "on" };
+  assert.equal(missingReadingText(hass, ["sensor.invalid_pressure"], now), "Last data unknown");
+});
+
 test("missing, malformed, blank and future reports never invent last-good timestamps", () => {
   const now = Date.parse("2026-10-25T12:00:00Z");
   const hass = { states: {

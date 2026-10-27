@@ -223,10 +223,12 @@ In **Tires**, choose an existing pressure, temperature, and/or battery
 source for each tire position. Sources may be `sensor`, `number`, or
 `input_number` entities. These are read-only mirrors; HAVRV does not discover
 or control TPMS hardware. The same battery selector also accepts `binary_sensor`,
-`input_boolean`, and `switch`, including template binary sensors. Use a battery-OK
-signal: on/true means OK; off/false means a battery problem. A low-battery alarm
-with opposite polarity needs an inverted template binary sensor. Boolean
-batteries are mirrored as on/off, not percentages, and remain read-only.
+`input_boolean`, and `switch`, including template binary sensors. Binary sensors
+with device class `battery` or `problem` are alarms: on means a battery problem,
+off means OK. Other boolean sources retain battery-OK semantics: on means OK,
+off means a problem. MQTT low-battery binary sensors with `device_class: battery`
+can be selected directly; no inverted template is needed. Boolean batteries are
+mirrored as raw on/off, not percentages, and remain read-only.
 
 You can set optional low/high pressure limits for front, rear, and tag tires,
 plus a shared high-temperature limit and numeric low-battery limit (default 20%;

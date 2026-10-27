@@ -270,14 +270,18 @@ may be `sensor`, `number`, or `input_number` entities. HAVRV exposes readings,
 pressure/temperature/battery problem states, data-present state, and an
 overall tire problem state. The same battery selector also accepts
 `binary_sensor`, `input_boolean`, and `switch` entities, including template
-binary sensors. For these sources, on/true means battery OK and off/false means
-a battery problem, regardless of device class. Select an **OK** signal, not a
-low-battery alarm with the opposite polarity. The read-only battery mirror
+binary sensors. Binary sensors with device class `battery` or `problem` use
+Home Assistant alarm semantics: on means a battery problem and off means OK.
+Other boolean sources use on=OK and off=problem. The read-only battery mirror
 preserves on/off without inventing a percentage or forwarding toggle actions.
 Numeric battery sources use a default low-battery limit of
 20%, configurable under **Tires** or in the native options fallback; this limit
 does not apply to boolean sources.
-Existing numeric mappings need no migration. The overall state turns on for
+Existing numeric mappings need no migration. Existing `battery`/`problem`-class
+binary mappings now follow their declared alarm semantics; remove any previous
+inversion that made those alarm-class sources report on for healthy.
+The dashboard accepts both on and off battery mirrors as present data.
+The overall state turns on for
 missing readings or when a configured limit is exceeded or cannot be evaluated.
 Unavailable or invalid boolean states stay unknown, not OK, and do not count
 as data present.
