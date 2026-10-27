@@ -11,8 +11,9 @@ devices, runtime tow controls, a management page, and an RV overview dashboard.
 Notifications, integration-specific triggers and conditions, and physical-device
 discovery are not implemented. No Home Assistant quality tier is claimed.
 
-**Current release: 0.5.2.** Refreshed guides and dashboard illustrations reflect
-the current implementation. Every RV has a **Tow** device with restorable
+**Current release: 0.5.3.** Tire battery alarms now follow their Home Assistant
+device-class polarity, and valid boolean battery readings no longer show false
+missing-data badges. Every RV has a **Tow** device with restorable
 Towing, Car/Trailer, and Weight controls. The overview draws the selected tow
 vehicle only while Towing is on. Recent updates also add two-line shore-power
 readings and remove tank devices when both capacity and source are cleared.
