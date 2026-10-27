@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.3
+
+- Interpret battery/problem-class tire binary sensors as alarms: on means a
+  problem and off means healthy. Other boolean sources retain on=healthy.
+- Recognize valid on/off tire battery mirrors as present dashboard data instead
+  of showing misleading missing-data clock badges.
+- Existing alarm-class templates inverted to report on for healthy must be
+  corrected or replaced with the original alarm source.
+
 ## 0.5.2
 
 - Bump the integration version to 0.5.2; no runtime behavior changes.
