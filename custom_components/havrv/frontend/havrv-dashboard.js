@@ -649,10 +649,18 @@ function temperatureText(temperature, compact) {
   return `${temperature.text}${unit ? ` ${unit}` : ""}`;
 }
 
-function flagText(state) {
-  return [state.dropping && "▼", state.hot && "HOT", state.lowBattery && "BAT"]
+function flagText(state, tire) {
+  return [
+    state.dropping && `<tspan ${readingAction(tire.pressure)}>▼</tspan>`,
+    state.hot && `<tspan ${readingAction(tire.temperature)}>HOT</tspan>`,
+    state.lowBattery && `<tspan ${readingAction(tire.battery || tire.batteryProblem)}>BAT</tspan>`,
+  ]
     .filter(Boolean)
     .join(" ");
+}
+
+function readingAction(entity) {
+  return entity ? `data-entity="${escapeHtml(entity)}" tabindex="0" role="button"` : "";
 }
 
 function tireChip(hass, axle, side, sign, states, geometry, box) {
@@ -674,16 +682,16 @@ function tireChip(hass, axle, side, sign, states, geometry, box) {
     const pressure = state.pressure
       ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
       : `<tspan class="mid muted">—</tspan>`;
-    const flags = flagText(state);
+    const flags = flagText(state, tire);
     const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
     const pressureAge = !state.pressure && state.temperature ? age : "";
     const rightAge = pressureAge ? "" : age;
     const rightEnd = x + width - 9;
     parts.push(
       `<g class="row">
-        <text class="row-pressure" x="${x + 9}" y="${y + 34}">${pressure}</text>
+        <text class="row-pressure" x="${x + 9}" y="${y + 34}" ${readingAction(tire.pressure)}>${pressure}</text>
         ${dataAgeLabel(pressureAge, x + 25, y + 34)}
-        <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${y + 34}" text-anchor="end">${
+        <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${y + 34}" text-anchor="end" ${readingAction(tire.temperature)}>${
           state.temperature
             ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperatureText(state.temperature, false))}</tspan>`
             : `<tspan>${escapeHtml(STR.noData)}</tspan>`
@@ -726,9 +734,9 @@ function tireChip(hass, axle, side, sign, states, geometry, box) {
     )}">
       <rect class="hit" x="${x}" y="${rowY - 15}" width="${width}" height="20"></rect>
       <text class="wheel ${state.level}" x="${x + 9}" y="${rowY}">${tire.wheel === "inner" ? STR.inner : STR.outer}</text>
-      <text class="row-pressure" x="${x + 22}" y="${rowY}">${pressure}</text>
+      <text class="row-pressure" x="${x + 22}" y="${rowY}" ${readingAction(tire.pressure)}>${pressure}</text>
       ${dataAgeLabel(pressureAge, x + 38, rowY)}
-      <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${rowY}" text-anchor="end">${right}</text>
+      <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${rowY}" text-anchor="end" ${readingAction(tire.temperature)}>${right}</text>
       ${dataAgeLabel(rightAge, rightEnd - dataAgeWidth(rightAge), rowY)}
     </g>`;
   });
@@ -843,9 +851,9 @@ function tankLabels(hass, model, span, states, geometry, vertical, band = TANK_B
       const percentWidth = percent === "—" ? 12 : percent.length * (age ? 6 : 7);
       const readingStart = x - (percentWidth + (age ? ageWidth + 3 : 0)) / 2;
       body = `
-        <text class="tank-pct${age ? " aged" : ""}" x="${age ? readingStart : x}" y="${yTop}" text-anchor="${age ? "start" : "middle"}">${escapeHtml(percent)}</text>
+        <text class="tank-pct${age ? " aged" : ""}" x="${age ? readingStart : x}" y="${yTop}" text-anchor="${age ? "start" : "middle"}" ${readingAction(tank.percentage)}>${escapeHtml(percent)}</text>
         ${dataAgeLabel(age, readingStart + percentWidth + 3, yTop)}
-        ${volume ? `<text class="tiny" x="${x}" y="${yTop + 13}" text-anchor="middle">${escapeHtml(volume)}</text>` : ""}
+        ${volume ? `<text class="tiny" x="${x}" y="${yTop + 13}" text-anchor="middle" ${readingAction(tank.level)}>${escapeHtml(volume)}</text>` : ""}
         <text class="tank-name" x="${x}" y="${yName}" text-anchor="middle">${escapeHtml(truncate(tank.name, 7))}</text>`;
     } else {
       const [xs, y] = geometry.map(start + 12, vc);
@@ -854,7 +862,7 @@ function tankLabels(hass, model, span, states, geometry, vertical, band = TANK_B
       body = `
         <text class="tank-name ${fontSize}" x="${xs}" y="${y - 5}">${escapeHtml(truncate(tank.name, Math.floor((end - start - 24) / 7)))}</text>
         <text class="tank-pct ${fontSize}" x="${xe - (age ? dataAgeWidth(age, true) + 4 : 0)}" y="${y + 12}" text-anchor="end">${
-          volume ? `<tspan class="tank-vol">${escapeHtml(volume)}</tspan><tspan dx="6">${escapeHtml(percent)}</tspan>` : escapeHtml(percent)
+          volume ? `<tspan class="tank-vol" ${readingAction(tank.level)}>${escapeHtml(volume)}</tspan><tspan dx="6" ${readingAction(tank.percentage)}>${escapeHtml(percent)}</tspan>` : `<tspan ${readingAction(tank.percentage)}>${escapeHtml(percent)}</tspan>`
         }</text>`;
       body += dataAgeLabel(age, xe - dataAgeWidth(age, true), y + 12);
     }
@@ -899,8 +907,8 @@ function towDrawing(hass, model, geometry, bounds, vertical) {
         </g>
       </g>
       <text class="tow-label" x="${cx}" y="${cy - 20}" text-anchor="middle" data-entity="${tow.enabled}" tabindex="0" role="button">Towing</text>
-      <text class="tow-label" x="${cx}" y="${cy}" text-anchor="middle" data-entity="${tow.weight}" tabindex="0" role="button">${escapeHtml(type === "car" ? "Car" : "Trailer")}
-        <tspan x="${cx}" dy="18">${escapeHtml(weight ? `${weight.text} ${weight.unit}` : STR.noData)}</tspan>
+      <text class="tow-label" x="${cx}" y="${cy}" text-anchor="middle" ${readingAction(tow.type)}>${escapeHtml(type === "car" ? "Car" : "Trailer")}
+        <tspan x="${cx}" dy="18" ${readingAction(tow.weight)}>${escapeHtml(weight ? `${weight.text} ${weight.unit}` : STR.noData)}</tspan>
       </text>
     </g>`,
   };
@@ -1180,7 +1188,7 @@ export function renderPowerBoxes(hass, layout) {
         const firstMetric = row.find(Boolean);
         const rowY = y + 32 + headerHeight + rowIndex * 20
           + (sharedMetrics.includes(firstMetric) ? 20 : 0);
-        return `<text class="small power-label" x="${x + 9}" y="${rowY}">${escapeHtml(
+        return `<text class="small power-label" x="${x + 9}" y="${rowY}" ${row.length === 1 ? readingAction(source[firstMetric]) : ""}>${escapeHtml(
           powerMetricLabel(firstMetric, shore).replace(/^Line [12] /, ""))}</text>`
           + row.map((metric, column) => {
             if (!metric) return "";
@@ -1319,6 +1327,7 @@ const STYLES = `
   .tank-label.watch .tank-pct, .tank-label.alert .tank-pct { fill: var(--lvl); }
   [data-entity] { cursor: pointer; }
   [data-entity]:focus { outline: none; }
+  text[data-entity]:focus-visible, tspan[data-entity]:focus-visible { outline: 2px solid var(--primary-color, #03a9f4); }
   [data-entity]:focus-visible .chip-bg, .chip [data-entity]:focus-visible .hit,
   .chip[data-entity]:focus-visible .chip-bg { stroke: var(--primary-color, #03a9f4); stroke-width: 2.5; }
   .chip.alert .chip-bg, .power-problem .power-bg, .power-problem .equipment-shell, .tire.alert rect, .tank.alert .tank-frame { animation: hv-pulse 1.6s ease-in-out infinite; }
