@@ -61,6 +61,10 @@ implemented integration behavior, not just repository configuration.
   remain unknown and fail data-presence checks.
 - An Operations device with a restorable operation-mode selector. The mode
   does not yet change problem detection.
+  Optional event-driven GPS tracker, altitude, detected speed and direction
+  mappings share Operations, with stable identities, profile units, native
+  options recovery, invalid-source handling and redacted travel configuration.
+  Direction is source-provided degrees, never calculated motion.
 - An always-present Tow device with restorable runtime towing, car/trailer and
   weight controls. The dashboard draws the selected outline only while towing
   is on; profile-unit weight conversion is independent of configuration writes.
@@ -71,8 +75,8 @@ implemented integration behavior, not just repository configuration.
 
 These foundations do not mean all Bronze rules are complete. Mapping is
 currently user-selected and limited to sensors, numbers, input-number helpers, binary sensors, switches,
-lights, and climate entities; automatic discovery, alerts, and triggers are
-not implemented.
+lights, climate entities, and optional GPS device trackers; automatic discovery,
+alerts, and triggers are not implemented.
 
 Profile setup currently excludes vehicle weight ratings, tire size/load-range
 and inflation details, wheelbase/tow rating, and powertrain, generator ratings,

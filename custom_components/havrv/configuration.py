@@ -33,6 +33,7 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_MEASUREMENT_SYSTEM,
     CONF_MODEL,
+    CONF_OPERATIONS_SOURCES,
     CONF_OVERALL_HEIGHT,
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
@@ -55,6 +56,7 @@ from .const import (
     DEFAULT_TIRE_BATTERY_LOW,
     DEFAULT_TIRE_PRESSURE,
     DEFAULT_TIRE_TEMPERATURE_HIGH,
+    OPERATIONS_METRICS,
     POWER_LOCATIONS,
     SHORE_LOCATIONS,
     SUPPORTED_ENTITY_DOMAINS,
@@ -362,6 +364,18 @@ def _options_schema(
     """Build source mapping and alert threshold options."""
     existing_options = entry.options
     fields = _entity_mapping_fields(_entry_entity_mappings(entry))
+    for metric in OPERATIONS_METRICS:
+        field = f"operations_{metric}"
+        saved = existing_options.get(CONF_OPERATIONS_SOURCES, {}).get(metric)
+        fields[
+            vol.Optional(field, description={"suggested_value": saved} if saved else {})
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=["device_tracker"]
+                if metric == "location"
+                else list(_NUMERIC_ENTITY_DOMAINS)
+            )
+        )
     fields[vol.Optional(CONF_CONFIGURE_POWER_SOURCES, default=False)] = (
         selector.BooleanSelector()
     )
@@ -479,6 +493,23 @@ def _normalize_options(
     mappings, error = _normalize_entity_mappings(user_input)
     if error:
         return {}, error
+
+    operations: dict[str, str] = {}
+    for metric in OPERATIONS_METRICS:
+        # Optional suggested values (not schema defaults) allow clearing in HA.
+        entity_id = user_input.get(f"operations_{metric}")
+        if entity_id is None or entity_id == "":
+            continue
+        operation_domains = (
+            ("device_tracker",) if metric == "location" else _NUMERIC_ENTITY_DOMAINS
+        )
+        if (
+            not isinstance(entity_id, str)
+            or not valid_entity_id(entity_id)
+            or entity_id.partition(".")[0] not in operation_domains
+        ):
+            return {}, "invalid_operations_source"
+        operations[metric] = entity_id
 
     existing_tank_mappings = entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
     tank_mappings: dict[str, str] = {}
@@ -607,6 +638,8 @@ def _normalize_options(
         CONF_TANK_ENTITY_MAPPINGS: tank_mappings,
         CONF_TANK_THRESHOLDS: tank_thresholds,
     }
+    if operations or CONF_OPERATIONS_SOURCES in entry.options:
+        options[CONF_OPERATIONS_SOURCES] = operations
     if CONF_POWER_SOURCES in entry.options:
         options[CONF_POWER_SOURCES] = entry.options[CONF_POWER_SOURCES]
     if positions:

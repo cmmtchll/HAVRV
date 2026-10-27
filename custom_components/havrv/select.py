@@ -4,27 +4,15 @@ from collections.abc import Callable
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import HavrvConfigEntry
-from .const import DOMAIN, OPERATION_MODES
+from .const import OPERATION_MODES
+from .operations import operations_device_info
 from .tow import HavrvTowTypeSelect
 
 PARALLEL_UPDATES = 0
-
-
-def operations_device_info(entry: HavrvConfigEntry) -> DeviceInfo:
-    """Return stable device information for the Operations device."""
-    parent_device_id = entry.runtime_data.device_id
-    if parent_device_id is None:
-        raise RuntimeError("RV device must be registered before platform setup")
-    return {
-        "identifiers": {(DOMAIN, f"{entry.entry_id}_operations")},
-        "name": "Operations",
-        "via_device_id": parent_device_id,
-    }
 
 
 class HavrvOperationModeSelect(SelectEntity, RestoreEntity):

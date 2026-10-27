@@ -34,6 +34,7 @@ from .const import (
     CONF_CONFIGURE_POWER_SOURCES,
     CONF_ENTITY_MAPPINGS,
     CONF_MEASUREMENT_SYSTEM,
+    CONF_OPERATIONS_SOURCES,
     CONF_POWER_SOURCES,
     CONF_REAR_AXLE_COUNT,
     CONF_TAG_AXLE_PRESENT,
@@ -43,6 +44,7 @@ from .const import (
     CONF_TIRE_ENTITY_MAPPINGS,
     CONF_TIRE_PRESSURE_THRESHOLDS,
     CONF_TIRE_TEMPERATURE_HIGH,
+    OPERATIONS_METRICS,
     SYSTEM_CATEGORIES,
     TANK_TYPES,
     UNIT_SYSTEM_METRIC,
@@ -109,6 +111,8 @@ def editable_values(
     }
     for tank, source in entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {}).items():
         options[f"{tank}_tank_level"] = source
+    for metric, source in entry.options.get(CONF_OPERATIONS_SOURCES, {}).items():
+        options[f"operations_{metric}"] = source
     for tank, limits in entry.options.get(CONF_TANK_THRESHOLDS, {}).items():
         for level, value in limits.items():
             options[f"{tank}_tank_{level}"] = value
@@ -318,6 +322,8 @@ def validate_values(
             if "tire" in option_error
             else "systems"
         )
+        if option_error == "invalid_operations_source":
+            section = "operations"
         error(section, "", option_error)
     if errors:
         return candidate, typed_values, errors, []
@@ -348,6 +354,7 @@ def validate_values(
             candidate.data.pop(key, None)
     flat_before, flat_after = baseline["options"], typed_values["options"]
     for key, prefixes in (
+        (CONF_OPERATIONS_SOURCES, tuple(f"operations_{m}" for m in OPERATIONS_METRICS)),
         (CONF_ENTITY_MAPPINGS, tuple(f"{c}_entities" for c in SYSTEM_CATEGORIES)),
         (CONF_TANK_ENTITY_MAPPINGS, tuple(f"{t}_tank_level" for t in TANK_TYPES)),
         (

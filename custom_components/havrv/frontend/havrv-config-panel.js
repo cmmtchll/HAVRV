@@ -110,6 +110,7 @@ function button(text, action, attributes = {}) {
   return node;
 }
 const SECTION_ICONS = {
+  operations: "mdi:map-marker-path",
   power: "mdi:lightning-bolt", tanks: "mdi:water-outline",
   tires: "mdi:circle-double", systems: "mdi:swap-horizontal", devices: "mdi:devices", entities: "mdi:shape-outline",
 };
@@ -425,7 +426,7 @@ export class HavrvConfigPanel extends HTMLElement {
     }
     const systems = element("section", null, { class: "card" });
     systems.append(element("h3", t("configureSystems")));
-    for (const section of ["power", "tanks", "tires", "systems"]) {
+    for (const section of ["operations", "power", "tanks", "tires", "systems"]) {
       const row = button("", () => this.navigate(section), { class: "action-row", id: `configure-${section}` });
       const description = section === "power"
         ? t("powerSummary", { count: this.model.schema.power.filter((source) => source.battery).length })

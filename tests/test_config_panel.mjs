@@ -34,6 +34,8 @@ function snapshot() {
         { name: "coach_model", label: "Coach model", selector: { text: {} } },
       ],
       options: [
+        { name: "operations_location", label: "RV GPS location source", selector: { entity: { domain: ["device_tracker"] } } },
+        entity("operations_altitude"), entity("operations_speed"), entity("operations_direction"),
         entity("power_entities", true), entity("water_entities", true),
         entity("fresh_water_tank_level"), number("fresh_water_tank_warning"),
         entity("tire_front_left_pressure"), number("tire_front_pressure_low"),
@@ -553,6 +555,13 @@ test("entity choices support numeric helpers, filter domains, friendly names and
   assert.equal(entityChoices(states, { entity: { filter: [{ domain: "number" }, { domain: "input_number" }] } }).length, 2);
   assert.equal(fieldSection("profile", "fresh_water_tank_capacity"), "tanks");
   assert.equal(fieldSection("options", "power_entities"), "systems");
+  assert.equal(fieldSection("options", "operations_location"), "operations");
+  assert.equal(fieldSection("options", "operations_direction"), "operations");
+  assert.deepEqual(entityChoices({
+    "device_tracker.gps": { state: "not_home", attributes: {} },
+    "sensor.gps": { state: "10", attributes: {} },
+    "person.driver": { state: "home", attributes: {} },
+  }, { entity: { domain: ["device_tracker"] } }).map((item) => item.value), ["device_tracker.gps"]);
 });
 
 // A deliberately small DOM fixture exercises the standard-element contract
@@ -636,11 +645,11 @@ async function panelFixture(options = {}) {
   return { panel, api, root: panel.shadowRoot };
 }
 
-test("panel is a registered standard custom element with six accessible tabs", async () => {
+test("panel is a registered standard custom element with seven accessible tabs", async () => {
   const { panel, api, root } = await panelFixture();
   assert.equal(registrations.get("havrv-config-panel"), HavrvConfigPanel);
   const tabs = walk(root).filter((node) => node.getAttribute("role") === "tab");
-  assert.equal(tabs.length, 6);
+  assert.equal(tabs.length, 7);
   assert.equal(tabs[0].getAttribute("aria-selected"), "true");
   assert.equal(walk(root).some((node) => node.tagName === "A" &&
     node.getAttribute("href") === "/config/devices/dashboard?config_entry=entry"), true);
@@ -648,6 +657,34 @@ test("panel is a registered standard custom element with six accessible tabs", a
   assert.equal(panel.section, "systems");
   assert.equal(window.location.href, "http://ha.test/havrv-config?config_entry=entry");
   assert.equal(api.calls.length, 1);
+  panel.disconnectedCallback();
+});
+
+test("Operations has independent travel source controls, aligned choices and clearing", async () => {
+  const { panel, root } = await panelFixture();
+  panel.navigate("overview");
+  root.getElementById("configure-operations").fire("click");
+  assert.equal(panel.section, "operations");
+  assert.equal(root.textContent.includes("No movement"), true);
+  for (const [metric, source] of [
+    ["location", "device_tracker.gps"], ["altitude", "sensor.altitude"],
+    ["speed", "number.template_speed"], ["direction", "input_number.course"],
+  ]) {
+    const control = root.getElementById(`field-options--operations_${metric}`);
+    assert.ok(control, metric);
+    control.value = source;
+    control.fire("change");
+    assert.equal(panel.model.payload().options[`operations_${metric}`], source);
+  }
+  panel.navigate("power");
+  panel.navigate("operations");
+  assert.equal(panel.model.payload().options.operations_location, "device_tracker.gps");
+  const speed = root.getElementById("field-options--operations_speed");
+  const clear = walk(speed.parentNode).find((node) =>
+    node.getAttribute("aria-label") === "Clear Label operations_speed");
+  clear.fire("click");
+  assert.equal("operations_speed" in panel.model.payload().options, false);
+  assert.equal(panel.model.payload().options.operations_direction, "input_number.course");
   panel.disconnectedCallback();
 });
 
@@ -713,7 +750,7 @@ test("entity datalist keeps missing IDs, filters other domains and treats labels
 
 test("clear actions share a row with every optional control without changing draft semantics", async () => {
   const { panel, root } = await panelFixture();
-  for (const section of ["profile", "power", "tanks", "tires", "systems"]) {
+  for (const section of ["profile", "operations", "power", "tanks", "tires", "systems"]) {
     panel.navigate(section);
     for (const clear of walk(root).filter((node) => node.getAttribute("class") === "clear-control")) {
       if (!clear.getAttribute("aria-label").startsWith("Clear ")) continue;

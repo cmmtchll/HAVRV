@@ -129,6 +129,28 @@ removed HAVRV entities/device; re-adding may require restoring customizations.
 Manually authored dashboard cards with explicit entity IDs must be edited
 manually. Recorder history is not explicitly purged.
 
+## An Operations travel reading is missing or unavailable
+
+Open **Operations** in the management panel (or native Configure/options)
+and verify the channel is mapped. Unmapped channels intentionally have no
+HAVRV entity. A location source must be a `device_tracker` with a complete
+finite latitude/longitude pair within valid coordinate ranges; a home/away
+state alone is insufficient. HAVRV uses HA's GPS/zone handling, so its zone
+text need not match a source's custom state.
+
+Altitude and speed need finite numeric values and declared compatible units,
+not just an entity name or device class. Direction requires unit `°` and
+0 ≤ value < 360; textual north/east, radians and 360 are not accepted.
+Negative altitude is valid; negative speed is not. Correct the original source
+or a template in `sensor`/`number`/`input_number`; do not enter a fake default.
+Do not map a HAVRV output back to itself: self-mapped travel channels remain
+unavailable rather than subscribing to their own state changes.
+Updates recover automatically when the source becomes valid.
+If units differ, check the RV profile and then any explicit per-entity unit
+override in HA. Remap or clear the source and apply/reload if necessary.
+Clearing removes the HAVRV entity, not its source or existing Recorder history.
+Diagnostics intentionally omit travel readings and redact source selections.
+
 ## The operation mode is unknown
 
 HAVRV does not detect or default the operation mode. Choose a mode on the

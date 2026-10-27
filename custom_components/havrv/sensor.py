@@ -17,6 +17,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
@@ -48,6 +49,7 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_MEASUREMENT_SYSTEM,
     CONF_MODEL,
+    CONF_OPERATIONS_SOURCES,
     CONF_REAR_AXLE_COUNT,
     CONF_STORAGE_ZONE_ID,
     CONF_TAG_AXLE_PRESENT,
@@ -69,6 +71,7 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .entity import HavrvSourceEntity, async_add_source_entities
+from .operations import HavrvOperationsSource, finite_number
 from .power import (
     HavrvPowerSourceEntity,
     PowerSource,
@@ -246,6 +249,77 @@ class HavrvSensor(HavrvSourceEntity, SensorEntity):
         """Return the source sensor's suggested display precision."""
         precision = self.source_attributes.get("suggested_display_precision")
         return precision if isinstance(precision, int) else None
+
+
+class HavrvTravelSensor(HavrvOperationsSource, SensorEntity):
+    """Read an explicit travel source, converting only declared compatible units."""
+
+    def __init__(self, entry: HavrvConfigEntry, metric: str) -> None:
+        """Initialize a stable optional Operations reading."""
+        super().__init__(entry, metric)
+        self._metric = metric
+        self._metric_units = entry.runtime_data.measurement_system == UNIT_SYSTEM_METRIC
+        self._attr_translation_key = f"detected_{metric}"
+        self._attr_native_unit_of_measurement = (
+            ("m" if self._metric_units else "ft")
+            if metric == "altitude"
+            else ("km/h" if self._metric_units else "mph")
+            if metric == "speed"
+            else "°"
+        )
+        self._attr_suggested_unit_of_measurement = self._attr_native_unit_of_measurement
+        self._attr_device_class = {
+            "altitude": SensorDeviceClass.DISTANCE,
+            "speed": SensorDeviceClass.SPEED,
+            "direction": None,
+        }[metric]
+        self._attr_state_class = (
+            SensorStateClass.MEASUREMENT_ANGLE
+            if metric == "direction"
+            else SensorStateClass.MEASUREMENT
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Refresh HA's cached default units without changing explicit user options."""
+        await super().async_added_to_hass()
+        # HA persists suggested units separately from explicit sensor preferences.
+        # Profile edits must refresh that default when this stable entity reloads.
+        defaults = self.get_initial_entity_options()
+        assert defaults is not None
+        er.async_get(self.hass).async_update_entity_options(
+            self.entity_id, "sensor.private", defaults["sensor.private"]
+        )
+        self.async_registry_entry_updated()
+
+    @property
+    def native_value(self) -> float | None:
+        """Require finite, explicitly unit-bearing readings without inferring motion."""
+        state = self._source_state
+        if state is None or not super().available:
+            return None
+        value = finite_number(state.state)
+        if value is None:
+            return None
+        unit = self.source_attributes.get("unit_of_measurement")
+        if self._metric == "direction":
+            return value if unit == "°" and 0 <= value < 360 else None
+        converter = DistanceConverter if self._metric == "altitude" else SpeedConverter
+        if (
+            not isinstance(unit, str)
+            or unit not in converter.VALID_UNITS
+            or self._metric == "speed"
+            and value < 0
+        ):
+            return None
+        converted = converter.convert(
+            value, unit, self._attr_native_unit_of_measurement
+        )
+        return converted if math.isfinite(converted) else None
+
+    @property
+    def available(self) -> bool:
+        """Keep invalid values and incompatible source units unavailable."""
+        return self.native_value is not None
 
 
 class HavrvTankLevelSensor(HavrvSensor):
@@ -973,6 +1047,13 @@ async def async_setup_entry(
     async_add_source_entities(entry, "sensor", HavrvSensor, async_add_entities)
     async_add_entities(list(_profile_sensors(entry)))
     async_add_entities(_tank_entities(entry))
+    async_add_entities(
+        [
+            HavrvTravelSensor(entry, metric)
+            for metric in ("altitude", "speed", "direction")
+            if entry.options.get(CONF_OPERATIONS_SOURCES, {}).get(metric)
+        ]
+    )
     power_entities: list[Entity] = []
     for source in power_sources(entry.data):
         settings = power_settings(entry, source)
