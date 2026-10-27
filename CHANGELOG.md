@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.4
+
+- Open the selected dashboard reading's own entity, including tire temperature,
+  tank volume/percentage, and tow type/weight. Keep pressure as the default for
+  tire clicks outside a specific reading.
+- Support keyboard activation of individual readings and single-tire HOT/BAT
+  flags in both dashboard orientations.
+
 ## 0.5.3
 
 - Interpret battery/problem-class tire binary sensors as alarms: on means a
