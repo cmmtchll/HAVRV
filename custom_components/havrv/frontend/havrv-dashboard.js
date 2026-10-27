@@ -365,7 +365,10 @@ const readingHistory = new WeakMap();
 function validReading(hass, entityId) {
   const state = stateOf(hass, entityId);
   if (!state || UNAVAILABLE.has(state.state) || !String(state.state).trim()) return false;
-  return entityId.startsWith("binary_sensor.")
+  const entry = hass.entities?.[entityId];
+  const booleanBattery = entry?.platform === DOMAIN && entry.translation_key === "tire_battery"
+    && (state.state === "on" || state.state === "off");
+  return entityId.startsWith("binary_sensor.") || booleanBattery
     ? state.state === "on" || state.state === "off"
     : Number.isFinite(Number(state.state));
 }

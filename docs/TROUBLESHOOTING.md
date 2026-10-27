@@ -143,10 +143,16 @@ require recognized units when a source supplies a unit. Check that configured
 limits are appropriate for the vehicle and the profile's selected measurement
 system.
 
-Boolean tire batteries (`binary_sensor`, `input_boolean`, or `switch`) must
-report on for OK and off for a problem. HAVRV does not infer polarity from
-the source's battery device class. Invert a low-battery alarm with a template
-binary sensor before selecting it. The percentage threshold applies only to
+Boolean tire batteries with domain `binary_sensor` and device class `battery`
+or `problem` report on for a problem and off for OK, matching Home Assistant's
+low-battery alarm convention. Other binary sensors, input booleans and switches
+report on for OK and off for a problem. Check the source's actual device class,
+not its name or MQTT topic. Existing alarm-class templates previously inverted
+to report on for healthy must be corrected or replaced by the original alarm
+source. The raw battery mirror preserves on/off; use **Battery problem** for
+the interpreted health state. Both valid boolean states count as present data
+on the dashboard and do not produce a missing-data clock badge.
+The percentage threshold applies only to
 numeric sources. Unknown, unavailable, missing, or invalid boolean readings
 do not count as data present and keep the overall tire problem on.
 

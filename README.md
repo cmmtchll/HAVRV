@@ -53,7 +53,8 @@ choose existing entities, and configure optional tank and tire monitoring.
 - Optionally creates water-tank devices and tire devices from selected existing
   entities, with percentage/status readings, configured-limit checks, and
   comparative tire analysis. Tire batteries accept numeric levels or boolean
-  health sources (on means OK; off means a problem) in the same selector.
+  health sources in the same selector. Battery/problem-class binary sensors use
+  on=problem; other boolean sources use on=OK.
 - Adds an Operations device with an operation-mode selector (Storage,
   Driving, Campsite full service, Campsite minimal, or Maintenance).
 - Always adds a **Tow** device with runtime-editable Towing, Car/Trailer,

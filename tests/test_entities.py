@@ -524,8 +524,9 @@ async def test_tire_problem_limits_default_battery_threshold(
 
 @pytest.mark.parametrize("domain", ["binary_sensor", "input_boolean", "switch"])
 @pytest.mark.parametrize("threshold", [None, 0, 100])
+@pytest.mark.parametrize("device_class", [None, "battery", "problem", "connectivity"])
 async def test_tire_boolean_battery_health(
-    hass: HomeAssistant, domain: str, threshold: float | None
+    hass: HomeAssistant, domain: str, threshold: float | None, device_class: str | None
 ) -> None:
     """Mirror boolean health without percentages, thresholds, or numeric metadata."""
     position = TirePosition("front_left", "Front Left Tire", TIRE_FRONT)
@@ -557,11 +558,16 @@ async def test_tire_boolean_battery_health(
         assert not tire_data_present(hass, entry, position)
         assert overall_tire_problem(hass, entry, position)
 
-    for state, problem in (("on", False), ("off", True), ("on", False)):
+    for state in ("on", "off", "on"):
+        alarm_source = domain == "binary_sensor" and device_class in (
+            "battery",
+            "problem",
+        )
+        problem = state == ("on" if alarm_source else "off")
         hass.states.async_set(
             entity_id,
             state,
-            {"device_class": "battery", "state_class": "measurement"},
+            {"device_class": device_class, "state_class": "measurement"},
         )
         assert battery.available
         assert battery.native_value == state

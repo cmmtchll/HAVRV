@@ -509,7 +509,12 @@ def tire_problem(
         state = hass.states.get(entity_id) if entity_id is not None else None
         if state is None or state.state not in ("on", "off"):
             return None
-        return state.state == "off"
+        alarm_source = (
+            entity_id is not None
+            and entity_id.startswith("binary_sensor.")
+            and state.attributes.get("device_class") in ("battery", "problem")
+        )
+        return state.state == ("on" if alarm_source else "off")
     value = _source_value(hass, entry, position, problem)
     if value is None:
         return None

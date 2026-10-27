@@ -130,7 +130,7 @@ rules:
     comment: Mapped entities preserve source categories; profile and tire problem sensors are diagnostic, and editable specifications and limits use CONFIG in custom_components/havrv/number.py. Runtime tow controls in custom_components/havrv/tow.py have no configuration category, verified in tests/test_configuration_numbers.py and tests/test_tow.py.
   entity-device-class:
     status: done
-    comment: Dimensions, capacities, pressure/temperature limits, and battery limits use applicable number device classes in custom_components/havrv/number.py; runtime tow weight uses weight in custom_components/havrv/tow.py. Profile units and explicit per-entity overrides are covered by tests/test_configuration_numbers.py and tests/test_tow.py. Boolean tire battery mirrors omit numeric and binary-only sensor metadata in custom_components/havrv/sensor.py, covered by tests/test_entities.py and tests/test_init.py.
+    comment: Dimensions, capacities, pressure/temperature limits, and battery limits use applicable number device classes in custom_components/havrv/number.py; runtime tow weight uses weight in custom_components/havrv/tow.py. Profile units and explicit per-entity overrides are covered by tests/test_configuration_numbers.py and tests/test_tow.py. Boolean tire battery mirrors omit numeric and binary-only sensor metadata in custom_components/havrv/sensor.py; battery/problem-class binary sources follow alarm polarity in custom_components/havrv/tire.py, covered by tests/test_entities.py and tests/test_init.py.
   entity-disabled-by-default:
     status: exempt
     comment: Entities are explicitly configured or profile values entered by the user; no optional noisy entity set is generated.
