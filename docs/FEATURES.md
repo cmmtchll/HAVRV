@@ -249,6 +249,35 @@ unrelated entities or another config entry is retained.
 
 ## Operations device
 
+The management panel's **Operations** source page optionally maps:
+
+- **RV location**: a `device_tracker` with finite latitude/longitude coordinates
+  in [-90, 90] and [-180, 180]. HAVRV exposes a GPS `device_tracker`, using Home
+  Assistant's map/zone handling rather than copying the source's home/away text.
+  Valid GPS accuracy passes through in metres; absent/invalid accuracy uses Home
+  Assistant's default zero (unknown precision), not a measured accuracy.
+- **Detected altitude** and **Detected speed**: `sensor`, `number`, or
+  `input_number`, including templates in their actual entity domains. Sources
+  must declare compatible distance/speed units. Altitude may be negative; speed
+  must be non-negative. Values convert to the profile's m/ft and km/h/mph,
+  independently of HA's global units; explicit HA per-entity unit overrides
+  remain respected.
+- **Detected direction of travel**: a numeric source in the same domains, with
+  unit `°` and value **0 ≤ degrees < 360**, clockwise from north (0 north,
+  90 east). Select a source that actually reports travel bearing/course, not
+  a compass heading unless that is the reading you intend to expose. HAVRV
+  neither calculates a course from GPS fixes nor normalizes headings, converts
+  compass labels, detects motion, or changes the operation mode.
+
+All four mappings are independent and optional, with no assumed sources or
+default readings. Missing, unavailable, non-finite, invalid or incompatible
+sources make only their mapped entity unavailable; updates are event-driven.
+Changing a source preserves the HAVRV entity identity. Clearing a mapping
+removes its HAVRV entity on reload, never its original source. Diagnostics
+redact travel source configuration and do not export travel readings/history.
+Like any HA tracker, valid location data is visible to HA maps, history and
+authorized users; HAVRV does not independently purge Recorder history.
+
 Each RV profile has an **Operations** device with an **Operation mode**
 selector: Storage, Driving, Campsite full service, Campsite minimal, or
 Maintenance. HAVRV does not detect the mode; choose it manually or from an

@@ -58,6 +58,9 @@ choose existing entities, and configure optional tank and tire monitoring.
   on=problem; other boolean sources use on=OK.
 - Adds an Operations device with an operation-mode selector (Storage,
   Driving, Campsite full service, Campsite minimal, or Maintenance).
+  Optional mapped GPS location (`device_tracker`), altitude, detected speed and
+  direction of travel live on that same device. These are read-only sources,
+  not calculated movement; see [Operations](docs/FEATURES.md#operations-device).
 - Always adds a **Tow** device with runtime-editable Towing, Car/Trailer,
   and Weight controls. The overview shows the matching outline only while
   towing is on. See [tow controls](docs/FEATURES.md#tow-device).

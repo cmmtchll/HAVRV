@@ -25,6 +25,7 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_MEASUREMENT_SYSTEM,
     CONF_MODEL,
+    CONF_OPERATIONS_SOURCES,
     CONF_OVERALL_HEIGHT,
     CONF_OVERALL_LENGTH,
     CONF_OVERALL_WIDTH,
@@ -182,6 +183,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         if entity_id.split(".", maxsplit=1)[0] in SUPPORTED_ENTITY_DOMAINS
     }
     platforms.add(Platform.SENSOR)
+    if entry.options.get(CONF_OPERATIONS_SOURCES, {}).get("location"):
+        platforms.add(Platform.DEVICE_TRACKER)
     platforms.add(Platform.SWITCH)
     if positions or any(
         settings.get(metric)
@@ -300,6 +303,12 @@ def _remove_stale_entities_and_devices(
             registry_entry.unique_id.startswith(f"{entry.entry_id}_source_")
             and registry_entry.unique_id not in active_power_ids
         )
+        is_stale_operations = registry_entry.unique_id in {
+            f"{entry.entry_id}_operations_{metric}"
+            for metric in ("location", "altitude", "speed", "direction")
+        } and not entry.options.get(CONF_OPERATIONS_SOURCES, {}).get(
+            registry_entry.unique_id.removeprefix(f"{entry.entry_id}_operations_")
+        )
         tire_key = registry_entry.unique_id.removeprefix(f"{entry.entry_id}_tire_")
         is_tire_entity = tire_key != registry_entry.unique_id
         is_stale_tire = is_tire_entity and not any(
@@ -350,6 +359,7 @@ def _remove_stale_entities_and_devices(
             or is_replaced_specification
             or is_stale_limit
             or is_stale_tank
+            or is_stale_operations
         ):
             entity_registry.async_remove(registry_entry.entity_id)
 

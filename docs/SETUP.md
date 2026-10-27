@@ -243,6 +243,26 @@ on its readings and the built-in pressure-trend predictors.
 
 ## 6. Check your setup
 
+For optional travel readings, open the integration gear's management panel and
+choose **Operations**. Select a GPS-capable `device_tracker` for RV location
+and/or `sensor`, `number`, or `input_number` sources for altitude, detected speed
+and detected direction of travel. Template sensors/numbers use their actual
+domains. Leave unknown or unwanted sources blank; none are selected by default.
+Altitude/speed sources may use any compatible declared distance/speed units.
+HAVRV converts output readings to the RV profile's m/ft and km/h/mph units
+(HA per-entity overrides remain available). Direction
+must already be travel bearing in `°`, clockwise from north, in [0, 360).
+HAVRV does not derive these readings from one another.
+
+**Apply changes** saves and reloads the profile. Remapping retains stable
+HAVRV identities; **Clear** removes a channel without deleting its source.
+Native **Configure/options** offers the same four source fields as a recovery
+path if the management panel cannot load; blank optional fields clear mappings.
+Native **Reconfigure** changes profile details/units while preserving travel
+source selections. Existing entries without these mappings need no migration.
+See [Operations details](FEATURES.md#operations-device) for GPS validity and
+privacy considerations.
+
 Open **Settings → Devices & services → HAVRV** and inspect the RV device and
 its child devices. Confirm that:
 

@@ -9,9 +9,10 @@ const canonical = (value) => {
 };
 export const equalValues = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 
-export const SECTIONS = ["overview", "profile", "power", "tanks", "tires", "systems"];
+export const SECTIONS = ["overview", "profile", "operations", "power", "tanks", "tires", "systems"];
 
 export function fieldSection(group, name) {
+  if (name.startsWith("operations_")) return "operations";
   if (group === "power") return "power";
   if (name.startsWith("tire_")) return "tires";
   if (name.includes("water_tank") || name.startsWith("tank_")) return "tanks";

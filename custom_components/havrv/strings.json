@@ -175,6 +175,7 @@
       }
     },
     "error": {
+      "invalid_operations_source": "Choose a device tracker for GPS location, or a sensor, number or input number for travel readings.",
       "invalid_shore_line_count": "Choose one or two shore power lines.",
       "name_required": "Enter a name for this RV.",
       "invalid_coach_year": "Enter a whole model year from 1900 through next year.",
@@ -200,6 +201,10 @@
         "title": "Map RV system entities",
         "description": "Choose existing entities for RV systems, optional water-tank levels, and each generated tire. Tank and tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
         "data": {
+          "operations_location": "RV GPS location source",
+          "operations_altitude": "Detected altitude source",
+          "operations_speed": "Detected speed source",
+          "operations_direction": "Detected direction of travel source",
           "power_entities": "Power system entities",
           "water_entities": "Water system entities",
           "chassis_entities": "Chassis system entities",
@@ -275,6 +280,12 @@
           "tire_temperature_high": "High tire-temperature limit",
           "tire_battery_low": "Low tire-battery limit",
           "configure_power_sources": "Edit power-source mappings, specifications and placement"
+        },
+        "data_description": {
+          "operations_location": "Optional device tracker with valid GPS latitude/longitude. HA handles maps and zones; no coordinates are assumed.",
+          "operations_altitude": "Optional sensor, number or input number with declared distance units. Converts to profile m/ft; negative altitude is valid.",
+          "operations_speed": "Optional sensor, number or input number with declared speed units. Non-negative readings convert to profile km/h or mph; no speed is calculated.",
+          "operations_direction": "Optional numeric travel bearing in °, clockwise from north, 0 ≤ value < 360. Not calculated from GPS or converted from compass labels. Leave blank to clear."
         }
       },
       "power_source": {
@@ -321,6 +332,7 @@
       }
     },
     "error": {
+      "invalid_operations_source": "Choose a device tracker for GPS location, or a sensor, number or input number for travel readings.",
       "invalid_shore_line_count": "Choose one or two shore power lines.",
       "invalid_entity_mapping": "Choose valid source entities.",
       "duplicate_entity_mapping": "Each source entity can be assigned to only one RV system.",
@@ -471,6 +483,15 @@
       }
     },
     "sensor": {
+      "detected_altitude": {
+        "name": "Detected altitude"
+      },
+      "detected_speed": {
+        "name": "Detected speed"
+      },
+      "detected_direction": {
+        "name": "Detected direction of travel"
+      },
       "coach_year": {
         "name": "Coach year"
       },
@@ -641,6 +662,11 @@
       },
       "power_problem": {
         "name": "Problem"
+      }
+    },
+    "device_tracker": {
+      "rv_location": {
+        "name": "RV location"
       }
     },
     "select": {

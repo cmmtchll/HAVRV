@@ -27,6 +27,15 @@
       }
     },
     "sensor": {
+      "detected_altitude": {
+        "default": "mdi:altimeter"
+      },
+      "detected_speed": {
+        "default": "mdi:speedometer"
+      },
+      "detected_direction": {
+        "default": "mdi:compass-outline"
+      },
       "coach_year": {
         "default": "mdi:calendar"
       },
@@ -113,6 +122,11 @@
       },
       "power_nominal_capacity": {
         "default": "mdi:battery-high"
+      }
+    },
+    "device_tracker": {
+      "rv_location": {
+        "default": "mdi:map-marker"
       }
     },
     "select": {

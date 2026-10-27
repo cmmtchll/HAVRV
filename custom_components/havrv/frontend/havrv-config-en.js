@@ -2,6 +2,9 @@
 export const en = {
   title: "HAVRV management", overview: "Overview", profile: "RV profile",
   power: "Power", tanks: "Tanks", tires: "Tires", systems: "System mappings",
+  operations: "Operations",
+  operationsSummary: "Optional RV GPS location, altitude, detected speed and travel direction.",
+  operationsHint: "Read-only passthrough. Select a tracker with GPS coordinates for location. Numeric sources must declare compatible units; direction is degrees clockwise from north [0, 360). No movement, heading or altitude is calculated.",
   back: "Integrations", navigation: "RV configuration", loading: "Loading configuration…",
   apply: "Apply changes", discard: "Discard", refresh: "Reload saved configuration",
   discardConfirm: "Discard all unsaved changes for this RV?",
