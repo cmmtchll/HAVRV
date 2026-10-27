@@ -75,7 +75,8 @@ choose existing entities, and configure optional tank and tire monitoring.
   vertical layouts, compact live readings, explicit status colors, and inline
   last-observed data ages when readings are missing. Placed electrical devices
   have independent tagged graphics and readout boxes; these illustrate
-  placement, not wiring or active supply.
+  placement, not wiring or active supply. Selecting a specific reading opens
+  that entity's details, including tire temperature and tank volume.
 - Shares default-on visibility options across the card and dashboard strategies,
   including tow, tires, tanks, power, coach information, mapped systems, header,
   and legend. Hidden groups leave no alert counts or layout reservations.

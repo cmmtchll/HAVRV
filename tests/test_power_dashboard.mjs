@@ -4,7 +4,17 @@ import test from "node:test";
 
 globalThis.HTMLElement = class {
   attachShadow() {
-    this.shadowRoot = { addEventListener() {}, innerHTML: "" };
+    const listeners = new Map();
+    this.shadowRoot = {
+      listeners,
+      addEventListener: (type, listener) => listeners.set(type, listener),
+      innerHTML: "",
+    };
+  }
+};
+globalThis.Element = class {
+  constructor(entity) {
+    this.dataset = entity ? { entity } : {};
   }
 };
 const elements = new Map();
@@ -1062,6 +1072,119 @@ test("single and dual tire readouts put pressure and temperature on the same bas
   assert.match(renderVehicle(hass, model, "horizontal", 1), /83 °F/);
   hass.states["sensor.temperature"].state = "unavailable";
   assert.match(renderVehicle(hass, model, "horizontal", 1), /No data/);
+});
+
+test("single and dual tire readings target their own entities in both orientations", () => {
+  const { hass, model } = completeFixture();
+  for (const orientation of ["horizontal", "vertical"]) {
+    for (const unavailable of [false, true]) {
+      for (const axle of model.axles) {
+        for (const tire of [...axle.left, ...axle.right]) {
+          hass.states[tire.pressure].state = unavailable ? "unavailable" : "102";
+          hass.states[tire.temperature].state = unavailable ? "unavailable" : "83";
+        }
+      }
+      const svg = renderVehicle(hass, model, orientation, 1);
+      for (const axle of model.axles) {
+        for (const tire of [...axle.left, ...axle.right]) {
+          for (const [role, css] of [["pressure", "row-pressure"], ["temperature", "small row-right"]]) {
+            assert.ok(svg.includes(`data-entity="${tire[role]}" tabindex="0" role="button"`));
+            const tags = [...svg.matchAll(new RegExp(`<text class="${css}"[^>]*>`, "g"))];
+            assert.ok(tags.some(([tag]) => tag.includes(`data-entity="${tire[role]}"`)));
+          }
+          assert.ok(svg.includes(`data-entity="${tire.pressure}" tabindex="0" role="button" aria-label="${tire.name}:`));
+        }
+      }
+    }
+  }
+  delete model.axles[0].left[0].temperature;
+  for (const orientation of ["horizontal", "vertical"]) {
+    const svg = renderVehicle(hass, model, orientation, 1);
+    assert.doesNotMatch(svg, /data-entity="(?:undefined|null|)"/);
+  }
+});
+
+test("tank volume, percentage, electrical values and tow type/weight have distinct targets", () => {
+  const { hass, rv } = towFixture();
+  const model = buildModel(hass, rv);
+  hass.states[model.tow.enabled].state = "on";
+  for (const orientation of ["horizontal", "vertical"]) {
+    const svg = renderVehicle(hass, model, orientation, 1);
+    for (const tank of model.tanks) {
+      const volume = orientation === "horizontal"
+        ? /<tspan class="tank-vol"[^>]*>/g : /<text class="tiny"[^>]*>/g;
+      assert.ok([...svg.matchAll(volume)].some(([tag]) => tag.includes(`data-entity="${tank.level}"`)));
+      const percentages = orientation === "horizontal" ? /<tspan dx="6"[^>]*>/g : /<text class="tank-pct[^>]*>/g;
+      assert.ok([...svg.matchAll(percentages)].some(([tag]) => tag.includes(`data-entity="${tank.percentage}"`)));
+    }
+    assert.match(svg, new RegExp(`<text class="tow-label"[^>]*data-entity="${model.tow.type}"`));
+    assert.match(svg, new RegExp(`<tspan[^>]*data-entity="${model.tow.weight}"`));
+    const layout = layoutPowerBoxes(hass, model, orientation);
+    for (const box of layout.boxes) {
+      for (const metric of box.metrics) {
+        assert.ok(svg.includes(`<g data-entity="${box.source[metric]}" tabindex="0" role="button"`));
+      }
+      for (const row of box.rows.filter((row) => row.length === 1)) {
+        assert.ok([...svg.matchAll(/<text class="small power-label"[^>]*>/g)]
+          .some(([tag]) => tag.includes(`data-entity="${box.source[row[0]]}"`)));
+      }
+    }
+  }
+});
+
+test("single-tire HOT and BAT flags open temperature and battery rather than pressure", () => {
+  const { hass, model } = completeFixture();
+  const tire = model.axles[0].left[0];
+  tire.temperatureProblem = "binary_sensor.hot";
+  tire.batteryProblem = "binary_sensor.low_battery";
+  tire.battery = "sensor.battery";
+  hass.states[tire.temperatureProblem] = { state: "on", attributes: {} };
+  hass.states[tire.batteryProblem] = { state: "on", attributes: {} };
+  for (const orientation of ["horizontal", "vertical"]) {
+    const svg = renderVehicle(hass, model, orientation, 1);
+    assert.ok(svg.includes(`<tspan data-entity="${tire.temperature}" tabindex="0" role="button">HOT</tspan>`));
+    assert.ok(svg.includes(`<tspan data-entity="${tire.battery}" tabindex="0" role="button">BAT</tspan>`));
+  }
+  delete tire.battery;
+  assert.ok(renderVehicle(hass, model, "horizontal", 1)
+    .includes(`<tspan data-entity="${tire.batteryProblem}" tabindex="0" role="button">BAT</tspan>`));
+});
+
+test("click and keyboard activation open the innermost reading once, with a row fallback", () => {
+  const card = new HavrvRvCard();
+  const events = [];
+  card.dispatchEvent = (event) => events.push(event);
+  for (const type of ["click", "keydown"]) {
+    for (const key of ["Enter", " "]) {
+      for (const specific of ["sensor.temperature", "sensor.volume", "sensor.line_2_voltage", undefined]) {
+        let prevented = 0;
+        let stopped = 0;
+        const path = [new Element(), new Element(specific), new Element("sensor.pressure")];
+        const before = events.length;
+        card.shadowRoot.listeners.get(type)({
+          key, composedPath: () => path,
+          preventDefault: () => prevented++,
+          stopPropagation: () => stopped++,
+        });
+        assert.equal(events.length, before + 1);
+        assert.equal(events.at(-1).type, "hass-more-info");
+        assert.deepEqual(events.at(-1).detail, { entityId: specific || "sensor.pressure" });
+        assert.equal(events.at(-1).bubbles, true);
+        assert.equal(events.at(-1).composed, true);
+        assert.equal(prevented, 1);
+        assert.equal(stopped, 1);
+      }
+    }
+  }
+  const before = events.length;
+  const ignored = {
+    key: "Escape", composedPath: () => [new Element()],
+    preventDefault: () => assert.fail("non-reading must not activate"),
+    stopPropagation: () => assert.fail("non-reading must not activate"),
+  };
+  card.shadowRoot.listeners.get("click")(ignored);
+  card.shadowRoot.listeners.get("keydown")(ignored);
+  assert.equal(events.length, before);
 });
 
 test("all equipment at R-Rear retains independent unclipped readouts and graphics", () => {

@@ -22,6 +22,11 @@ The card draws your RV from above. It shows every configured wheel with its
 pressure and temperature, and every configured water tank with its fill level.
 The silhouette has no decorative roof units or vents that could be mistaken
 for configured equipment.
+Select a specific reading to open that entity's Home Assistant details: tire
+temperature opens temperature rather than pressure, tank volume opens level
+rather than percentage, and each electrical value opens its own sensor.
+Mapped readings also support Tab and Enter/Space, even when unavailable.
+Clicks outside a specific tire reading keep the pressure-first default.
 The layout follows the RV profile:
 
 - A front axle, then one to three rear axles, each with single or dual wheels.
@@ -78,9 +83,9 @@ The layout follows the RV profile:
   trailer behind the RV, with its entered weight. Off/unknown/unavailable
   towing status hides it completely and reserves no space. Unknown weight
   shows **No data**. The rear drawing expands in either orientation, beyond
-  tire/electrical readouts. Select the outline to edit Type, the weight to edit
-  Weight, or **Towing** above the label to open the switch. Controls are always
-  available on the Tow device even while hidden; no generic Tow system section
+  tire/electrical readouts. Select the outline or Car/Trailer label to edit Type,
+  the weight to edit Weight, or **Towing** above the label to open the switch.
+  Controls are always available on the Tow device even while hidden; no generic Tow system section
   is generated. These values do not verify tow readiness or safe loading.
 - The drawing keeps a readable minimum size, rather than squeezing a crowded
   diagram into the card. Small cards scroll horizontally when necessary; tall
