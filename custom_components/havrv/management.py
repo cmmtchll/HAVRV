@@ -47,6 +47,7 @@ from .const import (
     OPERATIONS_METRICS,
     SYSTEM_CATEGORIES,
     TANK_TYPES,
+    TIRE_SOURCE_METRICS,
     UNIT_SYSTEM_METRIC,
 )
 from .power import power_sources, shore_line_count
@@ -366,7 +367,7 @@ def validate_values(
             tuple(
                 f"tire_{tire_entity_key(p, m)}"
                 for p in tire_positions(entry.data) + tire_positions(profile)
-                for m in ("pressure", "temperature", "battery")
+                for m in TIRE_SOURCE_METRICS
             ),
         ),
         (

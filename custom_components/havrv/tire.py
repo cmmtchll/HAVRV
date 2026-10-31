@@ -34,6 +34,7 @@ from .const import (
     TIRE_FRONT,
     TIRE_METRICS,
     TIRE_PRESSURE,
+    TIRE_SOURCE_METRICS,
     TIRE_TAG,
     TIRE_TEMPERATURE,
     UNIT_SYSTEM_METRIC,
@@ -155,7 +156,7 @@ class HavrvTireEntity(Entity):
         return list(
             dict.fromkeys(
                 mappings[key]
-                for metric in TIRE_METRICS
+                for metric in TIRE_SOURCE_METRICS
                 if (key := tire_entity_key(self._position, metric)) in mappings
             )
         )

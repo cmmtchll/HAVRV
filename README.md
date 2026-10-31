@@ -56,6 +56,10 @@ choose existing entities, and configure optional tank and tire monitoring.
   comparative tire analysis. Tire batteries accept numeric levels or boolean
   health sources in the same selector. Battery/problem-class binary sensors use
   on=problem; other boolean sources use on=OK.
+  Optional per-tire **Last received** timestamp sources supply actual reception
+  ages. Tire rows keep pressure, a thin one-hour pressure sparkline, temperature,
+  and age on one line; unavailable readings retain explicitly labeled **Last**
+  values without becoming current or healthy readings.
 - Adds an Operations device with an operation-mode selector (Storage,
   Driving, Campsite full service, Campsite minimal, or Maintenance).
   Optional mapped GPS location (`device_tracker`), altitude, detected speed and

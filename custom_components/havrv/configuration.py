@@ -66,6 +66,7 @@ from .const import (
     TANK_WARNING,
     TIRE_AXLE,
     TIRE_FRONT,
+    TIRE_SOURCE_METRICS,
     TIRE_TAG,
     UNIT_SYSTEM_METRIC,
     UNIT_SYSTEM_US_CUSTOMARY,
@@ -412,10 +413,12 @@ def _options_schema(
 
     tire_mappings = existing_options.get(CONF_TIRE_ENTITY_MAPPINGS, {})
     for position in tire_positions(entry.data):
-        for metric in ("pressure", "temperature", "battery"):
+        for metric in TIRE_SOURCE_METRICS:
             domains = (
                 _TIRE_BATTERY_ENTITY_DOMAINS
                 if metric == "battery"
+                else ("sensor",)
+                if metric == "last_received"
                 else _NUMERIC_ENTITY_DOMAINS
             )
             key = tire_entity_key(position, metric)
@@ -560,10 +563,12 @@ def _normalize_options(
     tire_mappings: dict[str, str] = {}
     selected_entities: set[str] = set()
     for position in positions:
-        for metric in ("pressure", "temperature", "battery"):
+        for metric in TIRE_SOURCE_METRICS:
             domains = (
                 _TIRE_BATTERY_ENTITY_DOMAINS
                 if metric == "battery"
+                else ("sensor",)
+                if metric == "last_received"
                 else _NUMERIC_ENTITY_DOMAINS
             )
             key = tire_entity_key(position, metric)

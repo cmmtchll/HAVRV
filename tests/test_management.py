@@ -99,6 +99,41 @@ def test_editor_accepts_boolean_tire_battery_sources(domain):
     )
 
 
+def test_editor_tire_timestamp_mapping():
+    """Share optional timestamp selectors, save/removal, and validation with forms."""
+    entry = profile_entry()
+    schema = editor_schema(Candidate(dict(entry.data), dict(entry.options)), "metric")
+    field = next(
+        field
+        for field in schema["options"]
+        if field["name"] == "tire_front_left_last_received"
+    )
+    assert field["selector"]["entity"]["domain"] == ["sensor"]
+    assert "device_class" not in field["selector"]["entity"]
+    values = editable_values(entry, "metric")
+    values["options"]["tire_front_left_last_received"] = "sensor.vendor_packet_clock"
+    candidate, _, errors, _ = validate_values(entry, values, "metric")
+    assert not errors
+    assert candidate.options["tire_entity_mappings"]["front_left_last_received"] == (
+        "sensor.vendor_packet_clock"
+    )
+    values["options"]["tire_front_left_last_received"] = "input_number.clock"
+    _, _, errors, _ = validate_values(entry, values, "metric")
+    assert errors
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, data=candidate.data, options=candidate.options
+    )
+    values = editable_values(entry, "metric")
+    assert (
+        values["options"]["tire_front_left_last_received"]
+        == "sensor.vendor_packet_clock"
+    )
+    values["options"]["tire_front_left_last_received"] = None
+    candidate, _, errors, _ = validate_values(entry, values, "metric")
+    assert not errors
+    assert "front_left_last_received" not in candidate.options["tire_entity_mappings"]
+
+
 @pytest.mark.parametrize("legacy", [False, True])
 def test_shore_editor_default_and_line_count_changes(legacy):
     """Share defaults, active fields and removal semantics with native options."""

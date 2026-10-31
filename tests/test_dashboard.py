@@ -20,6 +20,7 @@ from custom_components.havrv.const import (
     CONF_REAR_AXLE_COUNT,
     CONF_TAG_AXLE_PRESENT,
     CONF_TAG_AXLE_WHEEL_CONFIGURATION,
+    CONF_TIRE_ENTITY_MAPPINGS,
     DOMAIN,
 )
 from custom_components.havrv.dashboard import (
@@ -151,6 +152,7 @@ def test_dashboard_translation_keys_exist() -> None:
     assert used <= defined
 
 
+@pytest.mark.parametrize("timestamp_mapped", [False, True])
 @pytest.mark.parametrize(
     ("rear_axles", "rear_wheels", "tag_wheels"),
     [
@@ -165,6 +167,7 @@ async def test_registry_layout_matches_dashboard_discovery(
     rear_axles: int,
     rear_wheels: str,
     tag_wheels: str | None,
+    timestamp_mapped: bool,
 ) -> None:
     """Every device and entity the dashboard reads is discoverable by its rules."""
     data = {
@@ -178,7 +181,18 @@ async def test_registry_layout_matches_dashboard_discovery(
         data[CONF_TAG_AXLE_PRESENT] = True
         data[CONF_TAG_AXLE_WHEEL_CONFIGURATION] = tag_wheels
     entry = MockConfigEntry(
-        domain=DOMAIN, title="Layout RV", unique_id="layout rv", data=data, version=3
+        domain=DOMAIN,
+        title="Layout RV",
+        unique_id="layout rv",
+        data=data,
+        options={
+            CONF_TIRE_ENTITY_MAPPINGS: (
+                {"front_left_last_received": "sensor.arbitrary_packet_time"}
+                if timestamp_mapped
+                else {}
+            )
+        },
+        version=3,
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -224,8 +238,11 @@ async def test_registry_layout_matches_dashboard_discovery(
     if tag_wheels:
         expected_tires += 2 * wheels_per_side[tag_wheels]
     assert len(tires) == expected_tires
-    for keys in tires.values():
-        assert tire_roles <= keys
+    for key, keys in tires.items():
+        assert tire_roles - {"tire_last_received"} <= keys
+        assert ("tire_last_received" in keys) == (
+            timestamp_mapped and key == "tire_front_left"
+        )
     assert set(tanks) == {"tank_fresh_water", "tank_gray_water"}
     for keys in tanks.values():
         assert {"tank_percentage", "tank_status", "tank_level"} <= keys

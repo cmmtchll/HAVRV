@@ -17,6 +17,7 @@ const TIRE_KEY = /^(front|rear_axle_(\d+)|tag_axle)_(left|right)(?:_(inner|outer
 const TIRE_ROLES = {
   tire_pressure: "pressure",
   tire_temperature: "temperature",
+  tire_last_received: "lastReceived",
   tire_battery: "battery",
   tire_pressure_problem: "pressureProblem",
   tire_temperature_problem: "temperatureProblem",
@@ -78,6 +79,20 @@ const STR = {
   watch: (n) => `${n} to watch`,
   offline: (n) => `${n} no data`,
   noData: "No data",
+  last: "Last",
+  offlineLabel: "Offline",
+  temperatureOffline: "Temp offline",
+  batteryOffline: "Battery offline",
+  pressure: "Pressure",
+  temperature: "Temperature",
+  pressureTrend: "Pressure trend, past hour",
+  historyGaps: "Gaps mean no data.",
+  historyUnavailable: (reason) => `Pressure history unavailable: ${reason}`,
+  receivedAge: (status, age) => `${status ? `${status}; last received` : "Received"} ${age}`,
+  readingAge: (status, age) => `${status}; last valid reading ${age}`,
+  unknown: "unknown",
+  ago: (age) => `${age} ago`,
+  lastValid: (metric, time) => `Last valid ${metric}: ${time}`,
   suddenDrop: "Sudden pressure drop",
   slowLoss: "Slow pressure loss",
   pressureLimit: "Pressure outside limits",
@@ -361,6 +376,141 @@ function formatState(hass, entityId) {
 }
 
 const readingHistory = new WeakMap();
+const tireHistory = new WeakMap();
+const HOUR = 3600000;
+
+function tireSource(hass, entityId) {
+  const attributes = stateOf(hass, entityId)?.attributes || {};
+  return Object.hasOwn(attributes, "source_entity_id")
+    ? attributes.source_entity_id : attributes.last_valid_source;
+}
+
+function mappedTireChannel(hass, entityId) {
+  const attributes = stateOf(hass, entityId)?.attributes || {};
+  return Boolean(entityId && (!Object.hasOwn(attributes, "source_entity_id") || attributes.source_entity_id));
+}
+
+function validTimestamp(value, now = Date.now()) {
+  const timestamp = typeof value === "number" ? value * 1000 : Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp > 0 && timestamp <= now ? timestamp : undefined;
+}
+
+function shortAge(timestamp, now = Date.now()) {
+  if (!Number.isFinite(timestamp)) return "?";
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
+  return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m`
+    : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86400)}d`;
+}
+
+/** Convert retained native readings to the entity's current display unit. */
+export function convertTireValue(value, from, to, metric) {
+  if (from === to) return value;
+  if (metric === "pressure") {
+    const pascals = { mPa: 0.001, Pa: 1, hPa: 100, kPa: 1000, bar: 100000, cbar: 1000,
+      mbar: 100, psi: 6894.757, inHg: 3386.388640341, mmHg: 133.322387415,
+      "inH\u2082O": 249.0889083333348, atm: 101325 };
+    return pascals[from] && pascals[to] ? value * pascals[from] / pascals[to] : undefined;
+  }
+  const celsius = from === "°C" ? value : from === "°F" ? (value - 32) / 1.8
+    : from === "K" ? value - 273.15 : undefined;
+  return celsius === undefined ? undefined : to === "°C" ? celsius
+    : to === "°F" ? celsius * 1.8 + 32 : to === "K" ? celsius + 273.15 : undefined;
+}
+
+/** Retained values are presentation only; never feed them into tire health. */
+export function tireReading(hass, entityId, metric, now = Date.now()) {
+  const current = numeric(hass, entityId);
+  if (current) return current;
+  const attributes = stateOf(hass, entityId)?.attributes;
+  if (!attributes || typeof attributes.last_valid_value !== "number"
+    || !Number.isFinite(attributes.last_valid_value)) return undefined;
+  if (Object.hasOwn(attributes, "source_entity_id")
+    && attributes.last_valid_source !== attributes.source_entity_id) return undefined;
+  const timestamp = validTimestamp(attributes.last_valid_time, now);
+  const unit = attributes.unit_of_measurement || attributes.last_valid_unit;
+  const value = convertTireValue(attributes.last_valid_value, attributes.last_valid_unit, unit, metric);
+  if (timestamp === undefined || !Number.isFinite(value)) return undefined;
+  return {
+    value, unit, timestamp, retained: true,
+    text: formatNumber(hass, value, hass.entities?.[entityId]?.display_precision ?? 0),
+  };
+}
+
+/** One hour, real timestamps and explicit breaks; do not extend stale samples. */
+export function pressureSparkline(samples, unit, x, y, width = 32, now = Date.now()) {
+  const cutoff = now - HOUR;
+  const points = (samples || []).filter((sample) => sample.time >= cutoff && sample.time <= now)
+    .map((sample) => ({
+      time: sample.time,
+      value: sample.value === null ? undefined : convertTireValue(sample.value, sample.unit, unit, "pressure"),
+    }));
+  const values = points.filter((point) => Number.isFinite(point.value));
+  if (values.length < 2) return "";
+  const low = Math.min(...values.map((point) => point.value));
+  const high = Math.max(...values.map((point) => point.value));
+  const range = high - low;
+  let drawing = false;
+  let segments = 0;
+  const path = points.map((point) => {
+    if (!Number.isFinite(point.value)) {
+      drawing = false;
+      return "";
+    }
+    const px = r1(x + (point.time - cutoff) / HOUR * width);
+    const py = r1(y - 4 - (range ? (point.value - low) / range * 10 : 5));
+    const command = drawing ? "L" : "M";
+    if (drawing) segments++;
+    drawing = true;
+    return `${command}${px} ${py}`;
+  }).join(" ");
+  if (!segments) return "";
+  return `<path class="pressure-sparkline" d="${path}" role="img" aria-label="${STR.pressureTrend}">
+    <title>${STR.pressureTrend}; ${escapeHtml(formatNumber({}, low, 1))}–${escapeHtml(formatNumber({}, high, 1))} ${escapeHtml(unit)}. ${STR.historyGaps}</title>
+  </path>`;
+}
+
+/** Decode the compressed states returned by HA's history WebSocket command. */
+export function pressureHistory(states, now = Date.now()) {
+  return (states || []).flatMap((state) => {
+    const value = !UNAVAILABLE.has(state.s) && String(state.s ?? "").trim() ? Number(state.s) : NaN;
+    const time = validTimestamp(Number.isFinite(value) && state.a?.last_valid_time
+      ? state.a.last_valid_time : state.lu, now);
+    if (time === undefined || time < now - HOUR) return [];
+    return [{ time, value: Number.isFinite(value) ? value : null, unit: state.a?.unit_of_measurement || "" }];
+  });
+}
+
+function tireRowData(hass, tire, now = Date.now()) {
+  const pressure = tireReading(hass, tire.pressure, "pressure", now);
+  const temperature = tireReading(hass, tire.temperature, "temperature", now);
+  const pressureMissing = Boolean(mappedTireChannel(hass, tire.pressure) && !numeric(hass, tire.pressure));
+  const temperatureMissing = Boolean(mappedTireChannel(hass, tire.temperature) && !numeric(hass, tire.temperature));
+  const batteryMissing = Boolean(mappedTireChannel(hass, tire.battery) && !validReading(hass, tire.battery));
+  const missing = pressureMissing || temperatureMissing || batteryMissing;
+  const received = stateOf(hass, tire.lastReceived);
+  const receivedTime = received && !UNAVAILABLE.has(received.state)
+    ? validTimestamp(received.state, now) : undefined;
+  const times = [tire.pressure, tire.temperature, tire.battery]
+    .filter((id) => mappedTireChannel(hass, id) && !validReading(hass, id))
+    .map((id) => tireReading(hass, id, id === tire.pressure ? "pressure" : "temperature", now)?.timestamp
+      ?? readingHistory.get(hass)?.get(id));
+  // An explicitly mapped but invalid reception time stays unknown, not HA's update time.
+  const timestamp = tire.lastReceived ? receivedTime
+    : times.length && times.every(Number.isFinite) ? Math.min(...times) : undefined;
+  const age = tire.lastReceived || missing ? shortAge(timestamp, now) : "";
+  const status = pressureMissing ? STR.offlineLabel : temperatureMissing ? STR.temperatureOffline
+    : batteryMissing ? STR.batteryOffline : "";
+  const ageText = [status, age].filter(Boolean).join(" ");
+  const ageLabel = tire.lastReceived
+    ? STR.receivedAge(status, timestamp === undefined ? STR.unknown : `${STR.ago(shortAge(timestamp, now))} (${new Date(timestamp).toISOString()})`)
+    : STR.readingAge(status, timestamp === undefined ? STR.unknown : STR.ago(shortAge(timestamp, now)));
+  const pressureText = pressure ? `${pressure.retained ? `${STR.last} ` : ""}${pressure.text} ${pressure.unit}` : "—";
+  const temperatureValue = temperatureText(temperature, false);
+  const rightText = temperature ? `${temperature.retained && !pressure?.retained ? `${STR.last} ` : ""}${temperatureValue}` : STR.noData;
+  const hasSparkline = Boolean(pressure && pressureSparkline(tireHistory.get(hass)?.get(tire.pressure),
+    pressure.unit, 0, 0, 32, now));
+  return { pressure, temperature, pressureText, rightText, ageText, ageLabel, hasSparkline };
+}
 
 function validReading(hass, entityId) {
   const state = stateOf(hass, entityId);
@@ -663,6 +813,35 @@ function readingAction(entity) {
   return entity ? `data-entity="${escapeHtml(entity)}" tabindex="0" role="button"` : "";
 }
 
+function tireRow(hass, tire, state, x, y, width, dual) {
+  const data = tireRowData(hass, tire);
+  const pressureX = x + (dual ? 22 : 9);
+  const pressure = data.pressure
+    ? `<tspan class="${data.pressure.retained ? "retained " : ""}mid">${data.pressure.retained ? `${STR.last} ` : ""}${escapeHtml(data.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(data.pressure.unit)}</tspan>`
+    : `<tspan class="mid muted">—</tspan>`;
+  const ageWidth = data.ageText ? data.ageText.length * 5.3 + 9 : 0;
+  const rightEnd = x + width - 9 - ageWidth;
+  const temperature = data.temperature
+    ? `<tspan class="${data.temperature.retained ? "retained" : state.hot ? "hot" : ""}">${escapeHtml(data.rightText)}</tspan>`
+    : `<tspan>${escapeHtml(STR.noData)}</tspan>`;
+  const sparkX = pressureX + data.pressureText.length * 7.5 + 6;
+  const spark = data.hasSparkline && pressureSparkline(tireHistory.get(hass)?.get(tire.pressure),
+    data.pressure.unit, sparkX, y);
+  const title = `${tire.name}: ${data.pressureText}; ${data.rightText}${data.ageText ? `; ${data.ageLabel}` : ""}${
+    state.reasons.length ? `; ${state.reasons.join("; ")}` : ""}`;
+  return `<g class="row" ${readingAction(tire.pressure || tire.temperature)} aria-label="${escapeHtml(title)}">
+    <rect class="hit" x="${x}" y="${y - 15}" width="${width}" height="20"></rect>
+    ${dual ? `<text class="wheel ${state.level}" x="${x + 9}" y="${y}">${tire.wheel === "inner" ? STR.inner : STR.outer}</text>` : ""}
+    <text class="row-pressure" x="${pressureX}" y="${y}" ${readingAction(tire.pressure)}>
+      <title>${escapeHtml(data.pressure?.retained ? STR.lastValid(STR.pressure.toLowerCase(), new Date(data.pressure.timestamp).toISOString()) : STR.pressure)}</title>${pressure}</text>
+    ${spark ? spark.replace('class="pressure-sparkline"', `class="pressure-sparkline${data.pressure.retained ? " retained" : ""}"`) : ""}
+    <text class="small row-right" x="${rightEnd}" y="${y}" text-anchor="end" ${readingAction(tire.temperature)}>
+      <title>${escapeHtml(data.temperature?.retained ? STR.lastValid(STR.temperature.toLowerCase(), new Date(data.temperature.timestamp).toISOString()) : STR.temperature)}</title>${temperature}</text>
+    ${data.ageText ? `<text class="tire-age" x="${x + width - 9}" y="${y}" text-anchor="end" ${readingAction(tire.lastReceived)}
+      aria-label="${escapeHtml(data.ageLabel)}"><title>${escapeHtml(data.ageLabel)}</title> · ${escapeHtml(data.ageText)}</text>` : ""}
+  </g>`;
+}
+
 function tireChip(hass, axle, side, sign, states, geometry, box) {
   const tires = axle[side];
   const dual = tires.length > 1;
@@ -678,31 +857,14 @@ function tireChip(hass, axle, side, sign, states, geometry, box) {
   if (!dual) {
     const tire = tires[0];
     const state = tireStates[0];
-    const entity = tire.pressure || tire.temperature || "";
-    const pressure = state.pressure
-      ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
-      : `<tspan class="mid muted">—</tspan>`;
     const flags = flagText(state, tire);
-    const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
-    const pressureAge = !state.pressure && state.temperature ? age : "";
-    const rightAge = pressureAge ? "" : age;
-    const rightEnd = x + width - 9;
     parts.push(
-      `<g class="row">
-        <text class="row-pressure" x="${x + 9}" y="${y + 34}" ${readingAction(tire.pressure)}>${pressure}</text>
-        ${dataAgeLabel(pressureAge, x + 25, y + 34)}
-        <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${y + 34}" text-anchor="end" ${readingAction(tire.temperature)}>${
-          state.temperature
-            ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperatureText(state.temperature, false))}</tspan>`
-            : `<tspan>${escapeHtml(STR.noData)}</tspan>`
-        }</text>
-        ${dataAgeLabel(rightAge, rightEnd - dataAgeWidth(rightAge), y + 34)}
-      </g>`,
+      tireRow(hass, tire, state, x, y + 34, width, false),
       flags
-        ? `<text class="flag ${level}" x="${x + width - 9}" y="${y + 46}" text-anchor="end">${flags}</text>`
+        ? `<text class="flag ${level}" x="${x + width - 20}" y="${y + 13}" text-anchor="end">${flags}</text>`
         : "",
     );
-    return `<g class="chip ${level}" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
+    return `<g class="chip ${level}" ${readingAction(tire.pressure || tire.temperature)} aria-label="${escapeHtml(
       `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
     )}">${parts.join("")}</g>`;
   }
@@ -715,30 +877,7 @@ function tireChip(hass, axle, side, sign, states, geometry, box) {
     const tire = tires[i];
     const state = tireStates[i];
     const rowY = y + 32 + rowIndex * box.rowHeight;
-    const entity = tire.pressure || tire.temperature || "";
-    const pressure = state.pressure
-      ? `<tspan class="mid">${escapeHtml(state.pressure.text)}</tspan><tspan class="unit" dx="2">${escapeHtml(state.pressure.unit)}</tspan>`
-      : `<tspan class="mid muted">—</tspan>`;
-    // Rows are narrow: keep the full temperature, color a hot temperature,
-    // and show trend and battery flags in the chip header.
-    const temperature = temperatureText(state.temperature, false);
-    const right = temperature
-      ? `<tspan class="${state.hot ? "hot" : ""}" data-compact="${escapeHtml(temperatureText(state.temperature, true))}">${escapeHtml(temperature)}</tspan>`
-      : `<tspan>${escapeHtml(STR.noData)}</tspan>`;
-    const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
-    const pressureAge = !state.pressure && state.temperature ? age : "";
-    const rightAge = pressureAge ? "" : age;
-    const rightEnd = x + width - 9;
-    return `<g class="row" ${entity ? `data-entity="${entity}"` : ""} tabindex="0" role="button" aria-label="${escapeHtml(
-      `${tire.name}: ${state.reasons.join(", ") || STR.allClear}`,
-    )}">
-      <rect class="hit" x="${x}" y="${rowY - 15}" width="${width}" height="20"></rect>
-      <text class="wheel ${state.level}" x="${x + 9}" y="${rowY}">${tire.wheel === "inner" ? STR.inner : STR.outer}</text>
-      <text class="row-pressure" x="${x + 22}" y="${rowY}" ${readingAction(tire.pressure)}>${pressure}</text>
-      ${dataAgeLabel(pressureAge, x + 38, rowY)}
-      <text class="small row-right" x="${rightEnd - (rightAge ? dataAgeWidth(rightAge) + 4 : 0)}" y="${rowY}" text-anchor="end" ${readingAction(tire.temperature)}>${right}</text>
-      ${dataAgeLabel(rightAge, rightEnd - dataAgeWidth(rightAge), rowY)}
-    </g>`;
+    return tireRow(hass, tire, state, x, rowY, width, true);
   });
   const headerFlags = [
     tireStates.some((state) => state.dropping) && `<tspan class="trend">▼</tspan>`,
@@ -765,13 +904,9 @@ function layoutTireChips(hass, axles, geometry) {
       const rowHeight = 20;
       const height = axle.ghost ? 52 : Math.max(52, 24 + axle[side].length * rowHeight);
       const width = Math.max(geometry.chipWidth, ...axle[side].map((tire) => {
-        const pressure = numeric(hass, tire.pressure);
-        const temperature = numeric(hass, tire.temperature);
-        const pressureText = pressure ? `${pressure.text} ${pressure.unit}` : "—";
-        const rightText = temperatureText(temperature, false) || STR.noData;
-        const age = missingReadingText(hass, [tire.pressure, tire.temperature, tire.battery]);
-        return Math.ceil(pressureText.length * 8.5 + rightText.length * 7 + 51
-          + (age ? dataAgeWidth(age) + 4 : 0));
+        const data = tireRowData(hass, tire);
+        return Math.ceil(data.pressureText.length * 7.5 + data.rightText.length * 6
+          + data.ageText.length * 5.3 + (data.hasSparkline ? 91 : 53));
       }));
       const depth = geometry === ORIENTATIONS.horizontal ? height : width;
       let distance = TIRE_OUTER + CHIP_GAP + depth / 2;
@@ -1302,7 +1437,13 @@ const STYLES = `
   .trend { fill: var(--lvl); font-size: 8.5px; }
   .hot { fill: var(--hv-alert); }
   .row-right { font-size: 10px; }
+  .tire-age { fill: var(--hv-muted); font-size: 9px; }
+  .retained, .retained.mid { fill: var(--hv-muted); }
+  .pressure-sparkline { fill: none; stroke: var(--primary-color, #03a9f4);
+    stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  .pressure-sparkline.retained { stroke: var(--hv-muted); }
   .dot { fill: var(--lvl); }
+  .chip .dot.offline { fill: none; stroke: var(--hv-offline); stroke-width: 1.5; }
   .hit { fill: transparent; }
   .shore-divider { fill: none; stroke: var(--hv-line); stroke-width: 1; }
   .tank-shell { fill: color-mix(in srgb, var(--tank) 10%, var(--hv-card)); }
@@ -1377,6 +1518,10 @@ export class HavrvRvCard extends HTMLElement {
     this._uid = ++instanceCounter;
     this._width = 0;
     this._readingHistory = new Map();
+    this._tireSources = new Map();
+    this._pressureHistory = new Map();
+    this._historyGeneration = 0;
+    this._historyRevision = 0;
     this.attachShadow({ mode: "open" });
     const activate = (event) => {
       const target = event
@@ -1462,6 +1607,7 @@ export class HavrvRvCard extends HTMLElement {
       });
     }
     this._resizeObserver?.observe(this);
+    this._update();
     if (!this._ageTimer) {
       this._ageTimer = setInterval(() => this._update(), 30000);
       this._ageTimer.unref?.();
@@ -1473,6 +1619,9 @@ export class HavrvRvCard extends HTMLElement {
     this._resizeObserver?.disconnect();
     clearInterval(this._ageTimer);
     this._ageTimer = undefined;
+    this._historyGeneration++;
+    this._historyRequest = undefined;
+    this._historyUpdated = undefined;
     cancelAnimationFrame(this._fitFrame);
   }
 
@@ -1487,9 +1636,15 @@ export class HavrvRvCard extends HTMLElement {
     const rv = resolveRvDevice(hass, this._config.device_id);
     const model = rv ? visibleModel(buildModel(hass, rv), this._config) : undefined;
     if (model) {
+      const tireReadings = model.axles.flatMap((axle) => [...axle.left, ...axle.right]
+        .flatMap((tire) => [tire.pressure, tire.temperature, tire.battery])).filter(Boolean);
+      const sources = new Map(tireReadings.map((id) => [id, tireSource(hass, id)]));
+      for (const [id, source] of this._tireSources) {
+        if (!sources.has(id) || sources.get(id) !== source) this._readingHistory.delete(id);
+      }
+      this._tireSources = sources;
       const readings = [
-        ...model.axles.flatMap((axle) => [...axle.left, ...axle.right]
-          .flatMap((tire) => [tire.pressure, tire.temperature, tire.battery])),
+        ...tireReadings,
         ...model.tanks.flatMap((tank) => [tank.percentage, tank.level]),
         ...model.powerSources.flatMap((source) => [...SHORE_READING_METRICS,
           "enabled", "charging", "warning", "problem"].map((metric) => source[metric])),
@@ -1499,6 +1654,7 @@ export class HavrvRvCard extends HTMLElement {
         if (!current.has(id)) this._readingHistory.delete(id);
       }
       rememberReadings(hass, readings, this._readingHistory);
+      this._updateTireHistory(model);
     }
     const orientation = this._resolveOrientation();
     const key = JSON.stringify([
@@ -1507,6 +1663,8 @@ export class HavrvRvCard extends HTMLElement {
       hass.locale?.language,
       hass.themes?.darkMode,
       Math.floor(Date.now() / 30000),
+      this._historyRevision,
+      this._historyError,
       model && {
         name: model.name,
         axles: model.axles,
@@ -1517,7 +1675,11 @@ export class HavrvRvCard extends HTMLElement {
       },
       model?.watched.map((id) => {
         const state = hass.states[id];
-        return state ? [state.state, state.attributes.unit_of_measurement, state.last_reported, state.last_updated] : null;
+        return state ? [state.state, state.attributes.unit_of_measurement,
+          state.attributes.last_valid_value, state.attributes.last_valid_unit,
+          state.attributes.last_valid_time, state.attributes.last_valid_source,
+          state.attributes.source_entity_id,
+          state.last_reported, state.last_updated] : null;
       }),
     ]);
     if (key === this._renderKey) return;
@@ -1527,6 +1689,78 @@ export class HavrvRvCard extends HTMLElement {
       model ? this._renderModel(model, orientation) : `<div class="wrap"><div class="message">${escapeHtml(STR.noProfile)}</div></div>`
     }</ha-card>`;
     this._scheduleFit();
+  }
+
+  _updateTireHistory(model) {
+    const now = Date.now();
+    const hass = this._hass;
+    const ids = [...new Set(model.axles.flatMap((axle) =>
+      [...axle.left, ...axle.right].map((tire) => tire.pressure)).filter(Boolean))].sort();
+    const key = JSON.stringify(ids.map((id) => [id, tireSource(hass, id)]));
+    if (key !== this._historyKey || hass.connection !== this._historyConnection) {
+      this._pressureHistory.clear();
+      this._historyGeneration++;
+      this._historyKey = key;
+      this._historyConnection = hass.connection;
+      this._historyRequest = undefined;
+      this._historyUpdated = undefined;
+      this._historyError = "";
+    }
+    for (const id of ids) {
+      const state = stateOf(hass, id);
+      const reading = tireReading(hass, id, "pressure", now);
+      const time = validTimestamp(state?.attributes.last_valid_time
+        || state?.last_reported || state?.last_updated, now);
+      const samples = (this._pressureHistory.get(id) || []).filter((sample) => sample.time >= now - HOUR);
+      if (reading && time !== undefined && time >= now - HOUR) {
+        samples.push({ time, value: reading.value, unit: reading.unit });
+      }
+      if (state && !numeric(hass, id)) {
+        const outage = validTimestamp(state.last_updated, now);
+        if (outage !== undefined && outage >= now - HOUR) samples.push({ time: outage, value: null, unit: "" });
+      }
+      this._pressureHistory.set(id, [...new Map(samples.map((sample) => [sample.time, sample])).values()]
+        .sort((a, b) => a.time - b.time));
+    }
+    tireHistory.set(hass, this._pressureHistory);
+    if (!ids.length || !this.isConnected || typeof hass.callWS !== "function" || this._historyRequest
+      || (this._historyUpdated !== undefined && now - this._historyUpdated < 60000)) return;
+    this._historyUpdated = now;
+    this._historyRequest = this._loadPressureHistory(hass, ids, now, this._historyGeneration);
+  }
+
+  async _loadPressureHistory(hass, ids, now, generation) {
+    try {
+      const result = await hass.callWS({
+        type: "history/history_during_period",
+        start_time: new Date(now - HOUR).toISOString(),
+        end_time: new Date(now).toISOString(),
+        entity_ids: ids,
+        include_start_time_state: false,
+        significant_changes_only: false,
+        minimal_response: false,
+        no_attributes: false,
+      });
+      if (generation !== this._historyGeneration) return;
+      for (const id of ids) {
+        const source = tireSource(this._hass, id);
+        const samples = pressureHistory((result[id] || []).filter((state) =>
+          state.a?.last_valid_source === source), now);
+        const combined = [...samples, ...(this._pressureHistory.get(id) || [])];
+        this._pressureHistory.set(id, [...new Map(combined.map((sample) => [sample.time, sample])).values()]
+          .sort((a, b) => a.time - b.time));
+      }
+      this._historyError = "";
+    } catch (error) {
+      if (generation !== this._historyGeneration) return;
+      this._historyError = STR.historyUnavailable(error?.message || error?.code || "request failed");
+    } finally {
+      if (generation === this._historyGeneration) {
+        this._historyRequest = undefined;
+        this._historyRevision++;
+        this._update();
+      }
+    }
   }
 
   /**
@@ -1604,6 +1838,7 @@ export class HavrvRvCard extends HTMLElement {
     return `<div class="wrap">
       ${this._config.show_header ? this._renderHeader(model) : ""}
       <div class="drawing" tabindex="0" role="region" aria-label="RV diagram">${svg}</div>
+      ${this._historyError ? `<div class="message" role="status">${escapeHtml(this._historyError)}</div>` : ""}
       ${!this._config.show_tires || model.axles.length ? "" : `<div class="message">${escapeHtml(STR.noTires)}</div>`}
       ${this._config.show_legend ? `<div class="legend">${legend}</div>` : ""}
     </div>`;

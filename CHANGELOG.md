@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Keep all tire data on one line per wheel, with a thin one-hour pressure
+  sparkline, optional mapped Last received age, and explicit offline/unknown
+  status. Show retained pressure/temperature as muted Last values without
+  making unavailable readings current or clearing advisory states.
+- Preserve last-valid tire metadata across reloads/restarts, invalidate it on
+  source remapping, and respect profile/entity display units. Leave gaps in
+  recorded pressure traces instead of extending stale values to the present.
+
 ## 0.5.4
 
 - Open the selected dashboard reading's own entity, including tire temperature,

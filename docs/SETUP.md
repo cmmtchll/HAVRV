@@ -230,6 +230,24 @@ off means a problem. MQTT low-battery binary sensors with `device_class: battery
 can be selected directly; no inverted template is needed. Boolean batteries are
 mirrored as raw on/off, not percentages, and remain read-only.
 
+Optionally select **Last received** for each tire: an existing `sensor` whose
+state is a timezone-aware ISO timestamp (for example
+`2026-10-31T12:00:00+00:00`). Template timestamp sensors use the same domain.
+Relative text such as `6 minutes ago`, numeric ages, future timestamps and
+timestamps without a timezone are not usable. Leave this mapping empty if
+your TPMS does not provide it; pressure, temperature and monitoring still work.
+The dashboard uses this timestamp's value, not the time Home Assistant updated
+the pressure entity. It shows a compact age even while readings are available.
+There is no automatic stale-time threshold or extra freshness alarm to tune.
+
+Pressure and temperature retain their last valid values and original sample
+times across reloads/restarts for historical display. An unavailable source
+still makes its HAVRV reading unavailable; the card labels the retained number
+**Last** and shows **Offline** on the same line. Remapping a source does not
+reuse another source's retained reading. See the
+[dashboard guide](DASHBOARD.md#tire-trends-and-reception-age) for sparklines,
+partial availability and timestamp fallbacks.
+
 You can set optional low/high pressure limits for front, rear, and tag tires,
 plus a shared high-temperature limit and numeric low-battery limit (default 20%;
 ignored for boolean sources). Configure limits
