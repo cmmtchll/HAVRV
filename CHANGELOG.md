@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.6
+
 - Keep all tire data on one line per wheel, with a thin one-hour pressure
   sparkline, optional mapped Last received age, and explicit offline/unknown
   status. Show retained pressure/temperature as muted Last values without
