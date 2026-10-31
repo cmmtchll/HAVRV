@@ -317,6 +317,22 @@ as data present.
 Pressure and temperature limits are optional and use the RV profile's units;
 recognized source units are converted before comparison.
 
+Each tire can also map an optional **Last received** timestamp `sensor`.
+Its actual timestamp value supplies reception age; ordinary pressure updates
+are not treated as physical TPMS transmissions. Invalid, future, unavailable
+and timezone-less timestamps remain unknown. This mapping is informational,
+not part of pressure/temperature/battery advisory evaluation.
+
+Pressure and temperature mirrors preserve last-valid value, native unit,
+source and sample-time attributes across reloads/restarts. They remain
+unavailable when their sources are unavailable; neither data-present nor
+problem checks use retained numbers. Source remapping invalidates unrelated
+retained readings. The overview labels retained values **Last**, keeps
+currently available channels visible, and shows age/availability on the same
+line. A thin pressure-only sparkline covers the preceding hour of Recorder
+data, with explicit breaks at unavailable states and no extrapolation to now.
+See [tire trends and reception age](DASHBOARD.md#tire-trends-and-reception-age).
+
 Tire readings are read-only mirrors. HAVRV does not discover or control TPMS
 hardware. Tire problem entities do not send notifications and do not replace
 manufacturer-recommended cold inflation pressures or professional inspection.

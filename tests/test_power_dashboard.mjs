@@ -34,6 +34,7 @@ const {
   rvView, HavrvDashboardStrategy, HavrvViewStrategy, HavrvRvCard,
   DISPLAY_CLASSES, dashboardOptions, visibleModel,
   rememberReadings, missingReadingText,
+  convertTireValue, tireReading, pressureSparkline, pressureHistory,
 } = await import(`data:text/javascript;base64,${Buffer.from(text).toString("base64")}`);
 
 function fixture() {
@@ -932,7 +933,7 @@ test("maximum axles, duals, three tanks and dense banks have nonoverlapping read
       ? { x: 432, y: 120, width: 240, height: 136 }
       : { x: 180, y: 242, width: 136, height: 240 };
     assert.equal(obstacles.length, 10);
-    assert.ok(obstacles.every((chip) => chip.width === 156 && chip.height >= 52));
+    assert.ok(obstacles.every((chip) => chip.width >= 156 && chip.height >= 52));
     assert.ok(icons.every((icon) => icon.width === 44));
     const items = [...boxes, ...icons, ...obstacles];
     for (const item of items) {
@@ -1360,6 +1361,276 @@ test("missing, malformed, blank and future reports never invent last-good timest
   assert.equal(missingReadingText(hass, [], now), "");
 });
 
+test("retained tire values are explicitly historical and respect display units and zeroes", () => {
+  const now = Date.parse("2026-10-31T12:00:00Z");
+  const hass = { states: { "sensor.old": {
+    state: "unavailable", attributes: {
+      last_valid_value: 100, last_valid_unit: "psi", unit_of_measurement: "kPa",
+      last_valid_time: "2026-10-31T06:00:00Z",
+    },
+  } }, entities: { "sensor.old": { display_precision: 1 } } };
+  const value = tireReading(hass, "sensor.old", "pressure", now);
+  assert.equal(value.retained, true);
+  assert.equal(value.text, "689.5");
+  assert.equal(value.unit, "kPa");
+  assert.ok(Math.abs(convertTireValue(32, "°F", "°C", "temperature")) < 0.00001);
+  assert.equal(convertTireValue(273.15, "K", "°C", "temperature"), 0);
+  assert.equal(convertTireValue(0, "°C", "°F", "temperature"), 32);
+  for (const [unit, pascals] of [
+    ["mPa", 0.001], ["Pa", 1], ["hPa", 100], ["kPa", 1000], ["bar", 100000],
+    ["cbar", 1000], ["mbar", 100], ["psi", 6894.757], ["inHg", 3386.388640341],
+    ["mmHg", 133.322387415], ["inH\u2082O", 249.0889083333348], ["atm", 101325],
+  ]) {
+    assert.ok(Math.abs(convertTireValue(1, unit, "Pa", "pressure") - pascals) < 0.000001);
+    assert.ok(Math.abs(convertTireValue(pascals, "Pa", unit, "pressure") - 1) < 0.000001);
+  }
+  assert.equal(convertTireValue(1, "bogus", "kPa", "pressure"), undefined);
+  for (const invalid of ["unavailable", "", "100", NaN, Infinity, undefined]) {
+    hass.states["sensor.old"].attributes.last_valid_value = invalid;
+    assert.equal(tireReading(hass, "sensor.old", "pressure", now), undefined);
+  }
+  hass.states["sensor.old"].attributes.last_valid_value = 0;
+  assert.equal(tireReading(hass, "sensor.old", "pressure", now).value, 0);
+  for (const invalid of ["bad", "2026-11-01T12:00:00Z", undefined]) {
+    hass.states["sensor.old"].attributes.last_valid_time = invalid;
+    assert.equal(tireReading(hass, "sensor.old", "pressure", now), undefined);
+  }
+  hass.states["sensor.old"] = { state: "101", attributes: { unit_of_measurement: "psi" } };
+  assert.equal(tireReading(hass, "sensor.old", "pressure", now).retained, undefined);
+});
+
+test("pressure sparklines use a true one-hour time axis, thin paths and outage breaks", () => {
+  const now = Date.parse("2026-10-31T12:00:00Z");
+  const sample = (minutes, value, unit = "psi") => ({ time: now - minutes * 60000, value, unit });
+  assert.equal(pressureSparkline([sample(90, 100), sample(61, 102)], "psi", 0, 0, 60, now), "");
+  assert.equal(pressureSparkline([sample(30, 100)], "psi", 0, 0, 60, now), "");
+  assert.equal(pressureSparkline([sample(30, 100), sample(20, null), sample(10, 102)], "psi", 0, 0, 60, now), "");
+  const svg = pressureSparkline([
+    sample(60, 100), sample(50, 101), sample(40, null), sample(30, 102),
+    sample(20, 103), sample(-1, 200),
+  ], "psi", 0, 0, 60, now);
+  assert.match(svg, /class="pressure-sparkline"/);
+  assert.match(svg, /d="M0 -4 L10 -7.3  M30 -10.7 L40 -14"/);
+  assert.doesNotMatch(svg, /L60|NaN|Infinity|<rect|<circle/);
+  assert.match(svg, /past hour/);
+  assert.match(text, /\.pressure-sparkline \{ fill: none;/);
+  const flat = pressureSparkline([sample(60, 0), sample(30, 0)], "psi", 0, 0, 60, now);
+  assert.match(flat, /M0 -9 L30 -9/);
+  const converted = pressureSparkline([sample(60, 100), sample(30, 689.4757, "kPa")], "psi", 0, 0, 60, now);
+  assert.match(converted, /M0 -9 L30 -9/);
+});
+
+test("compressed Recorder history keeps invalid-state gaps and real source timestamps", () => {
+  const now = Date.parse("2026-10-31T12:00:00Z");
+  const seconds = (minutes) => (now - minutes * 60000) / 1000;
+  const samples = pressureHistory([
+    { s: "90", lu: seconds(61), a: { unit_of_measurement: "psi" } },
+    { s: "0", lu: seconds(50), a: { unit_of_measurement: "psi" } },
+    { s: "unavailable", lu: seconds(40) },
+    { s: "100", lu: seconds(10), a: { unit_of_measurement: "psi", last_valid_time: new Date(seconds(20) * 1000).toISOString() } },
+    { s: "1", lu: seconds(-1) },
+    { s: " ", lu: seconds(5) },
+    { s: "3", lu: "malformed" },
+  ], now);
+  assert.deepEqual(samples.map((point) => point.value), [0, null, 100, null]);
+  assert.equal(samples[2].time, seconds(20) * 1000);
+});
+
+test("tire rows combine live, last-known, offline and actual reception age on one line", () => {
+  const { hass, model } = completeFixture();
+  const tire = model.axles[0].left[0];
+  const ago = new Date(Date.now() - 6 * 3600000).toISOString();
+  hass.states[tire.pressureProblem].state = "off";
+  tire.lastReceived = "sensor.actual_reception";
+  hass.states[tire.lastReceived] = { state: ago, attributes: {} };
+  for (const metric of ["pressure", "temperature"]) {
+    Object.assign(hass.states[tire[metric]].attributes, {
+      last_valid_value: metric === "pressure" ? 103.7 : 77,
+      last_valid_unit: metric === "pressure" ? "psi" : "°F", last_valid_time: ago,
+    });
+    hass.states[tire[metric]].state = "unavailable";
+  }
+  for (const orientation of ["horizontal", "vertical"]) {
+    const svg = renderVehicle(hass, model, orientation, 1);
+    const row = [...svg.matchAll(/<g class="row"[\s\S]*?<\/g>/g)]
+      .find(([row]) => row.includes(`data-entity="${tire.pressure}"`))[0];
+    assert.match(row, /Last 104/);
+    assert.match(row, /class="retained">77 °F/);
+    assert.match(row, /Offline 6h/);
+    assert.match(row, /Offline; last received 6h ago/);
+    assert.match(row, /class="retained mid"/);
+    assert.match(row, /Last valid pressure:/);
+    assert.ok(row.includes(`data-entity="${tire.lastReceived}" tabindex="0" role="button"`));
+    const baselines = [...row.matchAll(/<text[^>]+ y="([^"]+)"/g)].map((match) => match[1]);
+    assert.equal(new Set(baselines).size, 1);
+    assert.doesNotMatch(row, /pressure-sparkline/);
+    assert.match(svg, /class="dot offline"/);
+  }
+  hass.states[tire.temperature].state = "78";
+  assert.match(renderVehicle(hass, model, "vertical", 1), />78 °F<\/tspan>/);
+  assert.doesNotMatch(renderVehicle(hass, model, "vertical", 1), /Last 78/);
+  hass.states[tire.lastReceived].state = "unknown";
+  assert.match(renderVehicle(hass, model, "vertical", 1), /Offline \?/);
+  hass.states[tire.pressure].state = "105";
+  hass.states[tire.lastReceived].state = new Date(Date.now() - 6 * 60000).toISOString();
+  const live = renderVehicle(hass, model, "vertical", 1);
+  assert.match(live, /> · 6m<\/text>/);
+  assert.doesNotMatch(live, /Last 104|Last 77|Offline 6h/);
+  delete tire.lastReceived;
+  hass.states[tire.pressure] = { state: "unavailable", attributes: { unit_of_measurement: "psi" } };
+  assert.match(renderVehicle(hass, model, "vertical", 1), /Offline; last valid reading unknown/);
+});
+
+test("last-received registry roles are discovered and watched without becoming numeric readings", () => {
+  const { hass, rv } = completeFixture();
+  const pressure = Object.values(hass.entities).find((entry) => entry.translation_key === "tire_pressure");
+  const id = "sensor.arbitrarily_renamed_received";
+  hass.entities = { ...hass.entities, [id]: {
+    entity_id: id, platform: "havrv", device_id: pressure.device_id, translation_key: "tire_last_received",
+  } };
+  const model = buildModel(hass, rv);
+  assert.equal(model.axles[0].left[0].lastReceived, id);
+  assert.ok(model.watched.includes(id));
+  assert.ok(!visibleModel(model, { show_tires: false }).watched.includes(id));
+});
+
+test("unmapped optional tire mirrors do not falsely report a temperature or battery outage", () => {
+  const { hass, model } = completeFixture();
+  const tire = model.axles[0].left[0];
+  const temperature = hass.states[tire.temperature];
+  temperature.state = "unavailable";
+  temperature.attributes.source_entity_id = null;
+  tire.battery = "sensor.unmapped_battery";
+  hass.states[tire.battery] = { state: "unavailable", attributes: { source_entity_id: null } };
+  for (const orientation of ["horizontal", "vertical"]) {
+    let svg = renderVehicle(hass, model, orientation, 1);
+    assert.doesNotMatch(svg, /Temp offline|Battery offline/);
+    temperature.attributes.source_entity_id = "sensor.configured_but_not_yet_valid";
+    svg = renderVehicle(hass, model, orientation, 1);
+    assert.match(svg, /Temp offline \?/);
+    temperature.attributes.source_entity_id = null;
+  }
+});
+
+test("remapping immediately invalidates report ages and retained values from another source", () => {
+  const { hass, model } = completeFixture();
+  const tire = model.axles[0].left[0];
+  const id = tire.pressure;
+  const state = hass.states[id];
+  state.last_reported = new Date(Date.now() - 7200000).toISOString();
+  state.attributes.source_entity_id = "sensor.original_tpms";
+  const card = new HavrvRvCard();
+  card.setConfig({});
+  card.hass = hass;
+  assert.ok(card._readingHistory.has(id));
+  state.state = "unavailable";
+  Object.assign(state.attributes, {
+    source_entity_id: "sensor.replacement_tpms", last_valid_source: "sensor.original_tpms",
+    last_valid_value: 98, last_valid_unit: "psi", last_valid_time: state.last_reported,
+  });
+  card.hass = { ...hass };
+  assert.equal(card._readingHistory.has(id), false);
+  assert.equal(tireReading(hass, id, "pressure"), undefined);
+  const row = [...card.shadowRoot.innerHTML.matchAll(/<g class="row"[\s\S]*?<\/g>/g)]
+    .find(([row]) => row.includes(`data-entity="${id}"`))[0];
+  assert.match(row, /Offline; last valid reading unknown/);
+  assert.doesNotMatch(row, /Last 98|2h/);
+});
+
+test("card batches Recorder history, caches it and exposes failures without losing readings", async () => {
+  const { hass } = completeFixture();
+  const requests = [];
+  const now = Date.now();
+  hass.callWS = async (message) => {
+    requests.push(message);
+    return Object.fromEntries(message.entity_ids.map((id) => [id, [
+      { s: "100", lu: (now - 3000000) / 1000, a: { unit_of_measurement: "psi" } },
+      { s: "102", lu: (now - 600000) / 1000, a: { unit_of_measurement: "psi" } },
+    ]]));
+  };
+  const card = new HavrvRvCard();
+  card.isConnected = true;
+  card.setConfig({});
+  card.hass = hass;
+  await card._historyRequest;
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "history/history_during_period");
+  assert.equal(Date.parse(requests[0].end_time) - Date.parse(requests[0].start_time), 3600000);
+  assert.equal(requests[0].include_start_time_state, false);
+  assert.equal(requests[0].minimal_response, false);
+  assert.equal(requests[0].no_attributes, false);
+  assert.equal(requests[0].entity_ids.length, 16);
+  assert.match(card.shadowRoot.innerHTML, /class="pressure-sparkline"/);
+  card.hass = { ...hass };
+  assert.equal(requests.length, 1);
+  hass.callWS = async () => { throw { code: "history_disabled", message: "Recorder disabled" }; };
+  card._historyUpdated = 0;
+  card.hass = hass;
+  await card._historyRequest;
+  assert.match(card.shadowRoot.innerHTML, /Pressure history unavailable: Recorder disabled/);
+  assert.match(card.shadowRoot.innerHTML, />102<\/tspan>/);
+  card.setConfig({ show_tires: false });
+  assert.equal(card._pressureHistory.size, 0);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="pressure-sparkline|Pressure history unavailable:/);
+  card.disconnectedCallback();
+});
+
+test("late history cannot repopulate removed mappings or disconnected cards", async () => {
+  const { hass } = completeFixture();
+  let resolve;
+  hass.callWS = () => new Promise((done) => { resolve = done; });
+  const card = new HavrvRvCard();
+  card.isConnected = true;
+  card.setConfig({});
+  card.hass = hass;
+  const pending = card._historyRequest;
+  card.setConfig({ show_tires: false });
+  resolve({});
+  await pending;
+  assert.equal(card._pressureHistory.size, 0);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="pressure-sparkline/);
+  card.setConfig({});
+  const pendingDisconnect = card._historyRequest;
+  card.disconnectedCallback();
+  const revision = card._historyRevision;
+  resolve({});
+  await pendingDisconnect;
+  assert.equal(card._historyRevision, revision);
+});
+
+test("source remapping rejects late requests and Recorder samples from the previous source", async () => {
+  const { hass, model } = completeFixture();
+  const id = model.axles[0].left[0].pressure;
+  const now = Date.now();
+  hass.states[id].attributes.last_valid_source = "sensor.original_tpms";
+  hass.states[id].attributes.last_valid_time = new Date(now - 60000).toISOString();
+  const pending = [];
+  hass.callWS = () => new Promise((resolve) => pending.push(resolve));
+  const card = new HavrvRvCard();
+  card.isConnected = true;
+  card.setConfig({});
+  card.hass = hass;
+  const first = card._historyRequest;
+  hass.states[id].attributes.last_valid_source = "sensor.replacement_tpms";
+  card.hass = { ...hass };
+  const second = card._historyRequest;
+  const sample = (value, minutes, source) => ({
+    s: String(value), lu: (now - minutes * 60000) / 1000,
+    a: { unit_of_measurement: "psi", last_valid_source: source },
+  });
+  pending[0]({ [id]: [sample(999, 30, "sensor.original_tpms")] });
+  await first;
+  assert.ok(card._pressureHistory.get(id).every((point) => point.value !== 999));
+  pending[1]({ [id]: [
+    sample(999, 30, "sensor.original_tpms"), sample(100, 20, "sensor.replacement_tpms"),
+    sample(101, 10, "sensor.replacement_tpms"),
+  ] });
+  await second;
+  assert.deepEqual(card._pressureHistory.get(id).map((point) => point.value), [100, 101, 102]);
+  assert.match(card.shadowRoot.innerHTML, /class="pressure-sparkline"/);
+  card.disconnectedCallback();
+});
+
 test("each tire row, tank and electrical box reports missing-channel age and recovers", () => {
   const { hass, model } = completeFixture();
   const now = Date.now();
@@ -1374,9 +1645,11 @@ test("each tire row, tank and electrical box reports missing-channel age and rec
   for (const id of ids) hass.states[id].state = "unavailable";
   for (const orientation of ["horizontal", "vertical"]) {
     const svg = renderVehicle(hass, model, orientation, 1);
-    assert.equal((svg.match(/class="data-age" role="img" aria-label="Last data 2h ago"/g) || []).length, 24);
+    assert.equal((svg.match(/class="data-age" role="img" aria-label="Last data 2h ago"/g) || []).length, 8);
+    assert.equal((svg.match(/class="tire-age"/g) || []).length, 16);
+    assert.equal((svg.match(/> · Offline 2h<\/text>/g) || []).length, 16);
     const labels = [...svg.matchAll(/<g class="data-age"[\s\S]*?<\/g>/g)].map(([label]) => label);
-    assert.equal(labels.length, 24);
+    assert.equal(labels.length, 8);
     for (const label of labels) {
       assert.match(label, /<title>Last data 2h ago<\/title>/);
       assert.match(label, /class="age-clock"/);
@@ -1390,7 +1663,7 @@ test("each tire row, tank and electrical box reports missing-channel age and rec
     }
     for (const [row] of svg.matchAll(/<g class="row"[\s\S]*?<\/g>/g)) {
       const baseline = /class="row-pressure"[^>]+ y="([^"]+)"/.exec(row)?.[1];
-      const ageBaseline = /class="data-age"[^>]+transform="translate\([^ ]+ ([^)]+)\)"/.exec(row)?.[1];
+      const ageBaseline = /class="tire-age"[^>]+ y="([^"]+)"/.exec(row)?.[1];
       assert.equal(ageBaseline, baseline);
     }
     for (const [tank] of svg.matchAll(/<g class="tank-label [\s\S]*?<\/g>/g)) {

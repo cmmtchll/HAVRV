@@ -33,9 +33,12 @@ The layout follows the RV profile:
 - An optional tag axle, drawn behind the drive axles.
 - Dual positions show outer (**O**) and inner (**I**) readings on one label.
 - Pressure and temperature always share one line per tire, including single
-  wheels. Labels grow for long readings and use outward lanes for crowded axles.
+  wheels, together with a thin one-hour pressure sparkline and optional reception
+  age. Unavailable readings can show muted, explicitly labeled **Last** values.
+  Labels grow for long readings and use outward lanes for crowded axles.
   Tight labels can omit the pressure unit or compact the temperature rather than
-  moving it to a second line. Missing measurements show no data independently.
+  moving it to a second line. Missing measurements without retained values show
+  no data independently.
 - Only the fresh, gray, and black water tanks that you configured are drawn.
   A capacity or level source defines a tank; thresholds alone do not. Clear
   both capacity and source and apply changes to remove it from the overview
@@ -128,17 +131,17 @@ dashboard resource, and reset the browser/app cache. See the
 
 ### Missing readings and last-data age
 
-Tire labels (one age per wheel on duals), tank labels and electrical boxes show
+Tank labels and electrical boxes show
 a small clock followed by **15s / 8m / 2h / 3d** when a mapped reading is missing,
 invalid, unknown or unavailable. It follows **No data** on the same baseline,
 not on an extra row. Narrow tanks use **dash + clock + age** beside the missing
-percentage; tire rows use the dash when pressure alone is missing.
+percentage.
 Hover for the full **Last data 2h ago** tooltip. Screen readers
 receive the same full wording. Electrical ages also include mapped Enabled, Charging,
 Warning and Problem statuses. Healthy readings stay visible independently of
 missing channels; ages do not change advisory colors or invent replacement values.
 Electrical measurements show their own ages, while a header indicator covers
-missing mapped Enabled/Warning/Problem statuses. Tire and tank indicators use
+missing mapped Enabled/Warning/Problem statuses. Tank indicators use
 the oldest known timestamp among their missing channels.
 If a missing channel has no known valid timestamp, its indicator instead reads
 **clock + ?**, with **Last data unknown** in its tooltip and accessible label.
@@ -149,10 +152,70 @@ The card remembers valid Home Assistant reports while that card is open, using
 `last_reported` (falling back to `last_updated`/`last_changed` when necessary).
 It never treats the timestamp of an unavailable state as the last valid reading.
 Ages refresh every 30 seconds while connected. This is an observation cache, not
-Recorder history: refreshing the page, recreating the card or hiding/removing a
-mapping clears the affected timestamps. An already-unavailable entity therefore
+Recorder history for tanks/electrical readings: refreshing the page, recreating
+the card or hiding/removing a mapping clears the affected timestamps.
+An already-unavailable entity therefore
 has an unknown last-valid age until a valid report is observed. These timestamps
 describe HAVRV entity reports, not guaranteed physical-device communication.
+
+### Tire trends and reception age
+
+Every tire keeps all measurements and status on **one line**, including each
+inner/outer wheel in a dual pair:
+
+| State | Example row |
+| --- | --- |
+| Current | **103.7 psi** · thin pressure line · **77.0 °F** · **6m** |
+| Unavailable with retained readings | **Last 103.7 psi** · **77.0 °F** · **Offline 6h** |
+| Pressure available, temperature unavailable | **103.7 psi** · **Last 77.0 °F** · **Temp offline 12m** |
+| No prior reading or known reception | **—** · **No data** · **Offline ?** |
+
+The sparkline is a thin, unfilled line with no bars, axes, dots or extra
+controls. It shows pressure only, over the **last hour** on a real time axis;
+temperature stays numeric. Recorded unavailable/invalid states break the line.
+The trace ends at the last valid sample, never extends a stale reading to the
+present, and disappears when there are fewer than two connected samples in
+that hour. Its vertical range adapts to the readings; it is a visual trend,
+not a pressure-loss alarm or a way to compare magnitudes between tires.
+Hover for its range, or select it/pressure to open the pressure entity's history.
+The card batches visible pressure history requests once per minute and adds
+real reports observed while open. Backfilling the preceding hour requires
+History/Recorder with these entities included in recording. Without recorded
+history, only observed samples can supply a line; no older data is invented.
+Request failures appear below the diagram without hiding readings. Hiding
+tires stops history requests and clears the affected observation cache.
+
+Configure an optional **Last received** timestamp source under **Tires** on
+the management page (or native options recovery flow). The row's age uses
+the timestamp **value**, not the pressure entity's `last_changed` or the time
+it became unavailable. **Offline 6h** means unavailable now, last received
+six hours ago; it does not assert a six-hour outage. Select the age to open
+the timestamp sensor; its tooltip gives the full meaning and exact timestamp.
+Mapped timestamps that are invalid/unavailable show **?** rather than falling
+back to an unrelated Home Assistant update time. An old reception time does
+not automatically recolor an otherwise available tire or invent a safety limit.
+
+When pressure or temperature becomes unavailable, its last valid reading is
+muted and labeled **Last**. When both readings are retained, one **Last**
+prefix covers the pair to save space. A hollow gray status dot indicates
+missing pressure unless an explicit advisory has higher priority. Current
+channels remain current; an old temperature does not hide a live pressure.
+Hover each retained number for its individual last-valid sample time.
+The tire-wide received timestamp does not claim both channels were sampled
+together. Retained values are never used as current data or to clear advisory
+states. Mirrors keep these historical attributes across reloads/restarts,
+and discard unrelated values when their mapped source changes.
+
+Without a Last received mapping, an offline row uses the oldest known
+last-valid time among its missing channels; this is a reading age, **not**
+verified physical reception. A missing channel with no known timestamp gives
+**?**. With no saved last-valid value, that channel stays **—**/**No data**.
+Existing mappings require no migration. Profile units and explicit entity
+unit overrides apply to retained readings and compatible recorded samples too.
+
+![Current, offline, partial and never-seen tire rows rendered horizontally](images/dashboard-tires-horizontal.png)
+
+<img src="images/dashboard-tires-vertical.png" alt="The same synthetic tire states in the vertical card, with one line per wheel" width="600">
 
 Readings use the units shown by the HAVRV entities, so they follow your RV
 profile's measurement system and any unit you set on an entity. Select a wheel,

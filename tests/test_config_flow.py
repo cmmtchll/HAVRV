@@ -373,6 +373,30 @@ def test_tire_options_accept_numeric_entity_domains(entity_id: str) -> None:
 
 @pytest.mark.parametrize(
     "domain",
+    ["sensor", "number", "input_number", "binary_sensor", "switch", "template"],
+)
+def test_tire_reception_timestamp_mapping(domain: str) -> None:
+    """Timestamp selectors are optional sensor-only, without numeric domain leakage."""
+    entry = _tire_profile_entry()
+    selectors = {
+        marker.schema: value for marker, value in _options_schema(entry).schema.items()
+    }
+    field = "tire_front_left_last_received"
+    assert selectors[field].config["domain"] == ["sensor"]
+    assert "device_class" not in selectors[field].config
+    options, error = _normalize_options({field: f"{domain}.radio_clock"}, entry)
+    if domain == "sensor":
+        assert error is None
+        assert options[CONF_TIRE_ENTITY_MAPPINGS]["front_left_last_received"] == (
+            "sensor.radio_clock"
+        )
+    else:
+        assert options == {}
+        assert error == "invalid_tire_entity_mapping"
+
+
+@pytest.mark.parametrize(
+    "domain",
     ["sensor", "number", "input_number", "binary_sensor", "input_boolean", "switch"],
 )
 def test_tire_battery_selector_and_validation_match(domain: str) -> None:

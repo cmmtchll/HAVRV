@@ -73,7 +73,7 @@ rules:
     comment: README.md documents installation methods and prerequisites; no integration-specific install parameters are required.
   entity-unavailable:
     status: done
-    comment: Mapped entities become unavailable when sources are absent or unavailable, tested in tests/test_entities.py; power readings also reject nonfinite/incompatible units and undefined Enabled, Charging, Warning and Problem states, with recovery/remapping/removal tested in tests/test_power.py. Optional GPS and travel readings reject invalid coordinates, nonfinite values and incompatible units with event-driven recovery in tests/test_travel.py.
+    comment: Mapped entities become unavailable when sources are absent or unavailable, tested in tests/test_entities.py; power readings also reject nonfinite/incompatible units and undefined Enabled, Charging, Warning and Problem states, with recovery/remapping/removal tested in tests/test_power.py. Optional GPS and travel readings reject invalid coordinates, nonfinite values and incompatible units with event-driven recovery in tests/test_travel.py. Tire last-valid metadata survives reloads without changing unavailable states or advisory inputs, and optional reception timestamps reject invalid/future values, covered in tests/test_tire_freshness.py; tests/test_power_dashboard.mjs covers historical-only display, unit conversion, one-hour history gaps and request lifecycle.
   integration-owner:
     status: done
     comment: An active code owner is declared in custom_components/havrv/manifest.json.

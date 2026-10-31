@@ -3,6 +3,7 @@
 import math
 from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -16,11 +17,20 @@ from homeassistant.const import (
     UnitOfArea,
     UnitOfTemperature,
 )
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    EventStateReportedData,
+    HomeAssistant,
+    callback,
+)
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_state_report_event,
+)
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import (
@@ -66,6 +76,7 @@ from .const import (
     TANK_PROBLEM,
     TANK_TYPES,
     TANK_WARNING,
+    TIRE_LAST_RECEIVED,
     TIRE_PRESSURE,
     TIRE_TEMPERATURE,
     UNIT_SYSTEM_METRIC,
@@ -692,7 +703,52 @@ class HavrvTankHistorySensor(HavrvTankDerivedSensor, RestoreEntity):
         self._last_percent = self._percent()
 
 
-class HavrvTireSensor(HavrvTireEntity, SensorEntity):
+def _tire_timestamp(value: object) -> datetime | None:
+    """Accept only actual timezone-aware timestamps that are not in the future."""
+    if not isinstance(value, str):
+        return None
+    try:
+        timestamp = dt_util.parse_datetime(value)
+    except ValueError:
+        return None
+    if (
+        timestamp is None
+        or timestamp.utcoffset() is None
+        or timestamp > dt_util.utcnow()
+    ):
+        return None
+    return timestamp
+
+
+class HavrvTireLastReceivedSensor(HavrvTireEntity, SensorEntity):
+    """Mirror an explicitly mapped reception timestamp, never a pressure update."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_translation_key = "tire_last_received"
+
+    def __init__(self, entry: HavrvConfigEntry, position: TirePosition) -> None:
+        """Associate a stable optional timestamp sensor with its tire."""
+        super().__init__(entry, position)
+        self._attr_unique_id = (
+            f"{entry.entry_id}_tire_{position.key}_{TIRE_LAST_RECEIVED}"
+        )
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Read a valid ISO datetime only from a sensor-domain timestamp source."""
+        source = source_entity_id(self._entry, self._position, TIRE_LAST_RECEIVED)
+        if source is None or source.partition(".")[0] != "sensor":
+            return None
+        state = self._source_state(TIRE_LAST_RECEIVED)
+        return None if state is None else _tire_timestamp(state.state)
+
+    @property
+    def available(self) -> bool:
+        """Keep unavailable and malformed timestamps unavailable."""
+        return self.native_value is not None
+
+
+class HavrvTireSensor(HavrvTireEntity, SensorEntity, RestoreEntity):
     """Expose a configured source reading on its generated tire device."""
 
     entity_description: SensorEntityDescription
@@ -716,6 +772,119 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
         )
         self._metric = metric
         self._attr_unique_id = f"{entry.entry_id}_tire_{position.key}_{metric}"
+        self._last_valid: dict[str, Any] = {}
+
+    async def async_added_to_hass(self) -> None:
+        """Restore only historical metadata, then capture a real current sample."""
+        await super().async_added_to_hass()
+        if self._metric not in (TIRE_PRESSURE, TIRE_TEMPERATURE):
+            return
+        if (state := await self.async_get_last_state()) is not None:
+            attributes = state.attributes
+            source = source_entity_id(self._entry, self._position, self._metric)
+            value = attributes.get("last_valid_value")
+            unit = attributes.get("last_valid_unit")
+            timestamp = _tire_timestamp(attributes.get("last_valid_time"))
+            converter = (
+                PressureConverter
+                if self._metric == TIRE_PRESSURE
+                else TemperatureConverter
+            )
+            target = self.native_unit_of_measurement
+            if (
+                source is not None
+                and attributes.get("last_valid_source") == source
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                and isinstance(unit, str)
+                and unit in converter.VALID_UNITS
+                and timestamp is not None
+            ):
+                converted = converter.convert(value, unit, target)
+                if math.isfinite(converted):
+                    self._last_valid = {
+                        "last_valid_value": converted,
+                        "last_valid_unit": target,
+                        "last_valid_time": timestamp.isoformat(),
+                        "last_valid_source": source,
+                    }
+        # Refresh HA's cached suggested units after profile edits; explicit user
+        # preferences remain in the separate public sensor options.
+        defaults = self.get_initial_entity_options()
+        assert defaults is not None
+        er.async_get(self.hass).async_update_entity_options(
+            self.entity_id, "sensor.private", defaults["sensor.private"]
+        )
+        self.async_registry_entry_updated()
+        self._capture_last_valid()
+        if source := source_entity_id(self._entry, self._position, self._metric):
+            self.async_on_remove(
+                async_track_state_report_event(
+                    self.hass, [source], self._async_on_source_reported
+                )
+            )
+
+    @callback
+    def _async_on_source_reported(self, event: Event[EventStateReportedData]) -> None:
+        """Capture identical reports too, without using unrelated channel times."""
+        self._capture_last_valid()
+        self.async_write_ha_state()
+
+    @callback
+    def _capture_last_valid(self) -> None:
+        """Retain finite real samples using the source's report/update time."""
+        if self._metric not in (TIRE_PRESSURE, TIRE_TEMPERATURE):
+            return
+        state = self._source_state(self._metric)
+        value = self.native_value
+        if (
+            state is None
+            or not isinstance(value, (float, int))
+            or not math.isfinite(value)
+        ):
+            return
+        timestamp = state.last_reported or state.last_updated
+        if timestamp.utcoffset() is None or timestamp > dt_util.utcnow():
+            return
+        self._last_valid = {
+            "last_valid_value": value,
+            "last_valid_unit": self.native_unit_of_measurement,
+            "last_valid_time": timestamp.isoformat(),
+            "last_valid_source": source_entity_id(
+                self._entry, self._position, self._metric
+            ),
+        }
+
+    @callback
+    def async_on_source_state_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Capture only this channel's real reports, never an outage timestamp."""
+        if event.data["entity_id"] == source_entity_id(
+            self._entry, self._position, self._metric
+        ):
+            self._capture_last_valid()
+        super().async_on_source_state_changed(event)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose historical native-unit metadata even while unavailable."""
+        return self._last_valid
+
+    @property
+    def capability_attributes(self) -> dict[str, Any]:
+        """Expose current mapping and retain metadata even while unavailable."""
+        attributes = dict(super().capability_attributes or {})
+        # HA 2026.10 drops extra_state_attributes for unavailable entities.
+        # Its capability-attribute hook is still included; keep the mirror
+        # unavailable and publish only historical metadata through that hook.
+        if not self.available:
+            attributes.update(self._last_valid)
+        attributes["source_entity_id"] = source_entity_id(
+            self._entry, self._position, self._metric
+        )
+        return attributes
 
     @property
     def native_value(self) -> float | str | None:
@@ -736,10 +905,14 @@ class HavrvTireSensor(HavrvTireEntity, SensorEntity):
         unit = state.attributes.get("unit_of_measurement")
         system = self._entry.runtime_data.measurement_system
         if self._metric == "pressure":
-            return pressure_in_profile_units(value, unit, system)
-        if self._metric == "temperature":
-            return temperature_in_profile_units(value, unit, system)
-        return value
+            normalized = pressure_in_profile_units(value, unit, system)
+        elif self._metric == "temperature":
+            normalized = temperature_in_profile_units(value, unit, system)
+        else:
+            normalized = value
+        return (
+            normalized if normalized is not None and math.isfinite(normalized) else None
+        )
 
     @property
     def available(self) -> bool:
@@ -1073,6 +1246,13 @@ async def async_setup_entry(
             HavrvTireSensor(entry, position, metric)
             for position in tire_positions(entry.data)
             for metric in ("pressure", "temperature", "battery")
+        ]
+    )
+    async_add_entities(
+        [
+            HavrvTireLastReceivedSensor(entry, position)
+            for position in tire_positions(entry.data)
+            if source_entity_id(entry, position, TIRE_LAST_RECEIVED) is not None
         ]
     )
     async_add_entities(

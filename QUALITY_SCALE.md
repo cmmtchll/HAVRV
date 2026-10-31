@@ -37,9 +37,15 @@ implemented integration behavior, not just repository configuration.
   from explicit Warning/Problem/Enabled mappings and distinct unavailable status,
   plus high-contrast equipment graphics with separate identity badges on the
   coach and an external shore plug. Vertical readouts use longitudinal space
-  before outward columns. Tire, tank and electrical labels show last-observed
+  before outward columns. Tank and electrical labels show last-observed
   valid-report ages for missing mapped channels, explicitly unknown when the
   current card has not observed a valid timestamp; this is not Recorder history.
+- Single-line tire rows with thin one-hour Recorder pressure sparklines,
+  explicit unavailable gaps, optional mapped Last received timestamp ages,
+  and explicitly labeled, muted Last pressure/temperature values. Historical
+  value/unit/source/time metadata survives reloads/restarts without making
+  unavailable readings current or healthy. Invalid reception timestamps remain
+  unknown; history errors are surfaced without hiding passthrough values.
 - Editable dimensions, tank capacities, and tank/tire limits exposed as number
   entities in Configuration on the main RV device, with other profile values
   exposed as read-only diagnostic sensors. Settings persist in the same

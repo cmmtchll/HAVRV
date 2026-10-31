@@ -239,11 +239,24 @@ old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
   those groups and their generated sections.
 - A gray wheel or tank has no pressure or percentage reading. Check its source
   entity, as described in the sections above.
-- The small **clock + age** reports a valid report previously observed by this
+- Tire rows show **Last** before retained numbers and **Offline** (or **Temp
+  offline**) with an age on the same line. The underlying sensor remains
+  unavailable; these are not live readings. Map each tire's **Last received**
+  timestamp sensor to use actual reception time. **?** means unknown, not a
+  new outage. Check that the source value is a timezone-aware ISO timestamp,
+  not relative text or a numeric age, and is not in the future. Without that
+  optional mapping the age describes missing channels' last valid samples.
+- If a pressure sparkline is absent, confirm History/Recorder is enabled and
+  the HAVRV pressure entity is recorded. It needs two connected valid samples
+  within the preceding hour; without Recorder backfill, it can only show reports
+  observed while the card is open. Old readings, excluded history and unavailable
+  gaps do not produce a fabricated trend. History request failures appear
+  explicitly below the drawing; live and retained numbers remain visible.
+- For tanks/electrical readings, the small **clock + age** reports a valid report previously observed by this
   card; hover for the full **Last data** tooltip. **Clock + ?** (**Last data unknown**
   in the tooltip) means at least one missing channel has no cached
   valid timestamp, often because the page opened after the outage or was
-  refreshed. It does not mean the outage just began. The card does not query
+  refreshed. It does not mean the outage just began. These ages do not query
   Recorder history; use the source entity's History for earlier reports.
 - Vertical electrical readouts now use free slots along the coach, rather than
   always pushing Shore into a second outside column. Very crowded layouts or
