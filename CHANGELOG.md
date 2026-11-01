@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.7
+
+- Recover RV card and dashboard/view strategy registration when Home Assistant
+  replaces its custom-element registry during startup. Recheck after frontend
+  readiness and once after five seconds, without redefining known elements.
+- Mitigate intermittent "Custom element doesn't exist: havrv-rv-card" errors,
+  including in Companion. Failed module downloads or execution remain separate
+  issues; no manual resource, configuration changes, or entity migration needed.
+
 ## 0.5.6
 
 - Keep all tire data on one line per wheel, with a thin one-hour pressure

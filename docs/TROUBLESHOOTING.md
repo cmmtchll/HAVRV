@@ -225,6 +225,14 @@ old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
 
 ## The RV card or dashboard is missing or wrong
 
+- HAVRV 0.5.7 rechecks card and strategy registration after Home Assistant's
+  frontend becomes ready, with one delayed fallback. This mitigates a startup
+  race where Home Assistant replaces its custom-element registry after the
+  HAVRV module loads, causing "Custom element doesn't exist: havrv-rv-card".
+  It does not repair failed downloads or incompatible browser engines.
+  If Companion fails while a browser works, update Android System WebView and
+  Companion, compare the same server URL, and inspect WebView console/network
+  errors if the issue persists after upgrading HAVRV and restarting.
 - If **HAVRV RV overview** is not offered when adding a card, or a dashboard
   shows "Custom element doesn't exist", restart Home Assistant after installing
   or updating HAVRV. Then refresh the browser, clearing its cache if needed.

@@ -21,8 +21,9 @@ const elements = new Map();
 globalThis.customElements = {
   get: (key) => elements.get(key),
   define: (key, value) => elements.set(key, value),
+  whenDefined: () => new Promise(() => {}),
 };
-globalThis.window = {};
+globalThis.window = { setTimeout: () => 0 };
 globalThis.requestAnimationFrame = () => 1;
 globalThis.cancelAnimationFrame = () => {};
 const text = await readFile(
@@ -36,6 +37,127 @@ const {
   rememberReadings, missingReadingText,
   convertTireValue, tireReading, pressureSparkline, pressureHistory,
 } = await import(`data:text/javascript;base64,${Buffer.from(text).toString("base64")}`);
+
+const dashboardTags = [
+  "havrv-rv-card",
+  "ll-strategy-dashboard-havrv",
+  "ll-strategy-view-havrv",
+];
+let registrationImport = 0;
+
+async function registrationFixture(t, ready = false) {
+  const registered = new Map();
+  const calls = [];
+  let signalReady;
+  let fallback;
+  const boot = ready ? Promise.resolve() : new Promise((resolve) => { signalReady = resolve; });
+  const registry = {
+    get: (tag) => registered.get(tag),
+    define: (tag, element) => {
+      assert.ok(!registered.has(tag), `Duplicate registration: ${tag}`);
+      registered.set(tag, element);
+      calls.push(tag);
+    },
+    whenDefined: (tag) => {
+      assert.equal(tag, "home-assistant");
+      return boot;
+    },
+  };
+  const originalRegistry = globalThis.customElements;
+  globalThis.customElements = registry;
+  t.after(() => { globalThis.customElements = originalRegistry; });
+  t.mock.method(window, "setTimeout", (callback, delay) => {
+    assert.equal(delay, 5000);
+    fallback = callback;
+    return 0;
+  });
+  const info = t.mock.method(console, "info", () => {});
+  const error = t.mock.method(console, "error", () => {});
+  const source = `${text}\n// registration test ${++registrationImport}`;
+  await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+  return { registered, calls, signalReady, fallback, info, error };
+}
+
+test("dashboard registration is immediate and repeated checks do not redefine elements", async (t) => {
+  const { registered, calls, signalReady, fallback, info } = await registrationFixture(t);
+  assert.deepEqual(calls, dashboardTags);
+  signalReady();
+  await Promise.resolve();
+  fallback();
+  assert.deepEqual(calls, dashboardTags);
+  assert.equal(registered.size, 3);
+  assert.equal(info.mock.callCount(), 0);
+});
+
+test("HA boot recovers all dashboard elements after a registry replacement", async (t) => {
+  const { registered, calls, signalReady, fallback, info } = await registrationFixture(t);
+  const constructors = new Map(registered);
+  const replacement = new Map();
+  globalThis.customElements = {
+    get: (tag) => replacement.get(tag),
+    define: (tag, element) => {
+      assert.ok(!replacement.has(tag));
+      replacement.set(tag, element);
+    },
+  };
+  signalReady();
+  await Promise.resolve();
+  assert.deepEqual(replacement, constructors);
+  fallback();
+  assert.equal(info.mock.callCount(), 3);
+  assert.deepEqual(calls, dashboardTags);
+});
+
+test("fallback recovers registration without a boot signal and preserves existing elements", async (t) => {
+  const { registered, calls, fallback, info } = await registrationFixture(t);
+  const card = registered.get(dashboardTags[0]);
+  registered.clear();
+  registered.set(dashboardTags[0], card);
+  fallback();
+  fallback();
+  assert.equal(registered.get(dashboardTags[0]), card);
+  assert.deepEqual(calls, [...dashboardTags, ...dashboardTags.slice(1)]);
+  assert.equal(info.mock.callCount(), 2);
+});
+
+test("a module loaded after HA boot remains registered without duplicates", async (t) => {
+  const { calls, fallback, info } = await registrationFixture(t, true);
+  fallback();
+  assert.deepEqual(calls, dashboardTags);
+  assert.equal(info.mock.callCount(), 0);
+});
+
+test("duplicate resource URLs preserve registered constructors and picker entries", async (t) => {
+  const { registered, calls, fallback } = await registrationFixture(t);
+  const constructors = new Map(registered);
+  const cards = window.customCards.length;
+  const strategies = window.customStrategies.length;
+  const source = `${text}\n// duplicate registration test ${++registrationImport}`;
+  await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+  fallback();
+  assert.deepEqual(registered, constructors);
+  assert.deepEqual(calls, dashboardTags);
+  assert.equal(window.customCards.length, cards);
+  assert.equal(window.customStrategies.length, strategies);
+});
+
+test("registration recovery reports errors and continues restoring other elements", async (t) => {
+  const { registered, fallback, error } = await registrationFixture(t);
+  registered.clear();
+  const failure = new Error("Registry rejected the card");
+  const define = globalThis.customElements.define;
+  t.mock.method(globalThis.customElements, "define", (tag, element) => {
+    if (tag === dashboardTags[0]) throw failure;
+    define(tag, element);
+  });
+  fallback();
+  assert.equal(error.mock.callCount(), 1);
+  assert.deepEqual(error.mock.calls[0].arguments, [
+    "HAVRV: could not restore havrv-rv-card registration", failure,
+  ]);
+  assert.ok(registered.has(dashboardTags[1]));
+  assert.ok(registered.has(dashboardTags[2]));
+});
 
 function fixture() {
   const rv = {

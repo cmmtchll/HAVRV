@@ -11,7 +11,11 @@ devices, runtime tow controls, a management page, and an RV overview dashboard.
 Notifications, integration-specific triggers and conditions, and physical-device
 discovery are not implemented. No Home Assistant quality tier is claimed.
 
-**Current release: 0.5.3.** Tire battery alarms now follow their Home Assistant
+**Current release: 0.5.7.** Dashboard registration now recovers from Home
+Assistant's startup custom-element registry replacement, reducing intermittent
+"Custom element doesn't exist" errors. See
+[dashboard loading troubleshooting](docs/TROUBLESHOOTING.md#the-rv-card-or-dashboard-is-missing-or-wrong).
+Tire battery alarms now follow their Home Assistant
 device-class polarity, and valid boolean battery readings no longer show false
 missing-data badges. Every RV has a **Tow** device with restorable
 Towing, Car/Trailer, and Weight controls. The overview draws the selected tow

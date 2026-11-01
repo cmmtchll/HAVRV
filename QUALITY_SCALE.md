@@ -78,6 +78,8 @@ implemented integration behavior, not just repository configuration.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
 - Ruff, pytest, a 96% integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.
+- Dashboard card/strategy registration recovery after frontend registry
+  replacement, with a bounded startup fallback and Node regression tests.
 
 These foundations do not mean all Bronze rules are complete. Mapping is
 currently user-selected and limited to sensors, numbers, input-number helpers, binary sensors, switches,

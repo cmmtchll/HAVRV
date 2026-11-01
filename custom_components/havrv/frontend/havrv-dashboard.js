@@ -1973,6 +1973,26 @@ define(CARD_TYPE, HavrvRvCard);
 define(`ll-strategy-dashboard-${STRATEGY_TYPE}`, HavrvDashboardStrategy);
 define(`ll-strategy-view-${STRATEGY_TYPE}`, HavrvViewStrategy);
 
+// HA can replace its custom-element registry after extra modules have loaded.
+const recoverRegistration = () => {
+  for (const [tag, element] of [
+    [CARD_TYPE, HavrvRvCard],
+    [`ll-strategy-dashboard-${STRATEGY_TYPE}`, HavrvDashboardStrategy],
+    [`ll-strategy-view-${STRATEGY_TYPE}`, HavrvViewStrategy],
+  ]) {
+    if (customElements.get(tag)) continue;
+    try {
+      define(tag, element);
+      console.info(`HAVRV: restored ${tag} in the current custom-element registry`);
+    } catch (error) {
+      console.error(`HAVRV: could not restore ${tag} registration`, error);
+    }
+  }
+};
+
+customElements.whenDefined("home-assistant").then(recoverRegistration);
+window.setTimeout(recoverRegistration, 5000);
+
 window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === CARD_TYPE)) {
   window.customCards.push({

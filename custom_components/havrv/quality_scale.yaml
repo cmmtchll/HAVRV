@@ -118,7 +118,7 @@ rules:
     comment: README.md lists supported source domains, mirrored attributes, controls, availability, and update behavior.
   docs-troubleshooting:
     status: done
-    comment: README.md provides troubleshooting guidance for missing mappings, unavailable sources, controls, tire readings, and profile values.
+    comment: README.md provides troubleshooting guidance for missing mappings, unavailable sources, controls, tire readings, and profile values. docs/TROUBLESHOOTING.md documents dashboard startup registry recovery and remaining loading failures; tests/test_power_dashboard.mjs covers registry replacement, bounded fallback, duplicate loading, and explicit recovery errors.
   docs-use-cases:
     status: done
     comment: README.md describes profile reference, system grouping, and entity-independent automation use cases.
