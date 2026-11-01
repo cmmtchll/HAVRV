@@ -8,6 +8,11 @@ HAVRV includes an RV overview card and a dashboard generated from your RV
 profile. Both are installed with the integration. You do not need a separate
 HACS frontend download or a Lovelace resource.
 
+The module rechecks card and strategy registration after Home Assistant's
+frontend becomes ready, with one five-second fallback to mitigate startup
+registry replacement. Failed downloads still require troubleshooting; see
+[dashboard loading errors](TROUBLESHOOTING.md#the-rv-card-or-dashboard-is-missing-or-wrong).
+
 ![Horizontal HAVRV overview with a towed car, tires, tanks, battery banks and two-line shore power](images/dashboard-horizontal.png)
 
 These rendered examples use synthetic source readings, not a particular RV's
