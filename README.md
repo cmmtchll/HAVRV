@@ -62,7 +62,9 @@ choose existing entities, and configure optional tank and tire monitoring.
   on=problem; other boolean sources use on=OK.
   Optional per-tire **Last received** timestamp sources supply actual reception
   ages. Tire rows keep pressure, a thin one-hour pressure sparkline, temperature,
-  and age on one line; unavailable readings retain explicitly labeled **Last**
+  and age on one line. Trends use a 1.25 psi visual deadband and predictable
+  3 psi scale steps (equivalent in other units); exact readings stay unchanged.
+  Unavailable readings retain explicitly labeled **Last**
   values without becoming current or healthy readings.
 - Adds an Operations device with an operation-mode selector (Storage,
   Driving, Campsite full service, Campsite minimal, or Maintenance).

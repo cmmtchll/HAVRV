@@ -1532,7 +1532,7 @@ test("pressure sparklines use a true one-hour time axis, thin paths and outage b
     sample(20, 103), sample(-1, 200),
   ], "psi", 0, 0, 60, now);
   assert.match(svg, /class="pressure-sparkline"/);
-  assert.match(svg, /d="M0 -4 L10 -7.3  M30 -10.7 L40 -14"/);
+  assert.match(svg, /d="M0 -5.7 L10 -5.7  M30 -12.3 L40 -12.3"/);
   assert.doesNotMatch(svg, /L60|NaN|Infinity|<rect|<circle/);
   assert.match(svg, /past hour/);
   assert.match(text, /\.pressure-sparkline \{ fill: none;/);
@@ -1540,6 +1540,56 @@ test("pressure sparklines use a true one-hour time axis, thin paths and outage b
   assert.match(flat, /M0 -9 L30 -9/);
   const converted = pressureSparkline([sample(60, 100), sample(30, 689.4757, "kPa")], "psi", 0, 0, 60, now);
   assert.match(converted, /M0 -9 L30 -9/);
+});
+
+test("pressure trends suppress screenshot-sized noise but retain cumulative changes and reversals", () => {
+  const now = Date.parse("2026-10-31T12:00:00Z");
+  const render = (values) => pressureSparkline(values.map((value, index) => ({
+    time: now - (60 - index * 10) * 60000, value, unit: "psi",
+  })), "psi", 0, 0, 60, now);
+  for (const values of [
+    [103.34, 103.52, 103.34, 103.70],
+    [97.18, 96.81, 97.18, 96.81],
+    [100, 101.25, 98.75, 100],
+  ]) {
+    assert.match(render(values), /d="M0 -9 L10 -9 L20 -9 L30 -9"/);
+  }
+  assert.match(render([100, 100.5, 101, 101.26]), /M0 -6.9 L10 -6.9 L20 -6.9 L30 -11.1/);
+  assert.match(render([100, 99.5, 99, 98.74]), /M0 -11.1 L10 -11.1 L20 -11.1 L30 -6.9/);
+  assert.match(render([100, 101.5, 100]), /M0 -6.5 L10 -11.5 L20 -6.5/);
+  const gap = render([100, 100.2, null, 100.8, 101]);
+  assert.match(gap, /M0 -7.7 L10 -7.7  M30 -10.3 L40 -10.3/);
+  assert.match(render([103.34, 103.70]), /103\.34–103\.70 psi/);
+});
+
+test("pressure trend scales expand in three psi steps and are physically identical across units", () => {
+  const now = Date.parse("2026-10-31T12:00:00Z");
+  const render = (values, unit = "psi") => pressureSparkline(values.map((value, index) => ({
+    time: now - (60 - index * 10) * 60000,
+    value: convertTireValue(value, "psi", unit, "pressure"), unit,
+  })), unit, 0, 0, 60, now);
+  assert.match(render([100, 103]), /M0 -4 L10 -14/);
+  assert.match(render([100, 103]), /Display scale: 100\.00–103\.00 psi/);
+  assert.match(render([100, 103.1]), /Display scale: 98\.55–104\.55 psi/);
+  assert.match(render([100, 106.1]), /Display scale: 98\.55–107\.55 psi/);
+  assert.match(render([100, 130]), /M0 -4 L10 -14/);
+  for (const values of [
+    [100, 100.3, 101.25], [100, 99.5, 98.75], [100, 100.5, 101.26],
+    [100, 103], [100, 106], [100, 130], [0, 3], [100, 103.1],
+  ]) {
+    const path = render(values).match(/d="([^"]+)"/)[1];
+    for (const unit of ["kPa", "bar", "Pa"]) {
+      assert.equal(render(values, unit).match(/d="([^"]+)"/)[1], path);
+    }
+    assert.equal(render(values.map((value) => value + 20)).match(/d="([^"]+)"/)[1], path);
+  }
+  const mixed = pressureSparkline([
+    { time: now - 3600000, value: 100, unit: "psi" },
+    { time: now - 1800000, value: convertTireValue(100.4, "psi", "kPa", "pressure"), unit: "kPa" },
+    { time: now, value: convertTireValue(101.5, "psi", "bar", "pressure"), unit: "bar" },
+  ], "kPa", 0, 0, 60, now);
+  assert.match(mixed, /M0 -6.5 L30 -6.5 L60 -11.5/);
+  assert.equal(render([100, 102], "bogus"), "");
 });
 
 test("compressed Recorder history keeps invalid-state gaps and real source timestamps", () => {

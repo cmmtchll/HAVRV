@@ -180,9 +180,21 @@ controls. It shows pressure only, over the **last hour** on a real time axis;
 temperature stays numeric. Recorded unavailable/invalid states break the line.
 The trace ends at the last valid sample, never extends a stale reading to the
 present, and disappears when there are fewer than two connected samples in
-that hour. Its vertical range adapts to the readings; it is a visual trend,
-not a pressure-loss alarm or a way to compare magnitudes between tires.
-Hover for its range, or select it/pressure to open the pressure entity's history.
+that hour. A **1.25 psi visual deadband** holds the line at its last meaningful
+value until pressure moves **more than 1.25 psi** in either direction. Gradual
+changes accumulate against that value, rather than being discarded at each
+report; a gap resets it. Exact numeric readings, recorded history and advisory
+checks are unchanged.
+
+The vertical span starts at **3 psi** and expands in **3 psi steps**
+(3, 6, 9, ...), centered on the plotted minimum and maximum. It never stretches
+tiny fluctuations to fill the height. Deadband and scale use equivalent physical
+pressure in every display unit (1.25 psi is about 8.62 kPa; 3 psi is about
+20.68 kPa). Hover for the actual recorded range and display-scale bounds in the
+entity's display unit, or select it/pressure to open the unfiltered entity history.
+This is a visual trend, not a pressure-loss alarm; compare scale bounds before
+comparing magnitudes between tires. Home Assistant's own history dialog controls
+its separate graph scale.
 The card batches visible pressure history requests once per minute and adds
 real reports observed while open. Backfilling the preceding hour requires
 History/Recorder with these entities included in recording. Without recorded

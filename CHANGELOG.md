@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Calm tire pressure sparklines with a 1.25 psi visual deadband and predictable
+  3 psi scale steps, equivalent in other display units. Preserve cumulative
+  trends, unavailable gaps, exact readings and advisory checks; show actual
+  recorded range and display-scale bounds in the tooltip.
+
 ## 0.5.7
 
 - Recover RV card and dashboard/view strategy registration when Home Assistant

@@ -331,6 +331,9 @@ retained readings. The overview labels retained values **Last**, keeps
 currently available channels visible, and shows age/availability on the same
 line. A thin pressure-only sparkline covers the preceding hour of Recorder
 data, with explicit breaks at unavailable states and no extrapolation to now.
+Its visual deadband is 1.25 psi and its vertical span expands in 3 psi steps,
+converted consistently for other display units; numeric readings and advisory
+checks remain unfiltered.
 See [tire trends and reception age](DASHBOARD.md#tire-trends-and-reception-age).
 
 Tire readings are read-only mirrors. HAVRV does not discover or control TPMS

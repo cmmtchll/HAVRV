@@ -86,6 +86,7 @@ const STR = {
   pressure: "Pressure",
   temperature: "Temperature",
   pressureTrend: "Pressure trend, past hour",
+  pressureScale: "Display scale",
   historyGaps: "Gaps mean no data.",
   historyUnavailable: (reason) => `Pressure history unavailable: ${reason}`,
   receivedAge: (status, age) => `${status ? `${status}; last received` : "Received"} ${age}`,
@@ -378,6 +379,8 @@ function formatState(hass, entityId) {
 const readingHistory = new WeakMap();
 const tireHistory = new WeakMap();
 const HOUR = 3600000;
+const PRESSURE_TREND_DEADBAND_PSI = 1.25;
+const PRESSURE_TREND_SCALE_STEP_PSI = 3;
 
 function tireSource(hass, entityId) {
   const attributes = stateOf(hass, entityId)?.attributes || {};
@@ -439,16 +442,33 @@ export function tireReading(hass, entityId, metric, now = Date.now()) {
 /** One hour, real timestamps and explicit breaks; do not extend stale samples. */
 export function pressureSparkline(samples, unit, x, y, width = 32, now = Date.now()) {
   const cutoff = now - HOUR;
+  // Unit-conversion roundoff must not cross a deadband or scale-step boundary.
+  const tolerance = (a, b) => Number.EPSILON * Math.max(1, Math.abs(a), Math.abs(b)) * 8;
+  let anchor;
   const points = (samples || []).filter((sample) => sample.time >= cutoff && sample.time <= now)
-    .map((sample) => ({
-      time: sample.time,
-      value: sample.value === null ? undefined : convertTireValue(sample.value, sample.unit, unit, "pressure"),
-    }));
+    .map((sample) => {
+      const value = sample.value === null ? undefined
+        : convertTireValue(sample.value, sample.unit, "psi", "pressure");
+      if (!Number.isFinite(value)) {
+        anchor = undefined;
+        return { time: sample.time, value: undefined };
+      }
+      // Compare with the last meaningful value so slow, cumulative changes survive.
+      if (anchor === undefined
+        || Math.abs(value - anchor) > PRESSURE_TREND_DEADBAND_PSI + tolerance(value, anchor)) anchor = value;
+      return { time: sample.time, value: anchor, raw: value };
+    });
   const values = points.filter((point) => Number.isFinite(point.value));
   if (values.length < 2) return "";
-  const low = Math.min(...values.map((point) => point.value));
-  const high = Math.max(...values.map((point) => point.value));
-  const range = high - low;
+  const minimum = Math.min(...values.map((point) => point.value));
+  const maximum = Math.max(...values.map((point) => point.value));
+  const range = Math.max(1, Math.ceil((maximum - minimum - tolerance(minimum, maximum))
+    / PRESSURE_TREND_SCALE_STEP_PSI))
+    * PRESSURE_TREND_SCALE_STEP_PSI;
+  const low = (minimum + maximum - range) / 2;
+  const high = low + range;
+  const display = (value) => escapeHtml(formatNumber({}, convertTireValue(value, "psi", unit, "pressure"), 2));
+  if (!Number.isFinite(convertTireValue(low, "psi", unit, "pressure"))) return "";
   let drawing = false;
   let segments = 0;
   const path = points.map((point) => {
@@ -457,7 +477,7 @@ export function pressureSparkline(samples, unit, x, y, width = 32, now = Date.no
       return "";
     }
     const px = r1(x + (point.time - cutoff) / HOUR * width);
-    const py = r1(y - 4 - (range ? (point.value - low) / range * 10 : 5));
+    const py = r1(y - 4 - (point.value - low) / range * 10);
     const command = drawing ? "L" : "M";
     if (drawing) segments++;
     drawing = true;
@@ -465,7 +485,7 @@ export function pressureSparkline(samples, unit, x, y, width = 32, now = Date.no
   }).join(" ");
   if (!segments) return "";
   return `<path class="pressure-sparkline" d="${path}" role="img" aria-label="${STR.pressureTrend}">
-    <title>${STR.pressureTrend}; ${escapeHtml(formatNumber({}, low, 1))}–${escapeHtml(formatNumber({}, high, 1))} ${escapeHtml(unit)}. ${STR.historyGaps}</title>
+    <title>${STR.pressureTrend}; ${display(Math.min(...values.map((point) => point.raw)))}–${display(Math.max(...values.map((point) => point.raw)))} ${escapeHtml(unit)}. ${STR.pressureScale}: ${display(low)}–${display(high)} ${escapeHtml(unit)}. ${STR.historyGaps}</title>
   </path>`;
 }
 

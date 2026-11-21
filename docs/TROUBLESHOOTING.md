@@ -260,6 +260,11 @@ old IDs. Water-tank capacity sensors and read-only profile sensor IDs remain.
   observed while the card is open. Old readings, excluded history and unavailable
   gaps do not produce a fabricated trend. History request failures appear
   explicitly below the drawing; live and retained numbers remain visible.
+- A flat pressure sparkline is expected for changes of 1.25 psi or less from
+  the last meaningful plotted value. Its scale starts at 3 psi and expands in
+  3 psi steps (equivalent in other units). Hover for recorded range and scale;
+  open the pressure entity history for unfiltered fluctuations. This display
+  filtering does not change numeric readings or pressure problem checks.
 - For tanks/electrical readings, the small **clock + age** reports a valid report previously observed by this
   card; hover for the full **Last data** tooltip. **Clock + ?** (**Last data unknown**
   in the tooltip) means at least one missing channel has no cached

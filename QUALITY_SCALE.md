@@ -41,6 +41,8 @@ implemented integration behavior, not just repository configuration.
   valid-report ages for missing mapped channels, explicitly unknown when the
   current card has not observed a valid timestamp; this is not Recorder history.
 - Single-line tire rows with thin one-hour Recorder pressure sparklines,
+  a presentation-only 1.25 psi deadband and 3 psi stepped vertical spans
+  (equivalent across display units), leaving readings and advisory inputs intact,
   explicit unavailable gaps, optional mapped Last received timestamp ages,
   and explicitly labeled, muted Last pressure/temperature values. Historical
   value/unit/source/time metadata survives reloads/restarts without making
