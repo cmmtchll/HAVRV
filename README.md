@@ -12,9 +12,12 @@ an RV overview dashboard, and a separate driven-profile analysis widget.
 Notifications, integration-specific triggers and conditions, and physical-device
 discovery are not implemented. No Home Assistant quality tier is claimed.
 
-**Current release: 0.5.7.** Dashboard registration now recovers from Home
-Assistant's startup custom-element registry replacement, reducing intermittent
-"Custom element doesn't exist" errors. See
+**Current release: 0.6.1.** A separate driven-profile widget adds terrain/fuel
+visualization, recorded-time markers, 1h/8h/1d ranges and saved trips using only
+HAVRV-exposed readings. See [driven-profile analysis](docs/DASHBOARD.md#driven-profile-widget).
+Dashboard registration recovers from Home Assistant's startup custom-element
+registry replacement, reducing intermittent "Custom element doesn't exist"
+errors. See
 [dashboard loading troubleshooting](docs/TROUBLESHOOTING.md#the-rv-card-or-dashboard-is-missing-or-wrong).
 Tire battery alarms now follow their Home Assistant
 device-class polarity, and valid boolean battery readings no longer show false
