@@ -2,10 +2,12 @@
 
 from copy import deepcopy
 from datetime import timedelta
+from threading import get_ident
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -60,6 +62,12 @@ def entry_for(hass, system="metric", options=None):
     entry.add_to_hass(hass)
     entry.runtime_data = HavrvRuntimeData(name="RV", measurement_system=system)
     publish_outputs(hass, entry)
+
+    @callback
+    def publish_on_change(_event):
+        """Publish synthetic mirrors on Home Assistant's event-loop thread."""
+        publish_outputs(hass, entry)
+
     entry.async_on_unload(
         async_track_state_change_event(
             hass,
@@ -69,7 +77,7 @@ def entry_for(hass, system="metric", options=None):
                 "number.odometer",
                 "sensor.fuel",
             ],
-            lambda event: publish_outputs(hass, entry),
+            publish_on_change,
         )
     )
     return entry
@@ -77,6 +85,7 @@ def entry_for(hass, system="metric", options=None):
 
 def publish_outputs(hass, entry):
     """Stand in for registered HAVRV mirrors while isolating the collector tests."""
+    assert get_ident() == hass.loop_thread_id
     mappings = {
         "location": entry.options.get("operations_sources", {}).get("location"),
         "elevation": entry.options.get("operations_sources", {}).get("altitude"),
