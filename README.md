@@ -7,7 +7,8 @@ systems.
 
 > **Project status:** In active development. Implemented features include RV
 profiles, entity mappings, tank and tire monitoring, independent power-source
-devices, runtime tow controls, a management page, and an RV overview dashboard.
+devices, chassis counter history, runtime tow controls, a management page, and
+an RV overview dashboard.
 Notifications, integration-specific triggers and conditions, and physical-device
 discovery are not implemented. No Home Assistant quality tier is claimed.
 
@@ -44,8 +45,8 @@ choose existing entities, and configure optional tank and tire monitoring.
 ## What HAVRV does
 
 - Opens a dedicated management page from the integration entry's gear button,
-  with profile, power, tank, tire and system-mapping editors. Changes across
-  sections stay in one draft until **Apply changes**; no separate frontend
+  with profile, chassis, operations, power, tank, tire and system-mapping
+  editors. Changes across sections stay in one draft until **Apply changes**; no separate frontend
   installation or YAML is required. Initial setup asks only for a name and units.
 - Keeps coach details, dimensions, tank capacities, axle layout, and wheel
   configuration on an RV device.
@@ -71,6 +72,15 @@ choose existing entities, and configure optional tank and tire monitoring.
   Optional mapped GPS location (`device_tracker`), altitude, detected speed and
   direction of travel live on that same device. These are read-only sources,
   not calculated movement; see [Operations](docs/FEATURES.md#operations-device).
+- Maps optional cumulative distance, fuel used and engine hours to a **Chassis**
+  device. It exposes totals and observed changes for 5m, 1h, 8h, 1d, 7d and
+  30d, plus fuel per engine hour and driving economy. Persistent history
+  survives ignition-off gaps; partial windows and historical endpoints are
+  explicitly described. The tablet-sized driver panel shows only total
+  distance/hours and compact Latest/5m/1h/8h readings with sparse sparklines.
+  An optional non-driving inspection mode adds longer windows and engine hours
+  per period for maintenance review.
+  See [Chassis](docs/FEATURES.md#chassis-counters).
 - Always adds a **Tow** device with runtime-editable Towing, Car/Trailer,
   and Weight controls. The overview shows the matching outline only while
   towing is on. See [tow controls](docs/FEATURES.md#tow-device).
@@ -91,8 +101,8 @@ choose existing entities, and configure optional tank and tire monitoring.
   placement, not wiring or active supply. Selecting a specific reading opens
   that entity's details, including tire temperature and tank volume.
 - Shares default-on visibility options across the card and dashboard strategies,
-  including tow, tires, tanks, power, coach information, mapped systems, header,
-  and legend. Hidden groups leave no alert counts or layout reservations.
+  including chassis, tow, tires, tanks, power, coach information, mapped systems,
+  header and legend. Hidden groups leave no alert counts or layout reservations.
   Crowded drawings scroll instead of shrinking without limit. See
   [dashboard configuration, colors, and layout presets](docs/DASHBOARD.md).
 

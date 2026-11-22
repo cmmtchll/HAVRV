@@ -53,8 +53,9 @@ control RV hardware directly.
    defaults to **1**; use **0** if absent. This counts complete banks, not
    individual batteries in series or parallel.
 7. Use **Power** to select any bank, Inverter, Generator, or Shore Power directly.
-   Unknown sources and capacities may remain blank. Use **Tanks**, **Tires** and
-   **System mappings** for the other existing configuration.
+   Unknown sources and capacities may remain blank. Use **Chassis** for
+   cumulative counters, **Operations** for travel sources, and **Tanks**,
+   **Tires** and **System mappings** for other configuration.
 8. Review the profile-wide draft with **Apply changes**, then confirm to save.
    Switching tabs does not save anything. **Discard** abandons the whole draft.
 
@@ -94,6 +95,28 @@ system, independent of Home Assistant's global unit defaults.
 
 Older saved profiles that predate the current axle model are not migrated.
 Remove and add those profiles again to use the current setup.
+
+### Chassis counter configuration
+
+Open **Chassis** on the management page and optionally map **Total distance
+driven**, **Total fuel used** and **Total engine operating hours**. Each source
+accepts `sensor`, `number` and `input_number`, including template-backed sources
+in those domains. Declare compatible distance, volume and duration units on
+the original source; unlike some power sources, unitless chassis inputs are
+not assigned guessed units. Seconds/minutes convert to hours.
+
+Use cumulative odometer, consumed-fuel and engine-time readings, not remaining
+fuel or tank level. There are no assumed mappings, engine specifications,
+thresholds or safety assessments. Every mapping defaults to blank and is
+independent; source-dependent derivations are created only when their inputs
+are selected. The native options form offers the same recovery fields.
+
+Apply the shared draft to save. Clearing or replacing a source restarts its
+affected history without changing the HAVRV entity identity; clearing all
+chassis sources deletes their private history. Profile-unit edits preserve
+history in canonical units. Ordinary reloads and restarts retain it.
+See [counter history and limitations](FEATURES.md#chassis-counters) and
+the [compact driver panel](DASHBOARD.md#compact-chassis-driver-panel).
 
 ### Power-source configuration
 

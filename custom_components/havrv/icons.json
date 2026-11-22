@@ -27,6 +27,19 @@
       }
     },
     "sensor": {
+      "chassis_total_distance": { "default": "mdi:counter" },
+      "chassis_total_fuel": { "default": "mdi:gas-station" },
+      "chassis_total_engine_hours": { "default": "mdi:engine" },
+      "chassis_latest_distance": { "default": "mdi:map-marker-distance" },
+      "chassis_latest_fuel": { "default": "mdi:gas-station" },
+      "chassis_latest_engine_hours": { "default": "mdi:engine" },
+      "chassis_latest_fuel_rate": { "default": "mdi:gas-station" },
+      "chassis_latest_economy": { "default": "mdi:gauge" },
+      "chassis_change_distance": { "default": "mdi:map-marker-distance" },
+      "chassis_change_fuel": { "default": "mdi:gas-station" },
+      "chassis_change_engine_hours": { "default": "mdi:engine" },
+      "chassis_change_fuel_rate": { "default": "mdi:gas-station" },
+      "chassis_change_economy": { "default": "mdi:gauge" },
       "detected_altitude": {
         "default": "mdi:altimeter"
       },
