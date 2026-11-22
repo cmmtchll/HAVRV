@@ -304,6 +304,15 @@ source selections. Existing entries without these mappings need no migration.
 See [Operations details](FEATURES.md#operations-device) for GPS validity and
 privacy considerations.
 
+For route analysis, configure GPS location and, optionally, altitude here,
+then cumulative total distance driven/fuel consumed under **Chassis**.
+The separate [Driven profile widget](DASHBOARD.md#driven-profile-widget)
+provides 1h/8h/1d buttons and saved trips with administrator start/stop controls.
+It starts collecting after configuration, not retroactively from Recorder.
+Use actual consumed-fuel totals, not tank level or instantaneous fuel rate.
+Numeric helper/template sources use their normal sensor/number/input-number
+domains and must declare compatible units. No road-map provider is required.
+
 Open **Settings → Devices & services → HAVRV** and inspect the RV device and
 its child devices. Confirm that:
 

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.6.1
+
+- Add a separate driven-profile dashboard widget using the selected RV's
+  HAVRV-exposed GPS, altitude, cumulative distance and fuel sensors, without
+  separate source mappings or direct upstream reads.
+- Persist private route history and manually started/stopped saved trips,
+  with 1h/8h/1d ranges, profile units, source permissions and explicit gaps.
+- Show terrain and relative fuel shading, GPS/wheel distance comparisons and
+  recorded local-time markers; keep detailed sample/economy charts expandable.
+  Distances and fuel/grade relationships remain sampled, observational estimates.
+
 ## 0.6.0
 
 - Add optional cumulative distance, fuel-used and engine-hours mappings on a

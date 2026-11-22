@@ -9,6 +9,7 @@
 
 const DOMAIN = "havrv";
 const CARD_TYPE = "havrv-rv-card";
+const PROFILE_CARD_TYPE = "havrv-driven-profile-card";
 const STRATEGY_TYPE = "havrv";
 const DOCS_URL =
   "https://github.com/cmmtchll/HAVRV/blob/main/docs/DASHBOARD.md";
@@ -134,6 +135,7 @@ export const DISPLAY_CLASSES = {
   show_power: { default: true, label: "Show placed power sources", fields: { powerSources: [] } },
   show_tow: { default: true, label: "Show tow vehicle", fields: { tow: undefined } },
   show_chassis: { default: true, label: "Show compact chassis driver panel", fields: { chassis: undefined } },
+  show_driven_profile: { default: true, label: "Show separate driven profile widget", fields: { drivenProfile: undefined } },
   show_coach: { default: true, label: "Show coach information and operation mode", fields: { profile: {}, profileEntities: [], operationMode: undefined } },
   show_systems: { default: true, label: "Show mapped system sections", fields: { systems: [] } },
 };
@@ -275,6 +277,7 @@ export function buildModel(hass, rv) {
     powerSources: [],
     tow: undefined,
     chassis: undefined,
+    drivenProfile: undefined,
   };
   const axles = new Map();
   for (const device of Object.values(hass.devices || {})) {
@@ -325,6 +328,9 @@ export function buildModel(hass, rv) {
       });
     } else if (part === "operations") {
       model.operationMode = entityRoles(entries, { operation_mode: "mode" }).mode;
+      if ((entries || []).some((entry) => !entry.hidden && entry.translation_key === "rv_location")) {
+        model.drivenProfile = { entryId };
+      }
     } else if (part === "tow") {
       model.tow = entityRoles(entries, {
         towing: "enabled", tow_type: "type", tow_weight: "weight",
@@ -2097,6 +2103,480 @@ const halfTile = (entity, extra = {}) => ({
 });
 
 /** Build a sections view for one RV from its registry layout. */
+// ---------------------------------------------------------------------------
+// Independent driven-profile analysis card.
+// ---------------------------------------------------------------------------
+
+const PROFILE_RANGES = ["1h", "8h", "1d"];
+const profileNumber = (value) => typeof value === "number" && Number.isFinite(value);
+const profileFormat = (value) => profileNumber(value)
+  ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "No data";
+const profileTime = (seconds) => profileNumber(seconds)
+  ? new Date(seconds * 1000).toLocaleString() : "Unknown";
+
+function fuelBands(points, economyUnit) {
+  const intensity = (economy) => economyUnit === "mpg" ? -economy : economy;
+  const values = points.map((point) => point.economy).filter(profileNumber).map(intensity);
+  const low = values.length ? Math.min(...values) : 0, high = values.length ? Math.max(...values) : 0;
+  return (economy) => !profileNumber(economy) ? undefined
+    : high > low ? Math.max(0, Math.min(4, Math.floor((intensity(economy) - low) / (high - low) * 4))) : 2;
+}
+
+function recordedTimeMarkers(points, x, bottom, distanceUnit) {
+  const samples = points.filter((point) => profileNumber(point.distance) && profileNumber(point.time));
+  if (!samples.length) return "";
+  const start = samples[0].time, end = samples.at(-1).time;
+  const selected = Array.from({ length: 5 }, (_, index) => {
+    const target = start + (end - start) * index / 4;
+    return samples.reduce((nearest, point) =>
+      Math.abs(point.time - target) < Math.abs(nearest.time - target) ? point : nearest);
+  });
+  const groups = [];
+  for (const point of [...new Map(selected.map((point) => [point.time, point])).values()]) {
+    const previous = groups.at(-1);
+    if (previous && point.distance === previous.start.distance) previous.end = point;
+    else groups.push({ start: point, end: point });
+  }
+  const clock = (time) => new Date(time * 1000).toLocaleTimeString(undefined, {
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  });
+  let lastLabel = -Infinity;
+  const right = x(samples.at(-1).distance);
+  return groups.map((group, index) => {
+    const position = x(group.start.distance);
+    const first = index === 0, last = index === groups.length - 1;
+    const label = clock(group.start.time) + (group.start.time !== group.end.time ? `-${clock(group.end.time)}` : "");
+    const visible = first || last || (position - lastLabel >= 65 && right - position >= 65);
+    if (visible) lastLabel = position;
+    return `<g class="profile-time-marker"><title>${escapeHtml(`${profileTime(group.start.time)}${group.start.time !== group.end.time ? ` to ${profileTime(group.end.time)}` : ""}; recorded GPS distance ${profileFormat(group.start.distance)} ${distanceUnit}`)}</title>
+      <line x1="${position}" x2="${position}" y1="22" y2="${bottom}"/>
+      ${visible ? `<text x="${position}" y="17" text-anchor="${first ? "start" : last ? "end" : "middle"}">${escapeHtml(label)}</text>` : ""}</g>`;
+  }).join("");
+}
+
+/** Plot only measured endpoints; nulls split each channel independently. */
+export function drivenProfileChart(points, { title, unit, distanceUnit, series, xKey = "distance", xUnit, cursor, minimum, area = false, simple = false, heatEconomyUnit }) {
+  const samples = points.filter((point) => profileNumber(point[xKey]));
+  const values = samples.flatMap((point) => series.map((item) => point[item.key])).filter(profileNumber);
+  if (!values.length) return `<section class="profile-chart"><h3>${escapeHtml(title)}</h3><p>No matched data</p></section>`;
+  const xs = samples.map((point) => point[xKey]);
+  let lowX = Math.min(...xs), highX = Math.max(...xs);
+  if (xKey === "distance") lowX = Math.min(0, lowX);
+  if (highX === lowX) highX = lowX + 1;
+  let low = Math.min(...values), high = Math.max(...values);
+  const pad = (high - low) * 0.08 || Math.max(Math.abs(high) * 0.01, 1);
+  low -= pad; high += pad;
+  if (minimum !== undefined) low = Math.max(minimum, low);
+  if (simple) {
+    low = Math.min(...values) >= 0 ? 0 : Math.floor(low / 100) * 100;
+    high = Math.ceil(Math.max(...values) / 100) * 100 || 100;
+  }
+  const x = (value) => 64 + (value - lowX) / (highX - lowX) * 510;
+  const bottom = simple ? 112 : 155;
+  const y = (value) => bottom - (value - low) / (high - low) * (simple ? 86 : 127);
+  const axisUnit = xUnit ?? distanceUnit;
+  const axes = [0, 0.5, 1].map((fraction) => {
+    const vertical = low + (high - low) * fraction;
+    const horizontal = lowX + (highX - lowX) * fraction;
+    return `<line x1="64" x2="574" y1="${y(vertical)}" y2="${y(vertical)}" class="profile-grid"/>
+      <text x="59" y="${y(vertical) + 4}" text-anchor="end">${escapeHtml(profileFormat(simple ? Math.round(vertical) : vertical))}</text>
+      <text x="${x(horizontal)}" y="${simple ? 134 : 178}" text-anchor="middle">${escapeHtml(profileFormat(horizontal))}</text>`;
+  }).join("");
+  const plots = series.map((item, index) => {
+    let path = "", connected = false, areaPath = "", areaEnd;
+    const dots = [];
+    const closeArea = () => {
+      if (areaEnd !== undefined) areaPath += `L${areaEnd.toFixed(2)},${bottom} Z `;
+      areaEnd = undefined;
+    };
+    for (const point of points) {
+      if (!profileNumber(point[xKey]) || !profileNumber(point[item.key])) {
+        closeArea();
+        connected = false;
+        continue;
+      }
+      const px = x(point[xKey]), py = y(point[item.key]);
+      path += `${connected ? "L" : "M"}${px.toFixed(2)},${py.toFixed(2)} `;
+      if (!connected) areaPath += `M${px.toFixed(2)},${bottom} `;
+      areaPath += `L${px.toFixed(2)},${py.toFixed(2)} `;
+      areaEnd = px;
+      connected = true;
+      dots.push(`<circle cx="${px}" cy="${py}" r="${xKey === "grade" ? 3 : 1.5}">
+        <title>${escapeHtml(`${item.label}: ${profileFormat(point[item.key])} ${unit}; ${profileFormat(point[xKey])} ${axisUnit}; ${profileTime(point.time)}`)}</title></circle>`);
+    }
+    closeArea();
+    const heat = [];
+    if (area && heatEconomyUnit) {
+      const band = fuelBands(points, heatEconomyUnit);
+      let previous;
+      for (const point of points) {
+        if (previous && profileNumber(previous.distance) && profileNumber(point.distance)
+          && profileNumber(previous[item.key]) && profileNumber(point[item.key])
+          && point.distance > previous.distance && band(point.economy) !== undefined) {
+          heat.push(`<path class="terrain-heat fuel-level-${band(point.economy)}" d="M${x(previous.distance)},${bottom} L${x(previous.distance)},${y(previous[item.key])} L${x(point.distance)},${y(point[item.key])} L${x(point.distance)},${bottom} Z"/>`);
+        }
+        previous = point;
+      }
+    }
+    return `<g class="profile-series series-${index}">${area ? `<path class="terrain-fill" d="${areaPath.trim()}"/>` : ""}${heat.join("")}${xKey === "grade" ? "" : `<path d="${path.trim()}"/>`}${simple ? "" : dots.join("")}</g>`;
+  }).join("");
+  const selected = xKey === "distance" && profileNumber(cursor?.distance)
+    ? `<line x1="${x(cursor.distance)}" x2="${x(cursor.distance)}" y1="26" y2="${bottom}" class="profile-cursor"/>` : "";
+  const timeMarkers = xKey === "distance" ? recordedTimeMarkers(points, x, bottom, distanceUnit) : "";
+  return `<section class="profile-chart"><h3>${escapeHtml(title)} <small>${escapeHtml(unit)}</small></h3>
+    <svg viewBox="0 0 600 ${simple ? 165 : 205}" role="img" aria-label="${escapeHtml(`${title}, ${unit}, versus ${xKey === "grade" ? "grade" : "sampled GPS distance"}, ${axisUnit}. Gaps mean no matched data.`)}">
+      ${axes}${plots}${timeMarkers}${selected}<text x="319" y="${simple ? 155 : 200}" text-anchor="middle">${escapeHtml(xKey === "grade" ? `Grade (${axisUnit})` : `Sampled GPS distance (${axisUnit})`)}</text>
+    </svg>${simple ? "" : `<div class="profile-legend">${series.map((item, index) => `<span class="series-${index}">${escapeHtml(item.label)}</span>`).join("")}</div>`}</section>`;
+}
+
+/** Align observed fuel economy with terrain, leaving missing intervals unpainted. */
+export function drivenFuelRibbon(points, units, cursor) {
+  const distances = points.map((point) => point.distance).filter(profileNumber);
+  if (!distances.length) return '<p class="profile-note">No GPS route recorded yet.</p>';
+  const end = Math.max(...distances);
+  if (end <= 0) return '<p class="profile-note">Fuel along the road appears once movement is recorded.</p>';
+  const band = fuelBands(points, units.economy);
+  const x = (value) => 64 + value / end * 510;
+  let previous;
+  const blocks = [];
+  for (const point of points) {
+    if (previous && profileNumber(previous.distance) && profileNumber(point.distance)
+      && point.distance > previous.distance) {
+      const valid = profileNumber(point.economy);
+      const level = band(point.economy);
+      blocks.push(`<rect x="${x(previous.distance)}" y="4" width="${x(point.distance) - x(previous.distance)}" height="22"
+        class="${valid ? `fuel-level-${level}` : "fuel-missing"}"><title>${escapeHtml(`${profileFormat(previous.distance)}-${profileFormat(point.distance)} ${units.distance}: ${valid ? `${profileFormat(point.economy)} ${units.economy}, observed interval economy` : "No matched fuel data"}`)}</title></rect>`);
+    }
+    previous = point;
+  }
+  const marker = profileNumber(cursor?.distance)
+    ? `<line x1="${x(cursor.distance)}" x2="${x(cursor.distance)}" y1="0" y2="30" class="profile-cursor"/>` : "";
+  return `<div class="fuel-ribbon"><h3>Fuel use along the road</h3><svg viewBox="0 0 600 34" role="img" aria-label="Relative observed fuel use per distance along the GPS route. Blue uses less fuel per distance; orange uses more. Blank intervals have no matched data.">${blocks.join("")}${marker}</svg>
+    <div class="fuel-key"><span>Less fuel per distance</span><span class="fuel-key-gradient"></span><span>More fuel per distance</span></div>
+    <p class="profile-note">Clock labels mark recorded local times. Terrain shading and the strip compare observed economy; gaps and stationary intervals have no assigned fuel rate.</p></div>`;
+}
+
+export function drivenDistanceComparison(summary, unit) {
+  const gps = summary.gps_distance, wheels = summary.odometer_distance;
+  const max = Math.max(profileNumber(gps) ? gps : 0, profileNumber(wheels) ? wheels : 0);
+  const row = (label, value, className) => `<div class="distance-row"><span>${label}</span>
+    <div class="distance-track"><div class="${className}" style="width:${max > 0 && profileNumber(value) ? value / max * 100 : 0}%"></div></div>
+    <strong>${escapeHtml(profileFormat(value))}${profileNumber(value) ? ` <small>${escapeHtml(unit)}</small>` : ""}</strong></div>`;
+  const difference = profileNumber(gps) && profileNumber(wheels) ? wheels - gps : null;
+  const note = profileNumber(difference)
+    ? difference === 0 ? "GPS and wheel counter recorded the same distance."
+      : `The wheel counter recorded ${profileFormat(Math.abs(difference))} ${unit} ${difference > 0 ? "more" : "less"} than sampled GPS.`
+    : "Map the cumulative odometer to compare the two measurements.";
+  return `<section class="drive-distance"><h3>Same drive, two distance measurements</h3>
+    ${row("GPS recorded", gps, "distance-gps")}${row("Wheel counter", wheels, "distance-wheels")}
+    <p>${escapeHtml(note)}</p><p class="profile-note">GPS samples can miss bends; calibration, noise and gaps also affect the difference. This is not a measurement of elevation gain.</p></section>`;
+}
+
+export function renderDrivenProfile(data, selectedIndex = 0, detailsOpen = false) {
+  const { units, points, summary } = data;
+  const selected = points[selectedIndex];
+  const distance = units.distance, elevation = units.elevation;
+  const summaryItems = [
+    ["GPS sampled", summary.gps_distance, distance],
+    ["3D estimate", summary.spatial_distance, distance],
+    ["Odometer", summary.odometer_distance, distance],
+    ["Fuel used", summary.fuel_used, units.fuel],
+    ["Ascent", summary.ascent, elevation],
+    ["Descent", summary.descent, elevation],
+  ];
+  const difference = profileNumber(summary.gps_distance) && profileNumber(summary.odometer_distance)
+    ? summary.odometer_distance - summary.gps_distance : null;
+  summaryItems.push(["Odometer minus GPS", difference, distance]);
+  const summaryHtml = `<dl class="profile-summary">${summaryItems.map(([label, value, unit]) =>
+    `<div><dt>${label}</dt><dd>${escapeHtml(profileFormat(value))}${profileNumber(value) ? ` <small>${escapeHtml(unit)}</small>` : ""}</dd></div>`).join("")}</dl>`;
+  const base = { distanceUnit: distance, cursor: selected };
+  const charts = [
+    { title: "Elevation profile", unit: elevation, series: [{ key: "elevation", label: "Elevation" }] },
+    { title: "Fuel economy along the drive", unit: units.economy, minimum: 0, series: [{ key: "economy", label: "Observed interval economy" }] },
+    { title: "Fuel consumed along the drive", unit: units.fuel, minimum: 0, series: [{ key: "fuel", label: "Cumulative fuel used" }] },
+    { title: "GPS versus wheel distance", unit: distance, minimum: 0, series: [
+      { key: "distance", label: "GPS sampled" }, { key: "odometer", label: "Odometer" },
+    ] },
+    { title: "Fuel economy versus slope", unit: units.economy, minimum: 0, xKey: "grade", xUnit: "%", series: [
+      { key: "economy", label: "Downhill < 0 / uphill > 0" },
+    ] },
+  ];
+  const inspection = selected ? `<div class="profile-inspect">
+    <label>Inspect recorded sample <input aria-label="Inspect recorded sample" data-profile-input="sample" type="range" min="0" max="${points.length - 1}" value="${selectedIndex}"></label>
+    <p>${escapeHtml(profileTime(selected.time))} &middot; GPS ${escapeHtml(profileFormat(selected.distance))} ${escapeHtml(distance)}
+      &middot; Elevation ${escapeHtml(profileFormat(selected.elevation))} ${escapeHtml(elevation)}
+      &middot; Odometer ${escapeHtml(profileFormat(selected.odometer))} ${escapeHtml(distance)}
+      &middot; Fuel ${escapeHtml(profileFormat(selected.fuel))} ${escapeHtml(units.fuel)}
+      &middot; Economy ${escapeHtml(profileFormat(selected.economy))} ${escapeHtml(units.economy)}
+      &middot; Grade ${escapeHtml(profileFormat(selected.grade))}${profileNumber(selected.grade) ? "%" : ""}</p></div>` : "";
+  const highlights = [["GPS recorded", summary.gps_distance, distance], ["Fuel used", summary.fuel_used, units.fuel], ["Climbed", summary.ascent, elevation]];
+  const explore = selected ? `<div class="profile-inspect drive-explore">
+    <label>Explore the drive <input aria-label="Explore the drive" data-profile-input="sample" type="range" min="0" max="${points.length - 1}" value="${selectedIndex}"></label>
+    <p>At ${escapeHtml(profileFormat(selected.distance))} ${escapeHtml(distance)} &middot; ${escapeHtml(profileFormat(selected.elevation))} ${escapeHtml(elevation)} elevation
+      &middot; ${profileNumber(selected.economy) ? `${escapeHtml(profileFormat(selected.economy))} ${escapeHtml(units.economy)}` : "No matched economy"}</p></div>` : "";
+  return `<p class="profile-span">${escapeHtml(profileTime(data.start))} &ndash; ${escapeHtml(profileTime(data.end))}${data.partial ? " · Partial recorded coverage" : ""}</p>
+    <div class="drive-highlights">${highlights.map(([label, value, unit]) => `<div><span>${label}</span><strong>${escapeHtml(profileFormat(label === "Climbed" && profileNumber(value) ? Math.round(value) : value))}${profileNumber(value) ? ` <small>${escapeHtml(unit)}</small>` : ""}</strong></div>`).join("")}</div>
+    <div class="drive-overview"><section class="drive-terrain">${drivenProfileChart(points, { ...base, title: "The hills along your drive", unit: elevation, area: true, simple: true, heatEconomyUnit: units.economy, series: [{ key: "elevation", label: "Road elevation" }] })}
+      ${drivenFuelRibbon(points, units, selected)}${explore}</section>
+      ${drivenDistanceComparison(summary, distance)}</div>
+    <details class="drive-details"${detailsOpen ? " open" : ""}><summary>Explore samples &amp; detailed charts</summary>
+      ${summaryHtml}${inspection}<div class="profile-charts">${charts.map((chart) => drivenProfileChart(points, { ...base, ...chart })).join("")}</div>
+      <p class="profile-note">GPS is the horizontal polyline between recorded fixes, not the exact road length. Sparse fixes cut corners; noise can add distance. The 3D estimate adds measured elevation change, not wheel travel. Gaps are not interpolated. Fuel/slope comparisons are observed intervals, not instantaneous burn or proof that grade caused a change; speed, load and idling also matter.</p>
+    </details>`;
+}
+
+const PROFILE_STYLES = `
+  :host { display:block; container-type:inline-size; }
+  ha-card { padding:16px; color:var(--primary-text-color); }
+  h2 { margin:0 0 12px; font-size:20px; } h3 { margin:0; font-size:15px; }
+  small,.profile-note,.profile-span { color:var(--secondary-text-color); font-size:12px; }
+  button,input,select { font:inherit; color:inherit; background:var(--card-background-color); border:1px solid var(--divider-color,#888); border-radius:5px; padding:7px; }
+  button { cursor:pointer; } button[aria-pressed=true] { border-color:var(--primary-color,#03a9f4); background:var(--secondary-background-color); }
+  button:disabled { opacity:.5; cursor:default; } input { min-width:0; }
+  button:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid var(--primary-color,#03a9f4); outline-offset:2px; }
+  .profile-controls { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; }
+  .profile-controls input { width:150px; } .profile-controls select { max-width:100%; }
+  .profile-summary { display:flex; flex-wrap:wrap; gap:10px 24px; } dt { font-size:12px; } dd { margin:3px 0; font-size:18px; }
+  .profile-charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,390px),1fr)); gap:16px; }
+  .profile-chart { min-width:0; } svg { display:block; width:100%; overflow:visible; }
+  svg text { fill:var(--secondary-text-color); font-size:12px; }
+  .profile-grid { stroke:var(--divider-color,#888); stroke-opacity:.35; }
+  .profile-time-marker line { stroke:var(--secondary-text-color); stroke-opacity:.3; stroke-dasharray:2 4; }
+  .profile-time-marker text { font-size:11px; fill:var(--secondary-text-color); }
+  .series-0 { color:var(--primary-color,#03a9f4); } .series-1 { color:var(--warning-color,#e99b20); }
+  .profile-series path { stroke:currentColor; fill:none; stroke-width:2; }
+  .profile-series.series-1 path { stroke-dasharray:5 3; }
+  .profile-series path.terrain-fill { fill:currentColor; fill-opacity:.13; stroke:none; }
+  .profile-series path.terrain-heat { fill-opacity:.3; stroke:none; }
+  .profile-series circle { fill:currentColor; } .profile-cursor { stroke:var(--primary-text-color); stroke-dasharray:3 3; stroke-opacity:.5; }
+  .profile-legend { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; }
+  .profile-inspect label { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:13px; }
+  .profile-inspect input { flex:1; min-width:120px; padding:0; } .profile-inspect p { font-size:12px; }
+  .profile-error { color:var(--error-color,#db4437); } .profile-note { line-height:1.6; }
+  .drive-highlights { display:flex; flex-wrap:wrap; gap:16px 40px; padding:10px 0 20px; }
+  .drive-highlights span { display:block; color:var(--secondary-text-color); font-size:13px; }
+  .drive-highlights strong { display:block; font-size:30px; font-weight:500; margin-top:4px; }
+  .drive-highlights small { font-size:16px; }
+  .drive-terrain { border:1px solid var(--divider-color); border-radius:12px; padding:16px; }
+  .drive-terrain .series-0 { color:var(--success-color,#3aaf8a); }
+  .fuel-ribbon h3 { font-size:13px; } .fuel-ribbon svg { margin-top:8px; }
+  .fuel-ribbon rect { shape-rendering:crispEdges; }
+  .fuel-level-0,.profile-series .fuel-level-0 { fill:#238db7; } .fuel-level-1,.profile-series .fuel-level-1 { fill:#54a6a2; } .fuel-level-2,.profile-series .fuel-level-2 { fill:#b1b478; }
+  .fuel-level-3,.profile-series .fuel-level-3 { fill:#d69e55; } .fuel-level-4,.profile-series .fuel-level-4 { fill:#df793f; } .fuel-missing { fill:var(--divider-color); fill-opacity:.25; }
+  .fuel-key { display:flex; justify-content:center; align-items:center; gap:8px; color:var(--secondary-text-color); font-size:11px; }
+  .fuel-key-gradient { width:70px; height:8px; border-radius:3px; background:linear-gradient(90deg,#238db7,#b1b478,#df793f); }
+  .drive-distance { margin:0; padding:16px; border:1px solid var(--divider-color); border-radius:12px; } .drive-distance h3 { margin-bottom:14px; }
+  .distance-row { display:grid; grid-template-columns:100px minmax(50px,1fr) 110px; gap:12px; align-items:center; margin:12px 0; font-size:13px; }
+  .distance-row strong { text-align:right; font-weight:500; }
+  .distance-track { height:12px; border-radius:3px; background:var(--secondary-background-color); overflow:hidden; }
+  .distance-track div { height:100%; } .distance-gps { background:#238db7; } .distance-wheels { background:#d69e55; }
+  .drive-distance p { font-size:13px; } .drive-details { border-top:1px solid var(--divider-color); padding-top:16px; margin-top:20px; }
+  .drive-details summary { cursor:pointer; font-size:14px; padding:6px 0; }
+  .drive-overview { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; }
+  .drive-explore { border-top:1px solid var(--divider-color); padding-top:12px; margin-top:12px; }
+  @container(min-width:900px) { .drive-overview { grid-template-columns:minmax(0,2fr) minmax(0,1fr); }.distance-row { grid-template-columns:86px minmax(30px,1fr) 85px; gap:8px; } }
+  @container(max-width:500px) { .drive-terrain svg text { font-size:16px; } }
+  @media(max-width:500px) { .distance-row { grid-template-columns:86px minmax(30px,1fr) 85px; gap:8px; }.drive-terrain { padding:10px; }.fuel-key { font-size:10px; }.fuel-key-gradient { width:40px; } }
+`;
+
+export class HavrvDrivenProfileCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._range = "8h";
+    this._tripId = "";
+    this._name = "";
+    this._generation = 0;
+    this._sample = 0;
+    this.shadowRoot.addEventListener("click", (event) => {
+      const target = event.composedPath().find((node) => node.dataset?.profileAction);
+      if (!target || this._busy) return;
+      const action = target.dataset.profileAction;
+      if (PROFILE_RANGES.includes(action) || action === "trips") {
+        this._range = action;
+        if (action === "trips" && !this._tripId) this._tripId = this._trips?.at(-1)?.id || "";
+        this._data = undefined;
+        this._sample = 0;
+        this._load();
+      } else this._load(action);
+    });
+    this.shadowRoot.addEventListener("input", (event) => {
+      const target = event.composedPath().find((node) => node.dataset?.profileInput);
+      if (target?.dataset.profileInput === "name") this._name = target.value;
+    });
+    this.shadowRoot.addEventListener("change", (event) => {
+      const target = event.composedPath().find((node) => ["trip", "sample"].includes(node.dataset?.profileInput));
+      if (!target || this._busy) return;
+      if (target.dataset.profileInput === "sample") {
+        const detailed = target.getAttribute?.("aria-label") === "Inspect recorded sample";
+        this._sample = Number(target.value);
+        this._render();
+        this.shadowRoot.querySelector(`[aria-label="${detailed ? "Inspect recorded sample" : "Explore the drive"}"]`)?.focus();
+        return;
+      }
+      this._tripId = target.value;
+      this._sample = 0;
+      this._data = undefined;
+      this._load();
+    });
+  }
+
+  static getConfigForm() {
+    return {
+      schema: [{ name: "device_id", selector: { device: { filter: { integration: DOMAIN } } } }],
+      computeLabel: () => "RV profile",
+    };
+  }
+
+  static getStubConfig(hass) {
+    const rv = findRvDevices(hass)[0];
+    return rv ? { device_id: rv.id } : {};
+  }
+
+  setConfig(config) {
+    if (!config || typeof config !== "object") throw new Error("Invalid configuration");
+    this._config = { ...config };
+    this._update();
+  }
+
+  set hass(hass) { this._hass = hass; this._update(); }
+  get hass() { return this._hass; }
+  getCardSize() { return 12; }
+  getGridOptions() { return { columns: "full", min_columns: 6, rows: "auto" }; }
+
+  connectedCallback() {
+    clearInterval(this._timer);
+    this._update();
+    this._timer = setInterval(() => {
+      if (!this._busy && (this._range !== "trips" || this._tripId === this._data?.active_trip?.id)) this._load();
+    }, 30000);
+    this._timer.unref?.();
+  }
+
+  disconnectedCallback() {
+    clearInterval(this._timer);
+    this._timer = undefined;
+    this._generation++;
+    this._busy = false;
+    this._key = undefined;
+  }
+
+  _update() {
+    if (!this._config || !this._hass) return;
+    const rv = resolveRvDevice(this._hass, this._config.device_id);
+    const entry = rv && havrvIdentifier(rv);
+    if (entry !== this._entry || this._hass.connection !== this._connection
+      || this._hass.user?.id !== this._user || this._hass.user?.is_admin !== this._admin) {
+      this._generation++;
+      this._entry = entry;
+      this._connection = this._hass.connection;
+      this._user = this._hass.user?.id;
+      this._admin = this._hass.user?.is_admin;
+      this._data = undefined;
+      this._trips = [];
+      this._active = undefined;
+      this._tripId = "";
+      this._busy = false;
+      this._key = undefined;
+      this._error = "";
+      this._uncertain = false;
+      this._statusKnown = false;
+      this._viewKey = undefined;
+    }
+    if (this.isConnected && entry && !this._key) this._load();
+    const key = JSON.stringify([entry, this._user, this._admin, this._hass.locale?.language]);
+    if (key === this._viewKey) return;
+    this._viewKey = key;
+    this._render();
+  }
+
+  async _load(action = "get") {
+    if (!this.isConnected || !this._entry || this._busy
+      || (action !== "get" && (this._uncertain || !this._statusKnown || !this._hass?.user?.is_admin))) return;
+    if (!this._hass?.callWS) {
+      this._error = "Driven profile requires a Home Assistant WebSocket connection.";
+      this._render();
+      return;
+    }
+    const generation = ++this._generation;
+    let loadSelectedTrip = false;
+    this._busy = true;
+    this._error = "";
+    this._key = `${this._entry}:${this._range}:${this._tripId}`;
+    this._render();
+    try {
+      const result = await this._hass.callWS({
+        type: "havrv/driven_profile",
+        entry_id: this._entry,
+        action,
+        range: PROFILE_RANGES.includes(this._range) ? this._range : "8h",
+        ...(action === "get" && this._range === "trips" && this._tripId ? { trip_id: this._tripId } : {}),
+        ...(action === "start" && this._name.trim() ? { name: this._name.trim() } : {}),
+      });
+      if (generation !== this._generation) return;
+      this._data = result;
+      this._trips = result.trips;
+      this._active = result.active_trip;
+      if (result.active_trip && !this._trips.some((trip) => trip.id === result.active_trip.id)) {
+        this._trips = [...this._trips, result.active_trip];
+      }
+      this._uncertain = false;
+      this._statusKnown = true;
+      this._sample = Math.min(this._sample, Math.max(0, result.points.length - 1));
+      if (action === "start") {
+        this._name = "";
+        this._range = "trips";
+        this._tripId = result.active_trip.id;
+      }
+      if (this._range === "trips" && !this._tripId && this._trips.length) {
+        this._tripId = this._trips.at(-1).id;
+        loadSelectedTrip = true;
+      }
+    } catch (error) {
+      if (generation !== this._generation) return;
+      this._data = undefined;
+      this._statusKnown = false;
+      if (action !== "get") this._uncertain = true;
+      this._error = `Driven profile ${action === "get" ? "history" : action} failed: ${error?.message || error?.code || "request failed"}.${action === "get" ? "" : " Refresh to check trip status before trying again."}`;
+    } finally {
+      if (generation === this._generation) {
+        this._busy = false;
+        this._render();
+      }
+    }
+    if ((action !== "get" || loadSelectedTrip) && !this._error && generation === this._generation) await this._load();
+  }
+
+  _render() {
+    const detailsOpen = this.shadowRoot.querySelector?.(".drive-details")?.open || false;
+    const disabled = this._busy || !this._entry ? " disabled" : "";
+    const trips = this._trips || [];
+    const active = this._active;
+    const admin = this._hass?.user?.is_admin;
+    const writeDisabled = disabled || (this._uncertain || !this._statusKnown ? " disabled" : "");
+    const rangeControls = [...PROFILE_RANGES, "trips"].map((range) =>
+      `<button data-profile-action="${range}" aria-pressed="${this._range === range}"${disabled}>${range === "trips" ? "Saved trips" : range}</button>`).join("");
+    const tripControl = this._range === "trips"
+      ? `<select aria-label="Saved trip" data-profile-input="trip"${disabled}>${trips.length
+        ? trips.map((trip) => `<option value="${escapeHtml(trip.id)}"${trip.id === this._tripId ? " selected" : ""}>${escapeHtml(trip.name)}${trip.end === null ? " (recording)" : ""}</option>`).join("")
+        : "<option>No saved trips yet</option>"}</select>` : "";
+    const recordControls = admin
+      ? active
+        ? `<button data-profile-action="stop"${writeDisabled}>Stop &amp; save trip</button>`
+        : `<input aria-label="New trip name" data-profile-input="name" maxlength="80" placeholder="Trip name (optional)" value="${escapeHtml(this._name)}"${writeDisabled}><button data-profile-action="start"${writeDisabled}>Start trip</button>`
+      : "<small>Trip start/stop requires an administrator.</small>";
+    this.shadowRoot.innerHTML = `<style>${PROFILE_STYLES}</style><ha-card>
+      <h2>Driven profile</h2><div class="profile-controls">${rangeControls}${tripControl}<button data-profile-action="get"${disabled}>Refresh</button></div>
+      <div class="profile-controls">${recordControls}</div>
+      ${active ? `<p role="status">Recording: ${escapeHtml(active.name)} &middot; started ${escapeHtml(profileTime(active.start))}</p>` : ""}
+      ${!this._entry ? `<p>${escapeHtml(STR.noProfile)}</p>` : ""}
+      ${this._busy ? '<p role="status">Loading recorded profile...</p>' : ""}
+      ${this._error ? `<p class="profile-error" role="alert">${escapeHtml(this._error)}</p>` : ""}
+      ${this._data && (this._range !== "trips" || this._tripId) ? renderDrivenProfile(this._data, this._sample, detailsOpen) : !this._busy && !this._error && this._entry ? "<p>Select a recorded range or start a trip. Map GPS and altitude in Operations, and cumulative distance/fuel in Chassis.</p>" : ""}
+    </ha-card>`;
+  }
+}
+
 export function rvView(hass, rv, config = {}) {
   const options = dashboardOptions(config);
   const model = visibleModel(buildModel(hass, rv), options);
@@ -2107,6 +2587,13 @@ export function rvView(hass, rv, config = {}) {
       cards: [{ type: `custom:${CARD_TYPE}`, device_id: rv.id, ...options }],
     },
   ];
+  if (model.drivenProfile) {
+    sections.push({
+      type: "grid",
+      column_span: 4,
+      cards: [{ type: `custom:${PROFILE_CARD_TYPE}`, device_id: rv.id }],
+    });
+  }
   const coach = [heading(STR.coach, "mdi:rv-truck")];
   if (model.operationMode) {
     coach.push({
@@ -2209,6 +2696,7 @@ const define = (tag, element) => {
 };
 
 define(CARD_TYPE, HavrvRvCard);
+define(PROFILE_CARD_TYPE, HavrvDrivenProfileCard);
 define(`ll-strategy-dashboard-${STRATEGY_TYPE}`, HavrvDashboardStrategy);
 define(`ll-strategy-view-${STRATEGY_TYPE}`, HavrvViewStrategy);
 
@@ -2216,6 +2704,7 @@ define(`ll-strategy-view-${STRATEGY_TYPE}`, HavrvViewStrategy);
 const recoverRegistration = () => {
   for (const [tag, element] of [
     [CARD_TYPE, HavrvRvCard],
+    [PROFILE_CARD_TYPE, HavrvDrivenProfileCard],
     [`ll-strategy-dashboard-${STRATEGY_TYPE}`, HavrvDashboardStrategy],
     [`ll-strategy-view-${STRATEGY_TYPE}`, HavrvViewStrategy],
   ]) {
@@ -2238,6 +2727,15 @@ if (!window.customCards.some((card) => card.type === CARD_TYPE)) {
     type: CARD_TYPE,
     name: "HAVRV RV overview",
     description: "Plan view of the RV with live tire and tank readings.",
+    preview: true,
+    documentationURL: DOCS_URL,
+  });
+}
+if (!window.customCards.some((card) => card.type === PROFILE_CARD_TYPE)) {
+  window.customCards.push({
+    type: PROFILE_CARD_TYPE,
+    name: "HAVRV driven profile",
+    description: "Elevation, fuel and sampled GPS versus odometer distance, with saved trips.",
     preview: true,
     documentationURL: DOCS_URL,
   });

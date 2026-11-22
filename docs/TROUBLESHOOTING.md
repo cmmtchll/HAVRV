@@ -159,6 +159,30 @@ removed HAVRV entities/device; re-adding may require restoring customizations.
 Manually authored dashboard cards with explicit entity IDs must be edited
 manually. Recorder history is not explicitly purged.
 
+## Driven profile analysis is empty or incomplete
+
+Configure a valid GPS location under **Operations**. Altitude and Chassis
+distance/fuel channels are optional, but their corresponding charts need
+valid mappings and compatible units. Fuel must be a cumulative consumed-fuel
+counter, not remaining fuel, a percentage, or an instantaneous burn rate.
+The new widget is separate from the compact driver panel; hiding
+`show_chassis` does not hide it, while `show_driven_profile: false` removes
+its section from generated dashboards.
+
+History starts with HAVRV's collection, not old Recorder observations.
+A newly configured source or very short trip may not have enough measured
+endpoints for ratios or grade. Missing GPS, stale/missing sources, resets,
+remapping and collection limits can produce gaps or partial coverage. Do not
+interpret missing values as no fuel use or an exact flat/straight road.
+GPS/odometer differences are expected with sparse fixes and measurement error;
+altitude change alone does not explain the difference.
+
+Start/stop needs an administrator; reading history requires access to all
+configured travel sources. A failed WebSocket read is displayed as an error,
+not an empty successful trip. After a failed start/stop, select **Refresh** to
+check whether the operation persisted before trying again. Reload the browser
+after upgrading if the separate card is not registered.
+
 ## An Operations travel reading is missing or unavailable
 
 Open **Operations** in the management panel (or native Configure/options)

@@ -118,6 +118,51 @@ on the Chassis device for other uses. The dashboard's optional
 per period for non-driving maintenance/inspection review, without inferring
 service schedules or safety findings.
 
+## Driven profile history
+
+The separate [driven-profile widget](DASHBOARD.md#driven-profile-widget)
+combines the existing Operations GPS/altitude mappings with Chassis cumulative
+distance and consumed-fuel mappings. It collects local observations even when
+the dashboard is closed, and offers rolling 1h/8h/1d ranges plus manually
+started/stopped saved trips. Collection resolves only that profile's registered
+HAVRV GPS tracker, altitude sensor and Chassis total-distance/total-fuel sensors,
+using stable unique identities rather than display names or upstream entity IDs.
+There are no separate source selectors, direct upstream reads or fallbacks to
+unexposed entities. Disabled/removed outputs leave missing channels. Operations
+outputs expose actual source-report timestamps so unchanged reports are not
+mistaken for outages or newly invented readings.
+It does not import older Recorder history, create
+new source readings, reset vehicle meters, or require a mapping migration.
+
+Horizontal GPS distance is the sampled coordinate polyline; altitude provides
+optional ascent/descent, grade and a 3D segment-distance estimate. Cumulative
+counter differences represent observed odometer distance and fuel used.
+Economy is derived only from matched valid endpoints. Missing altitude or
+counters does not remove the GPS profile; missing GPS prevents placing the
+other channels along a route. Sparse fixes, noise, rounded counters, outages,
+resets and changing sources limit the comparison. Unknown values and unmatched
+intervals are gaps, never fabricated zeroes or interpolated road sections.
+
+History and trip names are private per-RV data stored locally in Home Assistant,
+not sent to a mapping service or exported through diagnostics. WebSocket reads
+require appropriate access to the configured sources; start/stop requires an
+administrator. Removing the integration removes its private driven history.
+The widget uses profile units rather than copying source or global HA units;
+this is a distinct analysis display, not an override of existing entity units.
+
+Normal valid observations are sampled at most once per minute, with separate
+availability/reset transitions. Reports older than three minutes are considered
+stale for route placement. Grade/economy require reports at both endpoints
+within one minute of their observation and within five seconds of one another;
+slow or asynchronous counters can therefore retain totals while having no
+matched route economy. Rolling storage retains at most one day / 4,000 samples.
+Each trip and response retains at most 2,000 points; longer captures lose their
+leading portion and are explicitly partial, with distances rebased to retained
+observations. Up to 20 saved trips are supported; reaching that limit refuses
+new starts rather than silently deleting a trip. Trip deletion is not yet
+provided. Removing the RV deletes this history. Reload/restart inserts a gap
+instead of connecting observations through downtime.
+
 ## RV profile specifications
 
 The main RV device's **Configuration** section exposes editable number inputs

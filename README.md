@@ -7,14 +7,17 @@ systems.
 
 > **Project status:** In active development. Implemented features include RV
 profiles, entity mappings, tank and tire monitoring, independent power-source
-devices, chassis counter history, runtime tow controls, a management page, and
-an RV overview dashboard.
+devices, chassis counter history, runtime tow controls, a management page,
+an RV overview dashboard, and a separate driven-profile analysis widget.
 Notifications, integration-specific triggers and conditions, and physical-device
 discovery are not implemented. No Home Assistant quality tier is claimed.
 
-**Current release: 0.5.7.** Dashboard registration now recovers from Home
-Assistant's startup custom-element registry replacement, reducing intermittent
-"Custom element doesn't exist" errors. See
+**Current release: 0.6.1.** A separate driven-profile widget adds terrain/fuel
+visualization, recorded-time markers, 1h/8h/1d ranges and saved trips using only
+HAVRV-exposed readings. See [driven-profile analysis](docs/DASHBOARD.md#driven-profile-widget).
+Dashboard registration recovers from Home Assistant's startup custom-element
+registry replacement, reducing intermittent "Custom element doesn't exist"
+errors. See
 [dashboard loading troubleshooting](docs/TROUBLESHOOTING.md#the-rv-card-or-dashboard-is-missing-or-wrong).
 Tire battery alarms now follow their Home Assistant
 device-class polarity, and valid boolean battery readings no longer show false
@@ -81,6 +84,12 @@ choose existing entities, and configure optional tank and tire monitoring.
   An optional non-driving inspection mode adds longer windows and engine hours
   per period for maintenance review.
   See [Chassis](docs/FEATURES.md#chassis-counters).
+- Offers a separate **Driven profile** widget with 1h/8h/1d range buttons
+  and manually started/stopped saved trips. It compares sampled GPS and
+  odometer distance and plots elevation, fuel used, and interval economy
+  versus distance and slope. Missing data stays missing; these are observed
+  comparisons, not exact road reconstruction or causal fuel estimates.
+  See [driven-profile analysis](docs/DASHBOARD.md#driven-profile-widget).
 - Always adds a **Tow** device with runtime-editable Towing, Car/Trailer,
   and Weight controls. The overview shows the matching outline only while
   towing is on. See [tow controls](docs/FEATURES.md#tow-device).
