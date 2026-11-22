@@ -73,6 +73,16 @@ implemented integration behavior, not just repository configuration.
   mappings share Operations, with stable identities, profile units, native
   options recovery, invalid-source handling and redacted travel configuration.
   Direction is source-provided degrees, never calculated motion.
+- Optional cumulative distance/fuel/engine-hour sources on Chassis, with
+  stable profile-unit totals and Latest/5m/1h/8h/1d/7d/30d changes, fuel per
+  engine hour and economy. Bounded private history survives sparse
+  ignition-off reports, reloads and restarts; reset/remapping affects only
+  dependent history. The compact tablet driver panel exposes totals for
+  distance/hours and four metric rows with gap-aware eight-hour trends,
+  explicitly historical ages and partial spans, without inferring
+  instantaneous rates, missing-data zeroes or safety assessments.
+  A shared card/strategy inspection-mode option adds 1d/7d/30d columns and
+  engine hours per period while preserving the compact driving default.
 - An always-present Tow device with restorable runtime towing, car/trailer and
   weight controls. The dashboard draws the selected outline only while towing
   is on; profile-unit weight conversion is independent of configuration writes.

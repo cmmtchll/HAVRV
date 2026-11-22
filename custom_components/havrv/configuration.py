@@ -17,8 +17,10 @@ from .const import (
     AXLE_COUNT_ONE,
     AXLE_COUNT_THREE,
     AXLE_COUNT_TWO,
+    CHASSIS_METRICS,
     CONF_BLACK_WATER_TANK_CAPACITY,
     CONF_CHASSIS_BATTERY_BANK_COUNT,
+    CONF_CHASSIS_SOURCES,
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
@@ -365,6 +367,16 @@ def _options_schema(
     """Build source mapping and alert threshold options."""
     existing_options = entry.options
     fields = _entity_mapping_fields(_entry_entity_mappings(entry))
+    for metric in CHASSIS_METRICS:
+        saved = existing_options.get(CONF_CHASSIS_SOURCES, {}).get(metric)
+        fields[
+            vol.Optional(
+                f"chassis_{metric}",
+                description={"suggested_value": saved} if saved else {},
+            )
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=list(_NUMERIC_ENTITY_DOMAINS))
+        )
     for metric in OPERATIONS_METRICS:
         field = f"operations_{metric}"
         saved = existing_options.get(CONF_OPERATIONS_SOURCES, {}).get(metric)
@@ -496,6 +508,19 @@ def _normalize_options(
     mappings, error = _normalize_entity_mappings(user_input)
     if error:
         return {}, error
+
+    chassis: dict[str, str] = {}
+    for metric in CHASSIS_METRICS:
+        entity_id = user_input.get(f"chassis_{metric}")
+        if entity_id is None or entity_id == "":
+            continue
+        if (
+            not isinstance(entity_id, str)
+            or not valid_entity_id(entity_id)
+            or entity_id.partition(".")[0] not in _NUMERIC_ENTITY_DOMAINS
+        ):
+            return {}, "invalid_chassis_source"
+        chassis[metric] = entity_id
 
     operations: dict[str, str] = {}
     for metric in OPERATIONS_METRICS:
@@ -645,6 +670,8 @@ def _normalize_options(
     }
     if operations or CONF_OPERATIONS_SOURCES in entry.options:
         options[CONF_OPERATIONS_SOURCES] = operations
+    if chassis or CONF_CHASSIS_SOURCES in entry.options:
+        options[CONF_CHASSIS_SOURCES] = chassis
     if CONF_POWER_SOURCES in entry.options:
         options[CONF_POWER_SOURCES] = entry.options[CONF_POWER_SOURCES]
     if positions:

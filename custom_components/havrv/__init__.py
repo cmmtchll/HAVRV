@@ -1,6 +1,7 @@
 """Set up the HAVRV integration."""
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, Platform
@@ -8,11 +9,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
+from .chassis import chassis_entity_keys, storage_key
 from .const import (
     CONF_BLACK_WATER_TANK_CAPACITY,
+    CONF_CHASSIS_SOURCES,
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
     CONF_COACH_YEAR,
@@ -48,6 +52,9 @@ from .tank import TANK_DEFINITIONS, defined_tanks
 from .tire import tire_positions
 from .websocket_api import async_register_commands, async_reload_profile
 
+if TYPE_CHECKING:
+    from .chassis import ChassisHistory
+
 
 @dataclass
 class HavrvRuntimeData:
@@ -76,6 +83,7 @@ class HavrvRuntimeData:
     operation_mode: str | None = field(default=None, compare=False)
     platforms: list[Platform] = field(default_factory=list, compare=False)
     device_id: str | None = field(default=None, compare=False)
+    chassis_history: ChassisHistory | None = field(default=None, compare=False)
 
 
 type HavrvConfigEntry = ConfigEntry[HavrvRuntimeData]
@@ -142,6 +150,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         model=entry.runtime_data.model or "RV",
     )
     entry.runtime_data.device_id = rv_device.id
+    if entry.options.get(CONF_CHASSIS_SOURCES):
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_chassis")},
+            name="Chassis",
+            via_device_id=rv_device.id,
+        )
     for source in power_sources(data):
         device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
@@ -168,7 +183,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
         entry,
         active_categories={
             category for category, entities in mappings.items() if entities
-        },
+        }
+        | ({"chassis"} if entry.options.get(CONF_CHASSIS_SOURCES) else set()),
         active_mapping_ids={
             f"{entry.entry_id}_{category}_{entity_id}"
             for category, entities in mappings.items()
@@ -204,7 +220,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> bo
     platforms = entry.runtime_data.platforms
     if not platforms:
         return True
-    return await hass.config_entries.async_unload_platforms(entry, list(platforms))
+    unloaded = await hass.config_entries.async_unload_platforms(entry, list(platforms))
+    if unloaded and entry.runtime_data.chassis_history is not None:
+        await entry.runtime_data.chassis_history.async_save()
+    return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> None:
+    """Remove the profile's private counter history along with the integration."""
+    await Store[dict[str, object]](hass, 1, storage_key(entry.entry_id)).async_remove()
 
 
 async def async_migrate_entry(_hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -243,6 +267,12 @@ def _remove_stale_entities_and_devices(
     active_tanks = defined_tanks(
         entry.data, entry.options.get(CONF_TANK_ENTITY_MAPPINGS, {})
     )
+    active_chassis_ids = {
+        f"{entry.entry_id}_chassis_counter_{metric}_{period}"
+        for metric, period in chassis_entity_keys(
+            entry.options.get(CONF_CHASSIS_SOURCES, {})
+        )
+    }
     active_tank_ids = {
         f"{entry.entry_id}_tank_{tank}_{metric}"
         for tank in active_tanks
@@ -297,6 +327,9 @@ def _remove_stale_entities_and_devices(
         is_stale_mapping = any(
             registry_entry.unique_id.startswith(f"{entry.entry_id}_{category}_")
             and registry_entry.unique_id not in active_mapping_ids
+            and not registry_entry.unique_id.startswith(
+                f"{entry.entry_id}_chassis_counter_"
+            )
             for category in SYSTEM_CATEGORIES
         )
         is_stale_power = (
@@ -308,6 +341,10 @@ def _remove_stale_entities_and_devices(
             for metric in ("location", "altitude", "speed", "direction")
         } and not entry.options.get(CONF_OPERATIONS_SOURCES, {}).get(
             registry_entry.unique_id.removeprefix(f"{entry.entry_id}_operations_")
+        )
+        is_stale_chassis = (
+            registry_entry.unique_id.startswith(f"{entry.entry_id}_chassis_counter_")
+            and registry_entry.unique_id not in active_chassis_ids
         )
         tire_key = registry_entry.unique_id.removeprefix(f"{entry.entry_id}_tire_")
         is_tire_entity = tire_key != registry_entry.unique_id
@@ -360,6 +397,7 @@ def _remove_stale_entities_and_devices(
             or is_stale_limit
             or is_stale_tank
             or is_stale_operations
+            or is_stale_chassis
         ):
             entity_registry.async_remove(registry_entry.entity_id)
 

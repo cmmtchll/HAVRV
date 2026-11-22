@@ -103,6 +103,69 @@ The layout follows the RV profile:
 
 <img src="images/dashboard-vertical.png" alt="Vertical HAVRV card with a towed car and two-line shore power in a dark theme" width="420">
 
+## Compact chassis driver panel
+
+Map cumulative counters under **Chassis** on the management page. The RV card
+then includes a compact, fixed-390px driver readout above the vehicle diagram,
+rather than stretching a table across the dashboard. The wrapping layout
+leaves room for other panels rather than reserving a full-width section.
+Readings are 18px with inline labels/units and thin trends;
+the nominal four-row panel is approximately 155px high.
+
+Total distance and total engine hours share the header. Rows show **Economy**,
+**Fuel burn**, **Distance** and **Fuel**, with **Latest**, **5m**, **1h** and
+**8h** columns. Lifetime fuel, per-period engine time, history links and tuning
+controls stay off this driver view. Unmapped derived rows are absent, not zero.
+The operation-mode selector does not gate these readings; the panel also
+remains useful when parked.
+
+Each row's thin sparkline shows its 5m rolling values over an eight-hour real
+time axis, using bounded, observed history. Missing inputs and undefined ratios
+break the trace. Lines neither bridge outages nor extend stale values to now.
+This history comes from HAVRV's persistent counter history, not Recorder, and
+survives refreshing the card. Compatible display-unit overrides also convert
+the trend values. If an individual window uses a different unit from its row,
+that cell includes its own compact unit label.
+
+An asterisk and observed span identify a partial 8h window. Hover or focus a
+cell for its exact observed span and endpoint age; activating it opens the
+sensor's HA details. The small header age is the oldest mapped counter's
+last-valid report. Unavailable totals show **Last**, and historical results
+remain muted with age metadata instead of pretending to be live. Latest
+describes the most recent matched report interval, never instantaneous fuel
+burn. The 1d/7d/30d and engine-time sensors are available on the Chassis device
+without adding dense analysis sections to the driver dashboard.
+
+### Non-driving maintenance and inspection mode
+
+In the card editor, set **Chassis dashboard mode** to **Non-driving
+(maintenance / inspection)** (`chassis_mode: inspection`). Dashboard and view
+strategies accept the same option, like the other presentation options. The
+default, `driving`, preserves the compact driver panel.
+
+Inspection mode adds **1d**, **7d** and **30d** columns and an **Engine hours**
+row alongside distance, fuel, burn and economy. Total distance and engine
+hours remain in the header. Each partial window has an asterisk and its
+minimum observed row span in the footer; each cell retains its exact span,
+endpoint age and HA more-info action. Unavailable or undefined results remain
+dashes, never extrapolated monthly totals. The wider table scrolls
+horizontally on smaller tablets without shrinking the readings.
+
+This is a manual dashboard presentation choice, independent of the vehicle's
+operation mode. It provides recorded-counter context for maintenance and
+inspection, not service intervals, inspection findings or safety assessments.
+`show_chassis: false` hides either presentation.
+
+```yaml
+type: custom:havrv-rv-card
+chassis_mode: inspection
+```
+
+**Show compact chassis driver panel** (`show_chassis`) defaults to true in the
+card editor and both strategies. Setting it false removes the panel and its
+layout space; existing tire, power, tank and mapped-system visibility is
+unchanged.
+
 ## Configure electrical placement on an existing RV
 
 1. Open **Settings → Devices & services → HAVRV** and select the RV entry's
@@ -382,7 +445,7 @@ that no longer updates itself.
 
 ### Reuse driving and parked layouts
 
-Dashboard and view strategies accept the same `layout` and `show_*` options as
+Dashboard and view strategies accept the same `layout`, `chassis_mode` and `show_*` options as
 the card and pass them to each overview. `show_tanks` also hides the tank section,
 `show_tires` hides Tire analysis, `show_coach` hides Coach, and `show_systems`
 hides existing mapped-system sections. No per-system or future-system options
@@ -401,6 +464,7 @@ views:
       type: custom:havrv
       device_id: &rv 0123456789abcdef0123456789abcdef
       layout: vertical
+      chassis_mode: driving
       show_tanks: false
       show_power: false
       show_coach: false
@@ -420,6 +484,7 @@ views:
       type: custom:havrv
       device_id: *rv
       layout: vertical
+      chassis_mode: inspection
       show_tires: false
       show_coach: false
       show_systems: false
@@ -468,6 +533,8 @@ In dashboard edit mode, select **Add card** and search for
 | --- | --- | --- |
 | `device_id` | First RV profile | The RV device, or any of its HAVRV devices |
 | `layout` | `auto` | `auto`, `horizontal`, or `vertical` |
+| `chassis_mode` | `driving` | Compact `driving` or non-driving maintenance/inspection history (`inspection`) |
+| `show_chassis` | `true` | Show the selected chassis panel mode |
 | `show_header` | `true` | Show the name, operation mode, and status summary |
 | `show_legend` | `true` | Show the status color legend |
 | `show_power` | `true` | Show individually placed power-source readout boxes |

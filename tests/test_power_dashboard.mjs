@@ -36,6 +36,7 @@ const {
   DISPLAY_CLASSES, dashboardOptions, visibleModel,
   rememberReadings, missingReadingText,
   convertTireValue, tireReading, pressureSparkline, pressureHistory,
+  renderChassis, chassisSparkline, convertChassisValue,
 } = await import(`data:text/javascript;base64,${Buffer.from(text).toString("base64")}`);
 
 const dashboardTags = [
@@ -888,13 +889,210 @@ test("all display classes declare shared true defaults, readable labels and edit
     assert.match(form.computeLabel(field), /^Show .+/);
   }
   assert.deepEqual(Object.keys(DISPLAY_CLASSES), [
-    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_tow", "show_coach", "show_systems",
+    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_tow", "show_chassis", "show_coach", "show_systems",
   ]);
   const card = new HavrvRvCard();
   card.setConfig({ show_tires: undefined, show_tanks: undefined });
   assert.equal(card._config.show_tires, true);
   assert.equal(card._config.show_tanks, true);
   assert.equal(HavrvRvCard.getStubConfig({ devices: {} }).show_tires, true);
+});
+
+function chassisFixture() {
+  const { hass, rv } = fixture();
+  const now = Date.parse("2026-11-22T12:00:00Z");
+  hass.devices.chassis = { id: "chassis", name: "Chassis", identifiers: [["havrv", "entry_chassis"]] };
+  for (const [metric, unit, value] of [
+    ["distance", "mi", 182456.7], ["fuel", "gal", 24931.2],
+    ["engine_hours", "h", 5248.6], ["fuel_rate", "gal/h", 7.7], ["economy", "mpg", 7.8],
+  ]) {
+    for (const period of ["total", "latest", "5m", "1h", "8h", "1d", "7d", "30d"]) {
+      if (period === "total" && ["fuel_rate", "economy"].includes(metric)) continue;
+      const id = `sensor.renamed_${metric}_${period}`;
+      hass.entities[id] = { entity_id: id, device_id: "chassis", platform: "havrv",
+        translation_key: `chassis_${period === "total" ? "total" : period === "latest" ? "latest" : "change"}_${metric}` };
+      hass.states[id] = { state: String(period === "total" ? value : metric === "fuel" ? 0.064 : metric === "distance" ? 0.5 : value),
+        attributes: { chassis_metric: metric, period, unit_of_measurement: unit,
+          last_valid_value: value, last_valid_unit: unit, last_valid_time: new Date(now - 2000).toISOString(),
+          interval_start: new Date(now - (period === "8h" ? 22800000 : 32000)).toISOString(),
+          interval_end: new Date(now - 2000).toISOString(),
+          covered_seconds: period === "8h" ? 22800 : 30,
+          trend_unit: unit, trend: [
+            [(now - 7200000) / 1000, 7], [(now - 3600000) / 1000, 8],
+            [(now - 3500000) / 1000, null], [(now - 1800000) / 1000, 7.5],
+            [(now - 2000) / 1000, 7.8],
+          ],
+        } };
+    }
+  }
+  hass.entities["sensor.chassis_passthrough"] = {
+    entity_id: "sensor.chassis_passthrough", device_id: "chassis", platform: "havrv",
+  };
+  hass.states["sensor.chassis_passthrough"] = { state: "42", attributes: {} };
+  return { hass, rv, now, model: buildModel(hass, rv) };
+}
+
+test("compact chassis discovery uses metadata, preserves passthrough, and honors visibility in both strategies", async () => {
+  const { hass, rv, model, now } = chassisFixture();
+  assert.equal(model.chassis.readings.economy_5m, "sensor.renamed_economy_5m");
+  assert.ok(model.watched.includes("sensor.renamed_distance_total"));
+  assert.ok(!model.watched.includes("sensor.renamed_engine_hours_1h"));
+  assert.deepEqual(model.systems.find((system) => system.key === "chassis").entities, ["sensor.chassis_passthrough"]);
+  const html = renderChassis(hass, model.chassis, now);
+  assert.match(html, /182,456\.7/);
+  assert.match(html, /5,248\.6/);
+  assert.doesNotMatch(html, /24,931\.2|Engine runtime|30d/);
+  assert.equal((html.match(/<tr/g) || []).length, 5);
+  assert.match(html, /6h20m observed/);
+  assert.match(html, /Latest: 30s/);
+  assert.match(html, /data-entity="sensor\.renamed_economy_latest" tabindex="0" role="button"/);
+  const hidden = visibleModel(model, { show_chassis: false });
+  assert.equal(hidden.chassis, undefined);
+  assert.ok(!hidden.watched.includes("sensor.renamed_distance_total"));
+  assert.ok(model.chassis);
+  for (const result of [
+    rvView(hass, rv, { show_chassis: false }),
+    await HavrvViewStrategy.generate({ device_id: rv.id, show_chassis: false }, hass),
+    (await HavrvDashboardStrategy.generate({ show_chassis: false }, hass)).views[0],
+  ]) assert.equal(result.sections[0].cards[0].show_chassis, false);
+});
+
+test("chassis sparklines preserve gaps and elapsed time without extrapolation or unsupported unit guesses", () => {
+  const { hass, model, now } = chassisFixture();
+  const id = model.chassis.readings.fuel_5m;
+  const path = chassisSparkline(hass, id, "fuel", now);
+  assert.equal((path.match(/M/g) || []).length, 2);
+  assert.equal((path.match(/L/g) || []).length, 2);
+  assert.match(path, /gaps mean no samples/);
+  assert.equal(convertChassisValue(1, "fuel", "gal", "L"), 3.785411784);
+  assert.equal(convertChassisValue(1, "fuel_rate", "L/s", "L/h"), 3600);
+  assert.equal(convertChassisValue(1, "distance", "mi", "m"), 1609.344);
+  assert.equal(convertChassisValue(1, "fuel", "unrecognized", "L"), undefined);
+  assert.equal(convertChassisValue(Infinity, "fuel", "L", "L"), undefined);
+  hass.states[id].attributes.unit_of_measurement = "mL";
+  assert.match(chassisSparkline(hass, id, "fuel", now), /<path/);
+  hass.states[id].attributes.trend = [[now / 1000, 1]];
+  assert.equal(chassisSparkline(hass, id, "fuel", now), "");
+});
+
+test("offline chassis retains age-labeled endpoints and never substitutes last totals as current", () => {
+  const { hass, model, now } = chassisFixture();
+  for (const id of Object.values(model.chassis.readings)) {
+    const state = hass.states[id];
+    state.attributes.last_valid_time = new Date(now - 6 * 3600000).toISOString();
+    state.attributes.interval_end = state.attributes.last_valid_time;
+    if (state.attributes.period === "total" || ["5m", "1h"].includes(state.attributes.period)) state.state = "unavailable";
+  }
+  const html = renderChassis(hass, model.chassis, now);
+  assert.match(html, /chassis-offline/);
+  assert.match(html, /Last 182,456\.7/);
+  assert.match(html, /Last 6h/);
+  assert.match(html, /ends 6h ago/);
+  assert.match(html, />—<\/td>/);
+  hass.states[model.chassis.readings.distance_total].attributes.last_valid_unit = "unsupported";
+  assert.match(renderChassis(hass, model.chassis, now), /<span title="Total distance driven">Last — mi/);
+  assert.equal(renderChassis(hass, undefined, now), "");
+  assert.equal(renderChassis(hass, { readings: {} }, now), "");
+});
+
+test("chassis age includes hidden lifetime fuel and labels per-window unit overrides", () => {
+  const { hass, model, now } = chassisFixture();
+  const fuel = hass.states[model.chassis.readings.fuel_total];
+  fuel.state = "unavailable";
+  fuel.attributes.last_valid_time = new Date(now - 6 * 3600000).toISOString();
+  const distance = hass.states[model.chassis.readings.distance_5m];
+  distance.state = "0.8";
+  distance.attributes.unit_of_measurement = "km";
+  const html = renderChassis(hass, model.chassis, now);
+  assert.match(html, /chassis-offline/);
+  assert.match(html, /chassis-age">Last 6h/);
+  assert.match(html, /0\.8<small class="chassis-cell-unit">km<\/small>/);
+  assert.doesNotMatch(html, /24,931\.2/);
+});
+
+test("chassis inspection mode exposes long windows and engine hours without changing driving discovery", async () => {
+  const { hass, rv, model, now } = chassisFixture();
+  const original = structuredClone(model);
+  const inspection = visibleModel(model, { chassis_mode: "inspection" });
+  assert.ok(inspection.watched.includes(model.chassis.readings.distance_7d));
+  assert.ok(inspection.watched.includes(model.chassis.readings.fuel_30d));
+  assert.ok(inspection.watched.includes(model.chassis.readings.engine_hours_1d));
+  assert.ok(!model.watched.includes(model.chassis.readings.distance_7d));
+  assert.ok(!model.watched.includes(model.chassis.readings.engine_hours_1d));
+  hass.states[model.chassis.readings.engine_hours_latest].state = "0.012";
+  for (const [key, id] of Object.entries(model.chassis.readings)) {
+    if (!key.endsWith("_30d")) continue;
+    const duration = 29 * 86400 + 8 * 3600;
+    hass.states[id].attributes.covered_seconds = duration;
+    hass.states[id].attributes.interval_start = new Date(now - 2000 - duration * 1000).toISOString();
+  }
+  const html = renderChassis(hass, inspection.chassis, now);
+  assert.match(html, /Chassis maintenance and inspection readings/);
+  assert.match(html, /Engine hours<small>h/);
+  assert.match(html, /data-entity="sensor\.renamed_engine_hours_latest"[^>]*>0\.012<\/td>/);
+  assert.match(html, />1d\*<\/th>/);
+  assert.match(html, />7d\*<\/th>/);
+  assert.match(html, />30d\*<\/th>/);
+  assert.match(html, /\*30d: 29d8h observed/);
+  assert.match(html, /tabindex="0" role="region" aria-label="Chassis history table"/);
+  assert.equal((html.match(/<tr/g) || []).length, 6);
+  assert.doesNotMatch(renderChassis(hass, model.chassis, now), /Chassis inspection|Engine hours<small>|>7d|>30d/);
+  assert.deepEqual(model, original);
+  const hidden = visibleModel(model, { chassis_mode: "inspection", show_chassis: false });
+  assert.equal(hidden.chassis, undefined);
+  assert.ok(!hidden.watched.includes(model.chassis.readings.fuel_30d));
+  for (const view of [
+    rvView(hass, rv, { chassis_mode: "inspection" }),
+    await HavrvViewStrategy.generate({ device_id: rv.id, chassis_mode: "inspection" }, hass),
+    (await HavrvDashboardStrategy.generate({ chassis_mode: "inspection" }, hass)).views[0],
+  ]) assert.equal(view.sections[0].cards[0].chassis_mode, "inspection");
+});
+
+test("chassis mode editor defaults to driving and rerenders long-window-only updates", () => {
+  const form = HavrvRvCard.getConfigForm();
+  const field = form.schema.find((field) => field.name === "chassis_mode");
+  assert.equal(form.computeLabel(field), "Chassis dashboard mode");
+  assert.equal(field.default, "driving");
+  assert.deepEqual(field.selector.select.options.map((option) => option.value), ["driving", "inspection"]);
+  assert.equal(dashboardOptions().chassis_mode, "driving");
+  assert.equal(HavrvRvCard.getStubConfig({ devices: {} }).chassis_mode, "driving");
+  assert.throws(() => dashboardOptions({ chassis_mode: "invalid" }), /chassis_mode must be/);
+  const { hass, model } = chassisFixture();
+  const card = new HavrvRvCard();
+  card.setConfig({ chassis_mode: "inspection", show_tires: false });
+  card.hass = hass;
+  const before = card.shadowRoot.innerHTML;
+  hass.states[model.chassis.readings.distance_30d].state = "123";
+  card.hass = hass;
+  assert.notEqual(card.shadowRoot.innerHTML, before);
+  assert.match(card.shadowRoot.innerHTML, /123\.0/);
+  card.setConfig({ chassis_mode: "driving", show_tires: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /Chassis inspection|Engine hours<small>|>30d/);
+  const driving = card.shadowRoot.innerHTML;
+  hass.states[model.chassis.readings.distance_30d].state = "456";
+  card.hass = hass;
+  assert.equal(card.shadowRoot.innerHTML, driving);
+  card.setConfig({ chassis_mode: "inspection", show_chassis: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="chassis-panel/);
+  assert.throws(() => card.setConfig({ chassis_mode: "invalid" }), /chassis_mode must be/);
+});
+
+test("chassis panel toggle removes the panel and live attribute-only trend changes rerender it", () => {
+  const { hass, model } = chassisFixture();
+  const card = new HavrvRvCard();
+  card.setConfig({ show_tires: false });
+  card.hass = hass;
+  assert.match(card.shadowRoot.innerHTML, /class="chassis-panel/);
+  const before = card.shadowRoot.innerHTML;
+  const id = model.chassis.readings.distance_5m;
+  const now = Date.now();
+  hass.states[id].attributes.trend = [[(now - 10000) / 1000, 1], [now / 1000, 2]];
+  card.hass = hass;
+  assert.notEqual(card.shadowRoot.innerHTML, before);
+  card.setConfig({ show_chassis: false, show_tires: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="chassis-panel/);
+  card.setConfig({ show_chassis: true, show_tires: false });
+  assert.match(card.shadowRoot.innerHTML, /class="chassis-panel/);
 });
 
 test("visibility filtering is nonmutating, removes hidden alerts and preserves positional APIs", () => {
@@ -936,7 +1134,7 @@ test("both strategies propagate presentation and every visibility option and omi
   const { hass, rv } = completeFixture();
   for (const layout of ["auto", "horizontal", "vertical"]) {
     const config = {
-      device_id: rv.id, layout,
+      device_id: rv.id, layout, chassis_mode: "driving",
       ...Object.fromEntries(Object.keys(DISPLAY_CLASSES).map((key) => [key, false])),
     };
     const dashboard = await HavrvDashboardStrategy.generate(config, hass);

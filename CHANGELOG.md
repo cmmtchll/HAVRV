@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.6.0
+
+- Add optional cumulative distance, fuel-used and engine-hours mappings on a
+  Chassis device, with Latest/5m/1h/8h/1d/7d/30d changes, fuel per engine hour
+  and economy in profile-selected units.
+- Preserve bounded private counter history across ignition-off gaps, reloads
+  and restarts. Show real endpoint ages and partial spans without extrapolation;
+  reset only affected histories when counters decrease or mappings change.
+- Add a compact driving table with lifetime distance/hours and gap-aware
+  sparklines. Optional non-driving maintenance/inspection mode adds longer
+  windows and per-period engine hours through shared card/strategy options.
 - Calm tire pressure sparklines with a 1.25 psi visual deadband and predictable
   3 psi scale steps, equivalent in other display units. Preserve cumulative
   trends, unavailable gaps, exact readings and advisory checks; show actual

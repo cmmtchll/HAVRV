@@ -176,6 +176,7 @@
     },
     "error": {
       "invalid_operations_source": "Choose a device tracker for GPS location, or a sensor, number or input number for travel readings.",
+      "invalid_chassis_source": "Choose a sensor, number or input number for each cumulative chassis counter.",
       "invalid_shore_line_count": "Choose one or two shore power lines.",
       "name_required": "Enter a name for this RV.",
       "invalid_coach_year": "Enter a whole model year from 1900 through next year.",
@@ -201,6 +202,9 @@
         "title": "Map RV system entities",
         "description": "Choose existing entities for RV systems, optional water-tank levels, and each generated tire. Tank and tire readings accept sensors, number entities, input number helpers, and template sensors (which appear in Home Assistant as sensors). Readings and limits reload when you change these options.",
         "data": {
+          "chassis_distance": "Total distance driven source",
+          "chassis_fuel": "Total fuel used source",
+          "chassis_engine_hours": "Total engine operating hours source",
           "operations_location": "RV GPS location source",
           "operations_altitude": "Detected altitude source",
           "operations_speed": "Detected speed source",
@@ -302,6 +306,9 @@
           "configure_power_sources": "Edit power-source mappings, specifications and placement"
         },
         "data_description": {
+          "chassis_distance": "Optional cumulative odometer: sensor, number or input number with declared distance units. Template-backed sources use those domains. Converts to profile km/mi.",
+          "chassis_fuel": "Optional cumulative fuel consumed, not tank level or remaining fuel. Declare compatible volume units; profile L/US gal. History survives ignition-off gaps; observed decreases restart affected history.",
+          "chassis_engine_hours": "Optional cumulative engine operating time with declared duration units, including seconds, minutes or hours. Converts to hours and supplies fuel-per-engine-hour calculations. Leave blank to clear.",
           "operations_location": "Optional device tracker with valid GPS latitude/longitude. HA handles maps and zones; no coordinates are assumed.",
           "operations_altitude": "Optional sensor, number or input number with declared distance units. Converts to profile m/ft; negative altitude is valid.",
           "operations_speed": "Optional sensor, number or input number with declared speed units. Non-negative readings convert to profile km/h or mph; no speed is calculated.",
@@ -352,6 +359,7 @@
       }
     },
     "error": {
+      "invalid_chassis_source": "Choose a sensor, number or input number for each cumulative chassis counter.",
       "invalid_operations_source": "Choose a device tracker for GPS location, or a sensor, number or input number for travel readings.",
       "invalid_shore_line_count": "Choose one or two shore power lines.",
       "invalid_entity_mapping": "Choose valid source entities.",
@@ -503,6 +511,19 @@
       }
     },
     "sensor": {
+      "chassis_total_distance": { "name": "Total distance driven" },
+      "chassis_total_fuel": { "name": "Total fuel used" },
+      "chassis_total_engine_hours": { "name": "Total engine operating hours" },
+      "chassis_latest_distance": { "name": "Distance driven (latest update)" },
+      "chassis_latest_fuel": { "name": "Fuel used (latest update)" },
+      "chassis_latest_engine_hours": { "name": "Engine operating time (latest update)" },
+      "chassis_latest_fuel_rate": { "name": "Fuel burn (latest update)" },
+      "chassis_latest_economy": { "name": "Fuel economy (latest update)" },
+      "chassis_change_distance": { "name": "Distance driven ({period})" },
+      "chassis_change_fuel": { "name": "Fuel used ({period})" },
+      "chassis_change_engine_hours": { "name": "Engine operating time ({period})" },
+      "chassis_change_fuel_rate": { "name": "Fuel burn ({period})" },
+      "chassis_change_economy": { "name": "Fuel economy ({period})" },
       "detected_altitude": {
         "name": "Detected altitude"
       },

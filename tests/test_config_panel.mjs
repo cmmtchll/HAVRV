@@ -36,6 +36,7 @@ function snapshot() {
       options: [
         { name: "operations_location", label: "RV GPS location source", selector: { entity: { domain: ["device_tracker"] } } },
         entity("operations_altitude"), entity("operations_speed"), entity("operations_direction"),
+        entity("chassis_distance"), entity("chassis_fuel"), entity("chassis_engine_hours"),
         entity("power_entities", true), entity("water_entities", true),
         entity("fresh_water_tank_level"), number("fresh_water_tank_warning"),
         entity("tire_front_left_pressure"), number("tire_front_pressure_low"),
@@ -557,6 +558,9 @@ test("entity choices support numeric helpers, filter domains, friendly names and
   assert.equal(fieldSection("options", "power_entities"), "systems");
   assert.equal(fieldSection("options", "operations_location"), "operations");
   assert.equal(fieldSection("options", "operations_direction"), "operations");
+  assert.equal(fieldSection("options", "chassis_distance"), "chassis");
+  assert.equal(fieldSection("options", "chassis_engine_hours"), "chassis");
+  assert.equal(fieldSection("options", "chassis_entities"), "systems");
   assert.deepEqual(entityChoices({
     "device_tracker.gps": { state: "not_home", attributes: {} },
     "sensor.gps": { state: "10", attributes: {} },
@@ -645,11 +649,11 @@ async function panelFixture(options = {}) {
   return { panel, api, root: panel.shadowRoot };
 }
 
-test("panel is a registered standard custom element with seven accessible tabs", async () => {
+test("panel is a registered standard custom element with eight accessible tabs", async () => {
   const { panel, api, root } = await panelFixture();
   assert.equal(registrations.get("havrv-config-panel"), HavrvConfigPanel);
   const tabs = walk(root).filter((node) => node.getAttribute("role") === "tab");
-  assert.equal(tabs.length, 7);
+  assert.equal(tabs.length, 8);
   assert.equal(tabs[0].getAttribute("aria-selected"), "true");
   assert.equal(walk(root).some((node) => node.tagName === "A" &&
     node.getAttribute("href") === "/config/devices/dashboard?config_entry=entry"), true);

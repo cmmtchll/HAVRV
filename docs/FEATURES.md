@@ -7,8 +7,9 @@ guide](SETUP.md).
 ## Management page
 
 The integration entry's gear opens a dedicated, admin-only page with Overview,
-RV profile, Power, Tanks, Tires and System mappings. It edits the same config
-entry as native forms and configuration-number entities. All sections share one
+RV profile, Chassis, Operations, Power, Tanks, Tires and System mappings. It
+edits the same config entry as native forms and configuration-number entities.
+All sections share one
 in-memory draft and one **Apply changes** operation, with validation, removal
 review and stale-draft detection. Existing IDs and source ownership are retained.
 The monitoring dashboard is a separate view. Native options/reconfigure
@@ -60,6 +61,62 @@ including helpers without a device class. Other units remain passthrough.
 Home Assistant's global unit preference does not replace these profile defaults;
 explicit per-entity display-unit overrides still work. Original source states
 are never modified.
+
+## Chassis counters
+
+The **Chassis** device exposes optional source-owned cumulative distance,
+fuel consumed and engine operating hours, separate from advisory or historical
+results. It can share the existing Chassis system device with generic mappings.
+Sources accept numeric sensors, numbers and input numbers, including templates.
+Finite nonnegative values and declared compatible units are required.
+
+Distance uses profile km/mi, fuel uses L/US gal, and operating time uses hours.
+Fuel burn is consumed fuel divided by **engine hours**, in L/h or US gal/h,
+not fuel per elapsed wall-clock hour. Economy is L/100km for metric profiles
+and mpg (US gallons) for customary profiles. Both use matched counter
+endpoints; ratios with a zero denominator are unavailable, never infinity or
+invented zeroes. Source/global HA units do not override the profile's defaults;
+compatible explicit HA per-entity overrides are respected. Economy has no
+HA device-class unit converter and remains in its profile unit.
+
+For every configured counter and supported derivation, HAVRV creates **Latest
+update**, **5m**, **1h**, **8h**, **1d**, **7d** and **30d** sensors. Latest uses
+consecutive observed reports; ratios advance only after all required inputs
+have reported again. It is not an instantaneous measurement. Source cadence
+and rounding limit precision, especially for slowly updated engine hours.
+Rolling sensors subtract real endpoints inside their requested time frame.
+They show partial results immediately when two endpoints exist, with
+`interval_start`, `interval_end`, `covered_seconds` and `requested_seconds`.
+The span is the elapsed interval between endpoints, not a claim of continuous
+reports. Rolling fuel amounts are not cumulative meters and do not expose
+meter-style long-term statistics.
+
+Ignition-off, invalid and unavailable intervals **do not erase history**.
+Current totals become unavailable and expose separately labeled last-valid
+value/unit/time metadata. Historical changes remain available where an
+endpoint pair exists in the requested window, with their real endpoint age.
+No interpolation, missing-data zero-fill or extension to the present occurs.
+With six hours offline, 5m/1h may have no samples while 8h still has historical
+results. New cumulative reports can measure an increase across a gap, but
+cannot place activity at an exact time inside it. An undetected reset during a
+gap cannot be reconstructed.
+
+A detected decrease restarts only that counter's history and dependent ratios;
+the source total still passes through. Clearing/replacing a mapping likewise
+starts a new history era. Reloads, restarts and profile-unit edits preserve
+unchanged source histories. Local private storage retains up to 30 days of
+rolling observations, first/last reports per minute plus availability
+transitions, capped at 100,000 snapshots per RV. Latest intervals and retained
+totals survive separately. Removing the RV or clearing all chassis mappings
+deletes this history. Existing profiles without sources gain no invented
+readings. Diagnostics redact the mappings and do not export travel history.
+
+The [driver panel](DASHBOARD.md#compact-chassis-driver-panel) intentionally
+omits lifetime fuel and per-window engine time. All sensors remain organized
+on the Chassis device for other uses. The dashboard's optional
+`chassis_mode: inspection` presentation adds 1d/7d/30d columns and engine hours
+per period for non-driving maintenance/inspection review, without inferring
+service schedules or safety findings.
 
 ## RV profile specifications
 

@@ -115,6 +115,9 @@ const STR = {
   form: {
     device_id: "RV profile",
     layout: "Layout",
+    chassis_mode: "Chassis dashboard mode",
+    driving: "Driving (compact)",
+    inspection: "Non-driving (maintenance / inspection)",
     auto: "Automatic",
     horizontal: "Horizontal",
     vertical: "Vertical",
@@ -130,13 +133,19 @@ export const DISPLAY_CLASSES = {
   show_tanks: { default: true, label: "Show tanks", fields: { tanks: [] } },
   show_power: { default: true, label: "Show placed power sources", fields: { powerSources: [] } },
   show_tow: { default: true, label: "Show tow vehicle", fields: { tow: undefined } },
+  show_chassis: { default: true, label: "Show compact chassis driver panel", fields: { chassis: undefined } },
   show_coach: { default: true, label: "Show coach information and operation mode", fields: { profile: {}, profileEntities: [], operationMode: undefined } },
   show_systems: { default: true, label: "Show mapped system sections", fields: { systems: [] } },
 };
 
 export function dashboardOptions(config = {}) {
+  const chassisMode = config.chassis_mode ?? "driving";
+  if (!["driving", "inspection"].includes(chassisMode)) {
+    throw new Error("chassis_mode must be one of: driving, inspection");
+  }
   return {
     layout: config.layout ?? "auto",
+    chassis_mode: chassisMode,
     ...Object.fromEntries(Object.entries(DISPLAY_CLASSES).map(([key, group]) =>
       [key, config[key] ?? group.default])),
   };
@@ -149,6 +158,13 @@ export function visibleModel(model, config = {}) {
   for (const [key, group] of Object.entries(DISPLAY_CLASSES)) {
     if (options[key] === false) Object.assign(visible, structuredClone(group.fields));
   }
+  if (visible.chassis) {
+    visible.chassis = {
+      ...visible.chassis,
+      mode: options.chassis_mode,
+      watched: chassisWatched(visible.chassis.readings, options.chassis_mode),
+    };
+  }
   visible.watched = watchedEntities(visible);
   return visible;
 }
@@ -158,6 +174,7 @@ function watchedEntities(model) {
     ...Object.values(model.profile || {}),
     model.operationMode,
     ...Object.values(model.tow || {}),
+    ...(model.chassis?.watched || []),
     ...model.axles.flatMap((axle) =>
       [...axle.left, ...axle.right].flatMap((tire) =>
         Object.values(TIRE_ROLES).map((role) => tire[role]),
@@ -257,6 +274,7 @@ export function buildModel(hass, rv) {
     systems: [],
     powerSources: [],
     tow: undefined,
+    chassis: undefined,
   };
   const axles = new Map();
   for (const device of Object.values(hass.devices || {})) {
@@ -311,6 +329,25 @@ export function buildModel(hass, rv) {
       model.tow = entityRoles(entries, {
         towing: "enabled", tow_type: "type", tow_weight: "weight",
       });
+    } else if (part === "chassis") {
+      const readings = {};
+      const counterEntries = (entries || []).filter((entry) =>
+        !entry.hidden && entry.translation_key?.startsWith("chassis_"));
+      for (const entry of counterEntries) {
+        const attributes = hass.states[entry.entity_id]?.attributes;
+        if (attributes?.chassis_metric && attributes.period) {
+          readings[`${attributes.chassis_metric}_${attributes.period}`] = entry.entity_id;
+        }
+      }
+      if (counterEntries.length) {
+        model.chassis = {
+          readings,
+          watched: chassisWatched(readings, "driving"),
+        };
+      }
+      const counters = new Set(counterEntries.map((entry) => entry.entity_id));
+      const entities = visible(device.id).filter((id) => !counters.has(id));
+      if (entities.length) model.systems.push({ key: part, name: deviceName(device), entities });
     } else {
       const entities = visible(device.id);
       if (entities.length) {
@@ -366,6 +403,142 @@ function numeric(hass, entityId, defaultPrecision = 0) {
     text: formatNumber(hass, value, precision),
     unit: state.attributes.unit_of_measurement || "",
   };
+}
+
+const CHASSIS_ROWS = [
+  ["economy", "Economy"], ["fuel_rate", "Fuel burn"],
+  ["distance", "Distance"], ["fuel", "Fuel"],
+];
+const CHASSIS_PERIODS = ["latest", "5m", "1h", "8h"];
+const CHASSIS_WINDOWS = {
+  "5m": 300, "1h": 3600, "8h": 28800, "1d": 86400, "7d": 604800, "30d": 2592000,
+};
+const CHASSIS_INSPECTION_ROWS = [...CHASSIS_ROWS, ["engine_hours", "Engine hours"]];
+
+function chassisWatched(readings, mode) {
+  const rows = mode === "inspection" ? CHASSIS_INSPECTION_ROWS : CHASSIS_ROWS;
+  const periods = mode === "inspection" ? ["latest", ...Object.keys(CHASSIS_WINDOWS)] : CHASSIS_PERIODS;
+  const keys = new Set(rows.flatMap(([metric]) => periods.map((period) => `${metric}_${period}`)));
+  return Object.entries(readings).filter(([key]) => key.endsWith("_total") || keys.has(key))
+    .map(([, id]) => id);
+}
+const CHASSIS_UNITS = {
+  distance: { km: 1000, mi: 1609.344, m: 1, ft: 0.3048, yd: 0.9144, in: 0.0254, cm: 0.01, mm: 0.001 },
+  fuel: { L: 1, gal: 3.785411784, mL: 0.001, "m³": 1000, "ft³": 28.316846592, "fl. oz.": 0.0295735295625 },
+  fuel_rate: { "L/h": 1, "gal/h": 3.785411784, "L/min": 60, "L/s": 3600, "gal/min": 227.12470704, "gal/d": 3.785411784 / 24, "m³/h": 1000, "m³/min": 60000, "m³/s": 3600000, "mL/s": 3.6, "ft³/min": 1699.01079552 },
+  engine_hours: { h: 3600, min: 60, s: 1, d: 86400, w: 604800, ms: 0.001, "μs": 0.000001 },
+};
+
+export function convertChassisValue(value, metric, from, to) {
+  if (!Number.isFinite(value)) return undefined;
+  if (from === to) return value;
+  const units = CHASSIS_UNITS[metric];
+  return units?.[from] && units?.[to] ? value * units[from] / units[to] : undefined;
+}
+
+function chassisNumber(hass, value, metric, id) {
+  const explicit = hass.entities?.[id]?.display_precision;
+  const precision = explicit ?? (["fuel", "engine_hours"].includes(metric) ? 3 : 1);
+  return new Intl.NumberFormat(hass.locale?.language || "en", {
+    maximumFractionDigits: precision,
+    minimumFractionDigits: explicit ?? (metric === "fuel" ? 0 : 1),
+  }).format(value);
+}
+
+export function chassisSparkline(hass, id, metric, now = Date.now()) {
+  const state = stateOf(hass, id);
+  const attributes = state?.attributes || {};
+  const points = (Array.isArray(attributes.trend) ? attributes.trend : []).filter((point) =>
+    Array.isArray(point) && Number.isFinite(point[0]) && point[0] * 1000 >= now - 8 * HOUR
+    && point[0] * 1000 <= now).map(([time, value]) => ({
+    time: time * 1000,
+    value: value === null ? undefined
+      : convertChassisValue(value, metric, attributes.trend_unit, attributes.unit_of_measurement),
+  }));
+  const values = points.map((point) => point.value).filter(Number.isFinite);
+  if (values.length < 2) return "";
+  const low = Math.min(...values), high = Math.max(...values);
+  const span = high - low || 1;
+  let path = "", connected = false, lines = 0;
+  for (const point of points) {
+    if (point.value === undefined) { connected = false; continue; }
+    const x = 1 + (point.time - (now - 8 * HOUR)) / (8 * HOUR) * 34;
+    const y = high === low ? 7.5 : 13 - (point.value - low) / span * 11;
+    path += `${connected ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)} `;
+    if (connected) lines++;
+    connected = true;
+  }
+  return lines ? `<svg class="chassis-trend" viewBox="0 0 36 15" role="img" aria-label="${escapeHtml("8h trend of 5m values; gaps mean no samples")}"><path d="${path.trim()}"/></svg>` : "";
+}
+
+function chassisInterval(hass, id, now) {
+  const attributes = stateOf(hass, id)?.attributes;
+  const end = validTimestamp(attributes?.interval_end, now);
+  const duration = attributes?.covered_seconds;
+  return end !== undefined && Number.isFinite(duration) && duration > 0
+    ? { end, duration } : undefined;
+}
+
+function chassisSpan(seconds) {
+  if (seconds >= 86400) {
+    const days = Math.floor(seconds / 86400), hours = Math.floor(seconds % 86400 / 3600);
+    return `${days}d${hours ? `${hours}h` : ""}`;
+  }
+  const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60);
+  return hours ? `${hours}h${minutes ? `${minutes}m` : ""}` : minutes ? `${minutes}m` : `${Math.floor(seconds)}s`;
+}
+
+export function renderChassis(hass, chassis, now = Date.now()) {
+  if (!chassis) return "";
+  const readings = chassis.readings;
+  const inspection = chassis.mode === "inspection";
+  const periods = inspection ? ["latest", ...Object.keys(CHASSIS_WINDOWS)] : CHASSIS_PERIODS;
+  const rows = (inspection ? CHASSIS_INSPECTION_ROWS : CHASSIS_ROWS)
+    .filter(([metric]) => periods.some((period) => readings[`${metric}_${period}`]));
+  if (!rows.length) return "";
+  const totals = [];
+  const configuredTotals = ["distance", "fuel", "engine_hours"].map((metric) =>
+    readings[`${metric}_total`]).filter(Boolean);
+  const ages = configuredTotals.map((id) => validTimestamp(stateOf(hass, id)?.attributes.last_valid_time, now))
+    .filter((time) => time !== undefined).map((time) => now - time);
+  const offline = configuredTotals.some((id) => !numeric(hass, id));
+  for (const metric of ["distance", "engine_hours"]) {
+    const id = readings[`${metric}_total`], state = stateOf(hass, id);
+    if (!state) continue;
+    const current = numeric(hass, id);
+    const attributes = state.attributes;
+    const value = current?.value ?? convertChassisValue(attributes.last_valid_value, metric,
+      attributes.last_valid_unit, attributes.unit_of_measurement);
+    totals.push(`<span title="${escapeHtml(metric === "distance" ? "Total distance driven" : "Total engine operating hours")}">${!current ? "Last " : ""}${value === undefined ? "—" : chassisNumber(hass, value, metric, id)} ${escapeHtml(attributes.unit_of_measurement || "")}</span>`);
+  }
+  const intervals = Object.fromEntries(periods.map((period) => [period,
+    rows.map(([metric]) => chassisInterval(hass, readings[`${metric}_${period}`], now)).filter(Boolean)]));
+  const partialPeriods = periods.filter((period) =>
+    period !== "latest" && (inspection || period === "8h") && intervals[period].some((interval) =>
+      interval.duration < CHASSIS_WINDOWS[period] - 60));
+  const ageText = ages.length ? shortAge(now - Math.max(...ages), now) : "?";
+  const header = `<header><strong>${inspection ? "Chassis inspection" : "Chassis"}</strong><span class="chassis-totals">${totals.join(" / ")}</span><span class="chassis-age">${offline ? "Last " : ""}${escapeHtml(ageText)}</span></header>`;
+  const columns = periods.map((period) =>
+    `<th scope="col"${partialPeriods.includes(period) ? ' class="chassis-partial"' : ""}>${period === "latest" ? "Latest" : period}${partialPeriods.includes(period) ? "*" : ""}</th>`).join("");
+  const body = rows.map(([metric, label]) => {
+    const ids = periods.map((period) => readings[`${metric}_${period}`]);
+    const unit = ids.map((id) => stateOf(hass, id)?.attributes.unit_of_measurement).find(Boolean) || "";
+    const cells = ids.map((id, index) => {
+      const current = numeric(hass, id);
+      const interval = chassisInterval(hass, id, now);
+      const title = interval ? `Observed ${chassisSpan(interval.duration)}; ends ${shortAge(interval.end, now)} ago` : "No samples or undefined ratio";
+      const overrideUnit = current?.unit && current.unit !== unit
+        ? `<small class="chassis-cell-unit">${escapeHtml(current.unit)}</small>` : "";
+      return `<td${partialPeriods.includes(periods[index]) ? ' class="chassis-partial"' : ""}${id ? ` data-entity="${escapeHtml(id)}" tabindex="0" role="button"` : ""} title="${escapeHtml(title)}">${current ? chassisNumber(hass, current.value, metric, id) : "—"}${overrideUnit}</td>`;
+    }).join("");
+    return `<tr${metric === "fuel_rate" || metric === "economy" ? ' class="chassis-derived"' : ""}><th scope="row"><span>${escapeHtml(label)}<small>${escapeHtml(unit)}</small></span>${chassisSparkline(hass, readings[`${metric}_5m`], metric, now)}</th>${cells}</tr>`;
+  }).join("");
+  const latest = intervals.latest.length ? Math.min(...intervals.latest.map((interval) => interval.duration)) : undefined;
+  const spans = partialPeriods.map((period) =>
+    `*${period}: ${chassisSpan(Math.min(...intervals[period].map((interval) => interval.duration)))} observed`);
+  const foot = `${spans.length ? `${spans.join(" · ")} · ` : ""}Latest: ${latest === undefined ? "no samples" : chassisSpan(latest)} · Trends: 5m values`;
+  const table = `<table><thead><tr><th scope="col">8h trends</th>${columns}</tr></thead><tbody>${body}</tbody></table>`;
+  return `<section class="chassis-panel${inspection ? " chassis-inspection" : ""}${offline ? " chassis-offline" : ""}" aria-label="${inspection ? "Chassis maintenance and inspection readings" : "Chassis driver readings"}">${header}${inspection ? `<div class="chassis-scroll" tabindex="0" role="region" aria-label="Chassis history table">${table}</div>` : table}<footer>${escapeHtml(foot)}</footer></section>`;
 }
 
 function formatState(hass, entityId) {
@@ -1518,6 +1691,37 @@ const STYLES = `
   .power-legend i { border: 1px solid var(--hv-line); }
   .power-legend.power-unknown i { border-style: dashed; border-color: var(--hv-text); }
   .power-box [data-entity]:focus-visible .hit { stroke: var(--primary-color); stroke-width: 2; }
+  .driver-panels { display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 8px; }
+  .chassis-panel { width:390px; max-width:100%; box-sizing:border-box; border:1px solid var(--hv-line);
+    border-radius:6px; overflow:hidden; font-variant-numeric:tabular-nums; }
+  .chassis-panel header { display:flex; align-items:baseline; gap:8px; padding:3px 7px; line-height:16px; }
+  .chassis-panel header strong { font-size:14px; }
+  .chassis-totals { font-size:11px; white-space:nowrap; }
+  .chassis-age { font-size:9px; margin-left:auto; white-space:nowrap; color:var(--hv-muted); }
+  .chassis-panel table { width:calc(100% - 14px); margin:0 7px; border-collapse:collapse; table-layout:fixed; }
+  .chassis-panel th,.chassis-panel td { border-bottom:1px solid var(--hv-line); padding:1px 5px; text-align:right; }
+  .chassis-panel thead th { font-size:11px; font-weight:400; line-height:14px; padding:2px 5px;
+    border-top:1px solid var(--hv-line); }
+  .chassis-panel th:first-child { width:37%; padding-left:0; text-align:left; }
+  .chassis-panel thead th:first-child { font-size:9px; color:var(--hv-muted); }
+  .chassis-panel tbody th { font-size:12px; font-weight:400; }
+  .chassis-panel tbody th span { white-space:nowrap; }
+  .chassis-panel tbody th small { font-size:9px; margin-left:3px; color:var(--hv-muted); }
+  .chassis-panel td { font-size:18px; font-weight:600; line-height:20px; }
+  .chassis-panel .chassis-cell-unit { font-size:9px; font-weight:400; margin-left:2px; }
+  .chassis-panel tbody th { position:relative; padding-right:40px; }
+  .chassis-trend { width:36px; height:15px; position:absolute; right:0; top:3px; }
+  .chassis-trend path { fill:none; stroke:var(--primary-color,#03a9f4); stroke-width:1; }
+  .chassis-derived td { color:var(--primary-color,#03a9f4); }
+  .chassis-panel .chassis-partial { background:color-mix(in srgb,var(--hv-watch) 6%,transparent); }
+  .chassis-panel footer { font-size:9px; padding:2px 7px; line-height:11px; color:var(--hv-muted); }
+  .chassis-panel [data-entity] { cursor:pointer; }
+  .chassis-panel [data-entity]:focus-visible { outline:2px solid var(--primary-color); outline-offset:-2px; }
+  .chassis-offline td,.chassis-offline .chassis-totals { opacity:.65; }
+  .chassis-inspection { width:760px; }
+  .chassis-inspection .chassis-scroll { overflow-x:auto; }
+  .chassis-inspection table { min-width:744px; }
+  .chassis-inspection th:first-child { width:150px; }
 `;
 
 let instanceCounter = 0;
@@ -1568,6 +1772,16 @@ export class HavrvRvCard extends HTMLElement {
             select: {
               mode: "dropdown",
               options: LAYOUTS.map((value) => ({ value, label: STR.form[value] })),
+            },
+          },
+        },
+        {
+          name: "chassis_mode",
+          default: "driving",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: ["driving", "inspection"].map((value) => ({ value, label: STR.form[value] })),
             },
           },
         },
@@ -1692,6 +1906,7 @@ export class HavrvRvCard extends HTMLElement {
         powerSources: model.powerSources,
         tow: model.tow,
         mode: model.operationMode,
+        chassis: model.chassis,
       },
       model?.watched.map((id) => {
         const state = hass.states[id];
@@ -1699,6 +1914,9 @@ export class HavrvRvCard extends HTMLElement {
           state.attributes.last_valid_value, state.attributes.last_valid_unit,
           state.attributes.last_valid_time, state.attributes.last_valid_source,
           state.attributes.source_entity_id,
+          state.attributes.interval_start, state.attributes.interval_end,
+          state.attributes.covered_seconds, state.attributes.trend,
+          state.attributes.trend_unit,
           state.last_reported, state.last_updated] : null;
       }),
     ]);
@@ -1857,6 +2075,7 @@ export class HavrvRvCard extends HTMLElement {
     );
     return `<div class="wrap">
       ${this._config.show_header ? this._renderHeader(model) : ""}
+      ${model.chassis ? `<div class="driver-panels">${renderChassis(this._hass, model.chassis)}</div>` : ""}
       <div class="drawing" tabindex="0" role="region" aria-label="RV diagram">${svg}</div>
       ${this._historyError ? `<div class="message" role="status">${escapeHtml(this._historyError)}</div>` : ""}
       ${!this._config.show_tires || model.axles.length ? "" : `<div class="message">${escapeHtml(STR.noTires)}</div>`}

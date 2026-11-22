@@ -26,6 +26,7 @@ from homeassistant.core import (
 )
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -50,6 +51,13 @@ from homeassistant.util.unit_conversion import (
 )
 
 from . import HavrvConfigEntry
+from .chassis import (
+    WINDOWS,
+    ChassisHistory,
+    change_value,
+    chassis_entity_keys,
+    profile_value,
+)
 from .const import (
     CONF_COACH_BUILDER,
     CONF_COACH_IDENTIFIER,
@@ -331,6 +339,145 @@ class HavrvTravelSensor(HavrvOperationsSource, SensorEntity):
     def available(self) -> bool:
         """Keep invalid values and incompatible source units unavailable."""
         return self.native_value is not None
+
+
+class HavrvChassisSensor(SensorEntity):
+    """Expose source-owned chassis totals and explicitly historical changes."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _unrecorded_attributes = frozenset({"trend", "trend_unit"})
+
+    def __init__(
+        self, entry: HavrvConfigEntry, history: ChassisHistory, metric: str, period: str
+    ) -> None:
+        """Keep identities stable across source remappings and profile-unit edits."""
+        self._entry = entry
+        self._history = history
+        self._metric = metric
+        self._period = period
+        self._attr_unique_id = f"{entry.entry_id}_chassis_counter_{metric}_{period}"
+        parent = entry.runtime_data.device_id
+        if parent is None:
+            raise RuntimeError("RV device must be registered before platform setup")
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"{entry.entry_id}_chassis")},
+            "name": "Chassis",
+            "via_device_id": parent,
+        }
+        self._attr_translation_key = (
+            f"chassis_total_{metric}"
+            if period == "total"
+            else f"chassis_latest_{metric}"
+            if period == "latest"
+            else f"chassis_change_{metric}"
+        )
+        self._attr_translation_placeholders = {"period": period}
+        metric_units = entry.runtime_data.measurement_system == UNIT_SYSTEM_METRIC
+        self._attr_native_unit_of_measurement = {
+            "distance": "km" if metric_units else "mi",
+            "fuel": "L" if metric_units else "gal",
+            "engine_hours": "h",
+            "fuel_rate": "L/h" if metric_units else "gal/h",
+            "economy": "L/100km" if metric_units else "mpg",
+        }[metric]
+        self._attr_suggested_unit_of_measurement = self._attr_native_unit_of_measurement
+        self._attr_device_class = {
+            "distance": SensorDeviceClass.DISTANCE,
+            "fuel": SensorDeviceClass.VOLUME,
+            "engine_hours": SensorDeviceClass.DURATION,
+            "fuel_rate": SensorDeviceClass.VOLUME_FLOW_RATE,
+            "economy": None,
+        }[metric]
+        self._attr_state_class = (
+            SensorStateClass.TOTAL_INCREASING
+            if period == "total"
+            else None
+            if metric == "fuel"
+            else SensorStateClass.MEASUREMENT
+        )
+        self._attr_suggested_display_precision = 3 if metric == "fuel" else 1
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe once and refresh suggested units without overwriting overrides."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, self._history.signal, self.async_write_ha_state
+            )
+        )
+        defaults = self.get_initial_entity_options()
+        assert defaults is not None
+        er.async_get(self.hass).async_update_entity_options(
+            self.entity_id, "sensor.private", defaults["sensor.private"]
+        )
+        self.async_registry_entry_updated()
+
+    @property
+    def native_value(self) -> float | None:
+        """Never expose a retained total as a current source reading."""
+        if self._period == "total":
+            value = self._history.current.get(self._metric)
+            return (
+                profile_value(
+                    value, self._metric, self._entry.runtime_data.measurement_system
+                )
+                if value is not None
+                else None
+            )
+        return change_value(
+            self._history.change(self._metric, self._period),
+            self._metric,
+            self._entry.runtime_data.measurement_system,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Keep historical results available only while their ratios are defined."""
+        return self.native_value is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Describe actual endpoints and bounded trend data, not imaginary coverage."""
+        attributes: dict[str, Any] = {
+            "chassis_metric": self._metric,
+            "period": self._period,
+        }
+        if self._period == "total":
+            attributes["source_entity_id"] = self._history.sources[self._metric]
+            sample = self._history.last_valid.get(self._metric)
+            if sample is not None:
+                attributes.update(
+                    last_valid_value=profile_value(
+                        sample.values[self._metric],
+                        self._metric,
+                        self._entry.runtime_data.measurement_system,
+                    ),
+                    last_valid_unit=self.native_unit_of_measurement,
+                    last_valid_time=dt_util.utc_from_timestamp(sample.time).isoformat(),
+                )
+        elif change := self._history.change(self._metric, self._period):
+            attributes.update(
+                interval_start=dt_util.utc_from_timestamp(
+                    change.start.time
+                ).isoformat(),
+                interval_end=dt_util.utc_from_timestamp(change.end.time).isoformat(),
+                covered_seconds=change.duration,
+            )
+            if self._period in WINDOWS:
+                attributes["requested_seconds"] = WINDOWS[self._period]
+        if self._period == "5m":
+            attributes["trend"] = self._history.trend(self._metric)
+            attributes["trend_unit"] = self.native_unit_of_measurement
+        return attributes
+
+    @property
+    def capability_attributes(self) -> dict[str, Any]:
+        """Use HA's unavailable-safe hook for mapping and historical metadata."""
+        attributes = dict(super().capability_attributes or {})
+        if not self.available:
+            attributes.update(self.extra_state_attributes)
+        return attributes
 
 
 class HavrvTankLevelSensor(HavrvSensor):
@@ -1217,6 +1364,16 @@ async def async_setup_entry(
     async_add_entities: Callable[[list[Entity]], None],
 ) -> None:
     """Set up mapped sensor entities."""
+    history = ChassisHistory(hass, entry)
+    await history.async_setup()
+    if history.sources:
+        entry.runtime_data.chassis_history = history
+        async_add_entities(
+            [
+                HavrvChassisSensor(entry, history, metric, period)
+                for metric, period in chassis_entity_keys(history.sources)
+            ]
+        )
     async_add_source_entities(entry, "sensor", HavrvSensor, async_add_entities)
     async_add_entities(list(_profile_sensors(entry)))
     async_add_entities(_tank_entities(entry))

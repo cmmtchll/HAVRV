@@ -52,6 +52,36 @@ Check the original entity in Home Assistant. A missing, `unknown`, or
 `unavailable` source makes its HAVRV mirror unavailable until the source
 returns a usable state.
 
+## Chassis counters or fuel derivations are missing
+
+Check **Chassis** on the management page (or the native options recovery form).
+Select cumulative readings with declared distance, volume or duration units.
+Sensors, numbers, input numbers and template-backed numeric sources are
+supported; unitless, negative, nonfinite, missing and unavailable values do not
+become zeroes. Remaining fuel or tank percentage is not consumed fuel.
+Selecting HAVRV's own chassis output as an input is rejected at runtime to
+avoid recursive readings.
+
+A change needs two observed endpoints. Fuel per engine hour also needs a
+positive engine-hours increment; coarse or infrequent engine-time readings may
+temporarily make that ratio unavailable. Metric economy needs positive
+distance; customary mpg needs positive consumed fuel. Latest ratios wait for
+all required inputs to report again. This is sampled history, not inferred
+instantaneous engine data.
+
+Ignition-off gaps are expected: source totals go unavailable, while historical
+results and separately labeled last totals can remain visible with their age.
+Short windows eventually have no endpoint pair; longer windows may still
+work. Reconnect the original source rather than clearing the mapping to
+preserve history. Detected decreases, clearing/remapping, or a warning about
+corrupt saved chassis history restart the affected baseline. History predating
+HAVRV configuration or a hidden reset cannot be recovered.
+
+For a missing compact panel, ensure `show_chassis` is not false, refresh the
+frontend after updating, and confirm at least one mapped counter's HAVRV
+entities are not hidden. The longer-window sensors remain on the Chassis
+device rather than filling the driver dashboard with analysis sections.
+
 ## A control has no effect
 
 Confirm that the selected source entity is available and can be controlled
