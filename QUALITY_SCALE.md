@@ -87,6 +87,12 @@ implemented integration behavior, not just repository configuration.
   weight controls. The dashboard draws the selected outline only while towing
   is on; profile-unit weight conversion is independent of configuration writes.
   No towing ratings, readiness checks or load safety calculations are inferred.
+- A separate driven-profile dashboard card with rolling 1h/8h/1d ranges and
+  manually started/stopped saved trips. Local measured history supplies
+  elevation, fuel, economy/grade and sampled-GPS/odometer comparisons with
+  profile units and explicit gaps. GPS polylines and altitude-adjusted distances
+  are estimates, not exact road reconstruction or causal fuel assessments.
+  Existing compact chassis presentation remains independent.
 - Python 3.14.2 / Home Assistant Core 2026.10.0 target.
 - Ruff, pytest, a 96% integration coverage threshold, and CI validation.
 - End-user setup and project-status documentation.

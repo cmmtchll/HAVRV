@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import probatio as vol
+from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.components.websocket_api.decorators import (
@@ -26,6 +27,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .configuration import _default_measurement_system
 from .const import DOMAIN
+from .driven_profile import RANGES
 from .management import (
     Candidate,
     editable_values,
@@ -36,6 +38,65 @@ from .management import (
 
 _REGISTERED = f"{DOMAIN}_management_commands"
 RELOAD_RESULTS = f"{DOMAIN}_management_reload"
+
+
+@websocket_command(
+    {
+        vol.Required("type"): "havrv/driven_profile",
+        vol.Required("entry_id"): str,
+        vol.Required("action"): vol.In(("get", "start", "stop")),
+        vol.Optional("range", default="8h"): vol.In(RANGES),
+        vol.Optional("trip_id"): str,
+        vol.Optional("name"): str,
+    }
+)
+@async_response
+async def websocket_driven_profile(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Return private travel analyses only to users allowed to read every source."""
+    if (entry := _entry(hass, connection, msg)) is None:
+        return
+    if (
+        entry.state is not ConfigEntryState.LOADED
+        or (collector := getattr(entry.runtime_data, "driven_profile", None)) is None
+    ):
+        connection.send_error(msg["id"], "not_loaded", "HAVRV profile is not loaded")
+        return
+    user = connection.user
+    if user is None or (
+        not user.is_admin
+        and (
+            msg["action"] != "get"
+            or collector.admin_only
+            or not collector.source_ids
+            or not all(
+                user.permissions.check_entity(entity_id, POLICY_READ)
+                for entity_id in collector.source_ids
+            )
+        )
+    ):
+        connection.send_error(
+            msg["id"], "unauthorized", "Travel source access required"
+        )
+        return
+    if (
+        "name" in msg
+        and msg["action"] != "start"
+        or ("trip_id" in msg and msg["action"] != "get")
+    ):
+        connection.send_error(
+            msg["id"], "invalid_format", "Unexpected action parameter"
+        )
+        return
+    try:
+        if msg["action"] != "get":
+            await collector.async_action(msg["action"], msg.get("name"))
+        result = collector.payload(msg["range"], msg.get("trip_id"))
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_driven_profile", str(err))
+        return
+    connection.send_result(msg["id"], result)
 
 
 async def async_reload_profile(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -305,6 +366,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
         websocket_validate,
         websocket_apply,
         websocket_reload,
+        websocket_driven_profile,
     ):
         websocket_api.async_register_command(hass, command)
     hass.data[_REGISTERED] = True

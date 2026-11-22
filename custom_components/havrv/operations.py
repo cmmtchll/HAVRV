@@ -4,7 +4,9 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import EntityCategory
+from homeassistant.core import Event, EventStateReportedData, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.event import async_track_state_report_event
 
 from .const import CONF_OPERATIONS_SOURCES, DOMAIN
 from .entity import HavrvSourceEntity
@@ -40,6 +42,7 @@ class HavrvOperationsSource(HavrvSourceEntity):
     """Subscribe to one optional source with an identity independent of mapping."""
 
     _attr_should_poll = False
+    _unrecorded_attributes = frozenset({"source_reported"})
 
     def __init__(self, entry: HavrvConfigEntry, metric: str) -> None:
         """Associate each mapped reading with Operations, not a generic system."""
@@ -58,6 +61,28 @@ class HavrvOperationsSource(HavrvSourceEntity):
         if self._source_entity_id == self.entity_id:
             self._source_entity_id = None
         await super().async_added_to_hass()
+        if self._source_entity_id is not None:
+            self.async_on_remove(
+                async_track_state_report_event(
+                    self.hass,
+                    [self._source_entity_id],
+                    self._source_reported,
+                )
+            )
+
+    @callback
+    def _source_reported(self, _event: Event[EventStateReportedData]) -> None:
+        """Expose actual report freshness even for unchanged travel readings."""
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose source identity and report time without inventing a new reading."""
+        state = self._source_state
+        return {
+            "source_entity_id": self._source_entity_id,
+            "source_reported": state.last_reported.isoformat() if state else None,
+        }
 
     @property
     def entity_category(self) -> EntityCategory | None:

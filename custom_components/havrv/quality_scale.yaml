@@ -10,7 +10,7 @@ rules:
     comment: HACS-compatible icon asset is present at custom_components/havrv/brand/icon.png.
   common-modules:
     status: done
-    comment: Shared source behavior is centralized in custom_components/havrv/entity.py; native and management configuration use custom_components/havrv/configuration.py and custom_components/havrv/management.py. Shared chassis counter history and derivations are in custom_components/havrv/chassis.py, covered by tests/test_chassis.py.
+    comment: Shared source behavior is centralized in custom_components/havrv/entity.py; native and management configuration use custom_components/havrv/configuration.py and custom_components/havrv/management.py. Shared chassis counter history and derivations are in custom_components/havrv/chassis.py, covered by tests/test_chassis.py. Private route/trip collection and calculations using registered HAVRV outputs are in custom_components/havrv/driven_profile.py, covered by tests/test_driven_profile.py.
   config-flow-test-coverage:
     status: done
     comment: CI enforces 100% coverage of custom_components/havrv/config_flow.py and its extracted custom_components/havrv/configuration.py validators with tests/test_config_flow.py.
@@ -94,7 +94,7 @@ rules:
     comment: RV, mapped-system, and independent power-source devices are created in custom_components/havrv/__init__.py and tested in tests/test_init.py and tests/test_power.py; Operations uses shared device information in custom_components/havrv/operations.py and Tow in custom_components/havrv/tow.py, covered by tests/test_operations.py, tests/test_travel.py and tests/test_tow.py. Chassis counters share the Chassis device with optional passthrough mappings, with stable identities and sparse-history lifecycle tests in tests/test_chassis.py.
   diagnostics:
     status: done
-    comment: Diagnostics export redacted configuration in custom_components/havrv/diagnostics.py, tested in tests/test_diagnostics.py. Operations travel source configuration is redacted, with no live coordinates or travel readings exported, verified in tests/test_travel.py. Chassis mappings are redacted and private counter history is not exported, verified in tests/test_chassis.py.
+    comment: Diagnostics export redacted configuration in custom_components/havrv/diagnostics.py, tested in tests/test_diagnostics.py. Operations travel source configuration is redacted, with no live coordinates or travel readings exported, verified in tests/test_travel.py. Chassis mappings and private counter/route histories and trip names are not exported, verified in tests/test_chassis.py and tests/test_driven_profile.py.
   discovery-update-info:
     status: exempt
     comment: HAVRV has no discoverable network device or address information to update.
@@ -115,10 +115,10 @@ rules:
     comment: HAVRV maps arbitrary Home Assistant entities and does not support a fixed manufacturer or device list.
   docs-supported-functions:
     status: done
-    comment: README.md lists supported source domains, mirrored attributes, controls, availability, and update behavior. docs/DASHBOARD.md documents the optional non-driving chassis inspection presentation, including long windows, engine hours, partial spans and manual mode selection; card/strategy propagation and driving regressions are tested in tests/test_power_dashboard.mjs.
+    comment: README.md lists supported source domains, mirrored attributes, controls, availability, and update behavior. docs/DASHBOARD.md documents the optional non-driving chassis inspection presentation and the separate driven-profile widget with rolling ranges, saved trips, profile units and measured-data limitations; card/strategy propagation, independent visibility, chart gaps, mutation errors and driving regressions are tested in tests/test_power_dashboard.mjs.
   docs-troubleshooting:
     status: done
-    comment: README.md provides troubleshooting guidance for missing mappings, unavailable sources, controls, tire readings, and profile values. docs/TROUBLESHOOTING.md documents dashboard startup registry recovery and remaining loading failures; tests/test_power_dashboard.mjs covers registry replacement, bounded fallback, duplicate loading, and explicit recovery errors.
+    comment: README.md provides troubleshooting guidance for missing mappings, unavailable sources, controls, tire readings, and profile values. docs/TROUBLESHOOTING.md documents dashboard startup registry recovery, driven-profile gaps and access requirements, and uncertain trip writes; tests/test_power_dashboard.mjs covers registry replacement, bounded fallback, duplicate loading, and explicit history/mutation errors.
   docs-use-cases:
     status: done
     comment: README.md describes profile reference, system grouping, and entity-independent automation use cases.

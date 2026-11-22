@@ -46,6 +46,8 @@ from .const import (
     UNIT_SYSTEM_US_CUSTOMARY,
 )
 from .dashboard import async_register_frontend
+from .driven_profile import DrivenProfile
+from .driven_profile import storage_key as driven_storage_key
 from .panel import async_register_management_panel
 from .power import POWER_BINARY_METRICS, power_numeric_metrics, power_sources
 from .tank import TANK_DEFINITIONS, defined_tanks
@@ -84,6 +86,7 @@ class HavrvRuntimeData:
     platforms: list[Platform] = field(default_factory=list, compare=False)
     device_id: str | None = field(default=None, compare=False)
     chassis_history: ChassisHistory | None = field(default=None, compare=False)
+    driven_profile: DrivenProfile | None = field(default=None, compare=False)
 
 
 type HavrvConfigEntry = ConfigEntry[HavrvRuntimeData]
@@ -212,23 +215,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> boo
     await hass.config_entries.async_forward_entry_setups(
         entry, entry.runtime_data.platforms
     )
+    driven_profile = entry.runtime_data.driven_profile = DrivenProfile(hass, entry)
+    await driven_profile.async_setup()
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> bool:
     """Unload an RV profile."""
     platforms = entry.runtime_data.platforms
-    if not platforms:
-        return True
-    unloaded = await hass.config_entries.async_unload_platforms(entry, list(platforms))
+    unloaded = not platforms or await hass.config_entries.async_unload_platforms(
+        entry, list(platforms)
+    )
     if unloaded and entry.runtime_data.chassis_history is not None:
         await entry.runtime_data.chassis_history.async_save()
+    if unloaded and entry.runtime_data.driven_profile is not None:
+        await entry.runtime_data.driven_profile.async_save()
     return unloaded
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: HavrvConfigEntry) -> None:
     """Remove the profile's private counter history along with the integration."""
     await Store[dict[str, object]](hass, 1, storage_key(entry.entry_id)).async_remove()
+    await Store[dict[str, object]](
+        hass, 1, driven_storage_key(entry.entry_id)
+    ).async_remove()
 
 
 async def async_migrate_entry(_hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -37,10 +37,12 @@ const {
   rememberReadings, missingReadingText,
   convertTireValue, tireReading, pressureSparkline, pressureHistory,
   renderChassis, chassisSparkline, convertChassisValue,
+  HavrvDrivenProfileCard, drivenProfileChart, renderDrivenProfile, drivenFuelRibbon,
 } = await import(`data:text/javascript;base64,${Buffer.from(text).toString("base64")}`);
 
 const dashboardTags = [
   "havrv-rv-card",
+  "havrv-driven-profile-card",
   "ll-strategy-dashboard-havrv",
   "ll-strategy-view-havrv",
 ];
@@ -86,7 +88,7 @@ test("dashboard registration is immediate and repeated checks do not redefine el
   await Promise.resolve();
   fallback();
   assert.deepEqual(calls, dashboardTags);
-  assert.equal(registered.size, 3);
+  assert.equal(registered.size, 4);
   assert.equal(info.mock.callCount(), 0);
 });
 
@@ -105,7 +107,7 @@ test("HA boot recovers all dashboard elements after a registry replacement", asy
   await Promise.resolve();
   assert.deepEqual(replacement, constructors);
   fallback();
-  assert.equal(info.mock.callCount(), 3);
+  assert.equal(info.mock.callCount(), 4);
   assert.deepEqual(calls, dashboardTags);
 });
 
@@ -118,7 +120,7 @@ test("fallback recovers registration without a boot signal and preserves existin
   fallback();
   assert.equal(registered.get(dashboardTags[0]), card);
   assert.deepEqual(calls, [...dashboardTags, ...dashboardTags.slice(1)]);
-  assert.equal(info.mock.callCount(), 2);
+  assert.equal(info.mock.callCount(), 3);
 });
 
 test("a module loaded after HA boot remains registered without duplicates", async (t) => {
@@ -889,13 +891,308 @@ test("all display classes declare shared true defaults, readable labels and edit
     assert.match(form.computeLabel(field), /^Show .+/);
   }
   assert.deepEqual(Object.keys(DISPLAY_CLASSES), [
-    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_tow", "show_chassis", "show_coach", "show_systems",
+    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_tow", "show_chassis", "show_driven_profile", "show_coach", "show_systems",
   ]);
   const card = new HavrvRvCard();
   card.setConfig({ show_tires: undefined, show_tanks: undefined });
   assert.equal(card._config.show_tires, true);
   assert.equal(card._config.show_tanks, true);
   assert.equal(HavrvRvCard.getStubConfig({ devices: {} }).show_tires, true);
+});
+
+function drivenData() {
+  return {
+    units: { distance: "km", elevation: "m", fuel: "L", economy: "L/100km" },
+    start: 1000, end: 1300, partial: true, trips: [], active_trip: null,
+    summary: { gps_distance: 3, spatial_distance: 3.02, odometer_distance: 3.1,
+      fuel_used: 0.6, ascent: 30, descent: 20 },
+    points: [
+      { time: 1000, distance: 0, elevation: 100, odometer: 0, fuel: 0, economy: null, grade: null },
+      { time: 1060, distance: 1, elevation: 130, odometer: 1.1, fuel: 0.3, economy: 30, grade: 3 },
+      { time: 1120, distance: null, elevation: null, odometer: null, fuel: null, economy: null, grade: null },
+      { time: 1180, distance: 2, elevation: 110, odometer: 2.1, fuel: 0.6, economy: null, grade: null },
+      { time: 1300, distance: 3, elevation: 110, odometer: 3.1, fuel: 0.6, economy: 0, grade: 0 },
+    ],
+  };
+}
+
+function profileFixture() {
+  const { hass, rv } = fixture();
+  hass.devices.operations = { id: "operations", identifiers: [["havrv", "entry_operations"]] };
+  hass.entities["device_tracker.any_name"] = {
+    entity_id: "device_tracker.any_name", device_id: "operations", platform: "havrv", translation_key: "rv_location",
+  };
+  hass.user = { id: "user", is_admin: true };
+  return { hass, rv };
+}
+
+test("driven profile is a separate card in both strategies, with independent visibility and registry discovery", async () => {
+  const { hass, rv } = profileFixture();
+  const model = buildModel(hass, rv);
+  assert.deepEqual(model.drivenProfile, { entryId: "entry" });
+  assert.equal(visibleModel(model, { show_driven_profile: false }).drivenProfile, undefined);
+  assert.deepEqual(model.drivenProfile, { entryId: "entry" });
+  for (const view of [
+    rvView(hass, rv), await HavrvViewStrategy.generate({ device_id: rv.id }, hass),
+    (await HavrvDashboardStrategy.generate({}, hass)).views[0],
+  ]) {
+    const cards = view.sections.flatMap((section) => section.cards);
+    assert.equal(cards.filter((card) => card.type === "custom:havrv-driven-profile-card").length, 1);
+    assert.equal(cards.filter((card) => card.type === "custom:havrv-rv-card").length, 1);
+  }
+  for (const view of [
+    rvView(hass, rv, { show_driven_profile: false }),
+    await HavrvViewStrategy.generate({ device_id: rv.id, show_driven_profile: false }, hass),
+    (await HavrvDashboardStrategy.generate({ show_driven_profile: false }, hass)).views[0],
+  ]) assert.ok(!JSON.stringify(view).includes("custom:havrv-driven-profile-card"));
+  const card = new HavrvRvCard();
+  card.setConfig({});
+  card.hass = hass;
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /Elevation profile|Saved trips/);
+  hass.entities = {};
+  assert.equal(buildModel(hass, rv).drivenProfile, undefined);
+});
+
+test("driven profile charts preserve per-channel gaps, zeroes and measured units", () => {
+  const data = drivenData();
+  const chart = drivenProfileChart(data.points, { title: "Elevation", unit: "m",
+    distanceUnit: "km", series: [{ key: "elevation", label: "Altitude" }] });
+  const path = chart.match(/<path d="([^"]+)"/)[1];
+  assert.equal((path.match(/M/g) || []).length, 2);
+  assert.equal((path.match(/L/g) || []).length, 2);
+  assert.match(chart, /Sampled GPS distance \(km\)/);
+  assert.match(chart, /role="img".*Gaps mean no matched data/);
+  const html = renderDrivenProfile(data, 4);
+  assert.match(html, /Elevation profile/);
+  assert.match(html, /Fuel economy versus slope/);
+  assert.match(html, /Odometer minus GPS/);
+  assert.match(html, /Partial recorded coverage/);
+  assert.match(html, /Economy 0 L\/100km/);
+  assert.match(html, /Grade 0%/);
+  assert.doesNotMatch(html, /NaN|Infinity/);
+  data.units = { distance: "mi", elevation: "ft", fuel: "gal", economy: "mpg" };
+  assert.match(renderDrivenProfile(data), /Sampled GPS distance \(mi\)/);
+  assert.match(renderDrivenProfile(data), /Observed interval economy: 30 mpg/);
+  const absent = data.points.map((point) => ({ ...point, elevation: null }));
+  assert.match(drivenProfileChart(absent, { title: "Altitude", unit: "ft",
+    distanceUnit: "mi", series: [{ key: "elevation", label: "Elevation" }] }), /No matched data/);
+});
+
+test("profile scatter never joins grades and chart strings are escaped", () => {
+  const chart = drivenProfileChart(drivenData().points, {
+    title: "<unsafe>", unit: "L/100km", xKey: "grade", xUnit: "%",
+    series: [{ key: "economy", label: "<script>" }],
+  });
+  assert.doesNotMatch(chart, /<path|<unsafe>|<script>/);
+  assert.match(chart, /&lt;unsafe&gt;/);
+  assert.equal((chart.match(/<circle/g) || []).length, 2);
+  assert.match(chart, /Grade \(%\)/);
+  assert.doesNotMatch(chart, /profile-time-marker/);
+});
+
+test("distance graphs mark actual recorded times without interpolating across GPS gaps", () => {
+  const points = drivenData().points;
+  const chart = drivenProfileChart(points, {
+    title: "Elevation", unit: "m", distanceUnit: "km", series: [{ key: "elevation", label: "Altitude" }],
+  });
+  const markers = [...chart.matchAll(/<g class="profile-time-marker">([\s\S]*?)<\/g>/g)].map((match) => match[1]);
+  assert.equal(markers.length, 4);
+  for (const time of [1000, 1060, 1180, 1300]) {
+    assert.ok(markers.some((marker) => marker.includes(new Date(time * 1000).toLocaleString())));
+  }
+  assert.ok(!markers.some((marker) => marker.includes(new Date(1120 * 1000).toLocaleString())));
+  assert.ok(markers.every((marker) => marker.includes("recorded GPS distance")));
+  const dwell = [
+    { time: 1000, distance: 0, elevation: 10 },
+    { time: 1300, distance: 1, elevation: 20 },
+    { time: 1900, distance: 1, elevation: 20 },
+    { time: 2200, distance: 2, elevation: 30 },
+  ];
+  const stationary = drivenProfileChart(dwell, {
+    title: "Terrain", unit: "m", distanceUnit: "km", simple: true, series: [{ key: "elevation", label: "Elevation" }],
+  });
+  assert.equal((stationary.match(/class="profile-time-marker"/g) || []).length, 3);
+  assert.match(stationary, / to .*recorded GPS distance 1 km/);
+});
+
+test("story view keeps math optional and fuel shading follows measured intervals, gaps and inverse mpg units", () => {
+  const data = drivenData();
+  const html = renderDrivenProfile(data);
+  assert.match(html, /The hills along your drive/);
+  assert.match(html, /Same drive, two distance measurements/);
+  assert.match(html, /The wheel counter recorded 0\.1 km more/);
+  assert.match(html, /<details class="drive-details"><summary>/);
+  assert.doesNotMatch(html, /<details class="drive-details" open/);
+  assert.match(renderDrivenProfile(data, 1, true), /<details class="drive-details" open/);
+  const ribbon = drivenFuelRibbon(data.points, data.units);
+  assert.equal((ribbon.match(/<rect/g) || []).length, 2);
+  assert.match(ribbon, /fuel-level-4.*Observed|fuel-level-4/);
+  assert.match(ribbon, /fuel-level-0/);
+  assert.doesNotMatch(ribbon, /NaN|Infinity/);
+  const mpg = drivenFuelRibbon(data.points, { ...data.units, economy: "mpg" });
+  assert.match(mpg, /fuel-level-0"><title>0-1 km: 30 mpg/);
+  assert.match(mpg, /fuel-level-4"><title>2-3 km: 0 mpg/);
+  const terrain = drivenProfileChart(data.points, {
+    title: "Terrain", unit: "m", distanceUnit: "km", area: true, simple: true,
+    heatEconomyUnit: "L/100km", series: [{ key: "elevation", label: "Elevation" }],
+  });
+  assert.equal((terrain.match(/class="terrain-heat/g) || []).length, 2);
+  assert.match(terrain, /class="terrain-fill"/);
+  assert.match(terrain, /viewBox="0 0 600 165"/);
+});
+
+test("range and saved-trip controls request the same profile and start/stop persist through backend commands", async () => {
+  const { hass } = profileFixture();
+  const calls = [];
+  let result = drivenData();
+  hass.callWS = async (request) => {
+    calls.push(request);
+    if (request.action === "start") {
+      const trip = { id: "saved", name: request.name, start: 1000, end: null };
+      result = { ...drivenData(), trips: [trip], active_trip: trip };
+    } else if (request.action === "stop") {
+      result = { ...drivenData(), trips: [{ ...result.active_trip, end: 1300 }], active_trip: null };
+    }
+    return result;
+  };
+  const card = new HavrvDrivenProfileCard();
+  card.setConfig({ device_id: "rv" });
+  card.hass = hass;
+  card.isConnected = true;
+  await card._load();
+  assert.equal(calls[0].range, "8h");
+  assert.match(card.shadowRoot.innerHTML, /data-profile-action="1h"/);
+  for (const range of ["1h", "1d"]) {
+    card._range = range;
+    await card._load();
+    assert.equal(calls.at(-1).range, range);
+  }
+  card._name = '<Hill & valley>';
+  await card._load("start");
+  assert.equal(card._range, "trips");
+  assert.equal(calls.at(-1).trip_id, "saved");
+  assert.match(card.shadowRoot.innerHTML, /Recording: &lt;Hill &amp; valley&gt;/);
+  assert.match(card.shadowRoot.innerHTML, /Stop &amp; save trip/);
+  assert.equal(calls.filter((call) => call.action === "start").length, 1);
+  await card._load("stop");
+  assert.equal(calls.filter((call) => call.action === "stop").length, 1);
+  assert.equal(calls.at(-1).trip_id, "saved");
+  assert.match(card.shadowRoot.innerHTML, /Start trip/);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /Recording:/);
+});
+
+test("failed trip writes are uncertain, not retried, and require a status refresh", async () => {
+  const { hass } = profileFixture();
+  let calls = 0;
+  hass.callWS = async () => { calls++; throw new Error("connection lost"); };
+  const card = new HavrvDrivenProfileCard();
+  card.setConfig({});
+  card.hass = hass;
+  card.isConnected = true;
+  hass.callWS = async () => drivenData();
+  await card._load();
+  hass.callWS = async () => { calls++; throw new Error("connection lost"); };
+  await card._load("start");
+  assert.equal(calls, 1);
+  assert.match(card.shadowRoot.innerHTML, /Refresh to check trip status/);
+  assert.match(card.shadowRoot.innerHTML, /data-profile-action="start" disabled/);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /Elevation profile/);
+  await card._load("start");
+  assert.equal(calls, 1);
+  hass.callWS = async () => drivenData();
+  await card._load();
+  assert.equal(card._uncertain, false);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /role="alert"/);
+  assert.match(card.shadowRoot.innerHTML, /Elevation profile/);
+});
+
+test("profile changes and disconnect discard late responses; nonadmins have no mutation controls", async () => {
+  const { hass } = profileFixture();
+  let complete;
+  hass.callWS = () => new Promise((resolve) => { complete = resolve; });
+  const card = new HavrvDrivenProfileCard();
+  card.setConfig({});
+  card.hass = hass;
+  card.isConnected = true;
+  const pending = card._load();
+  card.disconnectedCallback();
+  complete(drivenData());
+  await pending;
+  assert.equal(card._data, undefined);
+  const response = drivenData();
+  response.active_trip = { id: "private", name: "private trip", start: 1000, end: null };
+  hass.callWS = async () => response;
+  await card._load();
+  assert.match(card.shadowRoot.innerHTML, /private trip/);
+  card.isConnected = false;
+  card.hass = { ...hass, user: { id: "different", is_admin: false } };
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /private trip|data-profile-action="start"|data-profile-action="stop"/);
+  assert.match(card.shadowRoot.innerHTML, /requires an administrator/);
+});
+
+test("unknown trip status disables mutations and saved-trip selection discovers newly recorded trips", async () => {
+  const { hass } = profileFixture();
+  const card = new HavrvDrivenProfileCard();
+  card.setConfig({});
+  card.hass = hass;
+  card.isConnected = true;
+  let calls = 0;
+  hass.callWS = async () => { calls++; throw new Error("source access denied"); };
+  await card._load();
+  assert.match(card.shadowRoot.innerHTML, /source access denied/);
+  assert.match(card.shadowRoot.innerHTML, /data-profile-action="start" disabled/);
+  await card._load("start");
+  assert.equal(calls, 1);
+  const requests = [];
+  hass.callWS = async (request) => {
+    requests.push(request);
+    return { ...drivenData(), trips: [{ id: "new-trip", name: "Recorded elsewhere", start: 1000, end: 1300 }] };
+  };
+  card._range = "trips";
+  await card._load();
+  assert.equal(card._tripId, "new-trip");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].trip_id, undefined);
+  assert.equal(requests[1].trip_id, "new-trip");
+  assert.match(card.shadowRoot.innerHTML, /Recorded elsewhere/);
+  assert.match(card.shadowRoot.innerHTML, /Elevation profile/);
+});
+
+test("a new RV rejects the previous RV's in-flight profile", async () => {
+  const { hass } = profileFixture();
+  hass.devices.second = { id: "second", name: "Second RV", identifiers: [["havrv", "other"]], config_entries: ["other"] };
+  const waiting = [];
+  hass.callWS = (request) => new Promise((resolve) => waiting.push({ request, resolve }));
+  const card = new HavrvDrivenProfileCard();
+  card.setConfig({ device_id: "rv" });
+  card.hass = hass;
+  card.isConnected = true;
+  const old = card._load();
+  card.setConfig({ device_id: "second" });
+  assert.equal(waiting.length, 2);
+  assert.equal(waiting[1].request.entry_id, "other");
+  waiting[0].resolve(drivenData());
+  await old;
+  assert.equal(card._data, undefined);
+  waiting[1].resolve({ ...drivenData(), summary: { ...drivenData().summary, gps_distance: 99 } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(card._data.summary.gps_distance, 99);
+  assert.match(card.shadowRoot.innerHTML, />99 <small>km/);
+});
+
+test("unrelated live states do not replace the profile's focused controls", () => {
+  const { hass } = profileFixture();
+  const card = new HavrvDrivenProfileCard();
+  card.setConfig({ device_id: "rv" });
+  card.hass = hass;
+  let renders = 0;
+  card._render = () => { renders++; };
+  hass.states = { "sensor.unrelated": { state: "1", attributes: {} } };
+  card.hass = hass;
+  assert.equal(renders, 0);
+  card.hass = { ...hass, user: { ...hass.user, is_admin: false } };
+  assert.equal(renders, 1);
+  assert.equal(card._statusKnown, false);
 });
 
 function chassisFixture() {

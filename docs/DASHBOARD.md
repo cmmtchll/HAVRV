@@ -4,8 +4,9 @@ The monitoring dashboard is separate from the management page opened by the
 integration entry's gear. Configure profile layout and source mappings on that
 page, then **Apply changes** to update the saved configuration used here.
 
-HAVRV includes an RV overview card and a dashboard generated from your RV
-profile. Both are installed with the integration. You do not need a separate
+HAVRV includes an RV overview card, a separate driven-profile analysis card,
+and a dashboard generated from your RV profile. They are installed with the
+integration. You do not need a separate
 HACS frontend download or a Lovelace resource.
 
 The module rechecks card and strategy registration after Home Assistant's
@@ -165,6 +166,78 @@ chassis_mode: inspection
 card editor and both strategies. Setting it false removes the panel and its
 layout space; existing tire, power, tank and mapped-system visibility is
 unchanged.
+
+## Driven profile widget
+
+**Driven profile** is a separate card, not another mode of the compact chassis
+driver panel. The generated dashboard adds it when a visible HAVRV GPS tracker
+is configured. **Show separate driven profile widget**
+(`show_driven_profile: true`) is default-on in the overview editor and both
+strategies; false removes the generated analysis section without hiding the
+chassis panel or changing collection. On a manually managed dashboard, add:
+
+```yaml
+type: custom:havrv-driven-profile-card
+device_id: your_havrv_profile_device_id
+```
+
+The card's visual editor selects the RV profile; no source entity IDs belong in
+its YAML. Map **GPS location** and **Altitude** under Operations, and cumulative
+**Total distance driven** and **Total fuel consumed** under Chassis. Sources are
+optional, so a missing channel leaves its chart empty without hiding others.
+The widget and its collector use only the selected RV's HAVRV configuration
+and registered HAVRV-exposed readings. They do not select or directly read
+another integration's sensors. Renaming HAVRV outputs is supported;
+disabled/removed outputs remain missing, never replaced by their upstream source.
+Charts use the profile's km/m/L/L-per-100km or mi/ft/US-gal/mpg units, independent
+of Home Assistant's global unit system.
+
+Use the top **1h**, **8h**, and **1d** buttons for rolling recorded ranges.
+**Saved trips** opens the trip selector. An administrator can enter an optional
+trip name, select **Start trip**, then **Stop & save trip**. The recording status
+stays visible even while viewing a different range or trip. Trips belong to the
+RV, not the browser, and survive refreshes and integration reloads/restarts.
+Starting/stopping does not reset the GPS source or vehicle's counters.
+After a connection error during start/stop, **Refresh** checks the actual trip
+status before another mutation is allowed; the card never repeats a write
+automatically.
+
+The main view emphasizes the drive rather than a table of calculations: three
+highlights show GPS distance, fuel used and total climb, followed by a shaded
+terrain silhouette. Terrain shading and an aligned fuel strip use blue for
+less fuel per distance and orange for more. Colors compare observed economy
+within the selected drive/range, not fixed thresholds; changing the range can
+rescale them. The direction is reversed correctly for mpg. Missing matched
+intervals stay unpainted, and stationary intervals have no distance-based rate.
+Two simple bars compare GPS distance with the wheel counter, with a plain-language
+description of the difference. **Explore the drive** moves a common cursor.
+Clock labels and dotted markers on distance-based graphs show actual recorded
+samples in local time, making slower and faster sections easier to recognize.
+Labels use nearby observed timestamps, never interpolated times across GPS
+gaps. Multiple selected timestamps at the same recorded distance share a
+time-range label; crowded intermediate labels are omitted rather than overlapped.
+
+**Explore samples & detailed charts** opens the optional analysis: exact
+readings, altitude-adjusted **3D estimate**, ascent/descent and
+odometer-minus-GPS difference, plus elevation, interval economy, cumulative
+fuel and GPS/wheel-distance charts. A scatter plot compares economy with grade
+(negative downhill, positive uphill). The detailed sample inspector exposes
+time, elevation, fuel, economy and grade; hover chart points for values.
+Narrow cards stack the main visuals without squeezing them into columns.
+Empty, unavailable or unmatched values remain **No data**, not zero.
+
+GPS distances are sums of straight horizontal segments between valid fixes.
+Sparse fixes miss curves and turns; GPS noise can overcount. The optional 3D
+estimate adds measured elevation change to those segments but cannot recover
+unobserved road shape. Wheel calibration, tire circumference/slip and reporting
+precision can also affect the comparison. Odometer-minus-GPS is not an estimate
+of elevation gain. Gaps are not interpolated, and partial recorded coverage is
+labeled. Fuel/slope graphs show association over observed intervals, not
+instantaneous fuel burn or proof that climbing caused a change; speed, load,
+wind and idling are other influences.
+
+See [history and privacy](FEATURES.md#driven-profile-history) and
+[missing analysis data](TROUBLESHOOTING.md#driven-profile-analysis-is-empty-or-incomplete).
 
 ## Configure electrical placement on an existing RV
 
