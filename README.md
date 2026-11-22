@@ -12,7 +12,12 @@ an RV overview dashboard, and a separate driven-profile analysis widget.
 Notifications, integration-specific triggers and conditions, and physical-device
 discovery are not implemented. No Home Assistant quality tier is claimed.
 
-**Current release: 0.6.1.** A separate driven-profile widget adds terrain/fuel
+**Current release: 0.7.0.** Optional Engine, Transmission and Fuel devices add
+live readings, configurable freshness and advisory limits, with dense dashboard
+instruments, trends and observation ages. See
+[powertrain readings and limits](docs/FEATURES.md#powertrain-readings-and-limits).
+
+A separate driven-profile widget adds terrain/fuel
 visualization, recorded-time markers, 1h/8h/1d ranges and saved trips using only
 HAVRV-exposed readings. See [driven-profile analysis](docs/DASHBOARD.md#driven-profile-widget).
 Dashboard registration recovers from Home Assistant's startup custom-element

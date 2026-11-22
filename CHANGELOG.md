@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.7.0
+
+- Add optional Engine, Transmission and Fuel virtual devices with dedicated
+  management pages, native options recovery and stable source-independent
+  entity identities.
+- Expose live profile-unit readings with configurable freshness (60 seconds
+  by default) and optional low/high warning and problem limits. Invalid or
+  stale readings remain unavailable; no manufacturer limits are assumed.
+- Derive engine-running state from fresh RPM and estimated remaining fuel
+  volume from a valid level reading and configured capacity.
+- Add dense dashboard clusters with an RPM tachometer, Load/Pedal segment
+  bars, separate engine temperatures, transmission gears and temperature
+  dials, and Fuel level/rate/reported-average economy.
+- Preserve source-aware one-hour trends, observation ages and visible
+  warnings. Engine, Transmission and Fuel have independent visibility
+  controls; engine temperatures share the Engine control.
+
 ## 0.6.1
 
 - Add a separate driven-profile dashboard widget using the selected RV's
