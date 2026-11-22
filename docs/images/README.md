@@ -26,6 +26,26 @@ readings. A clock with `?` means no valid report has been observed by that card.
 
 ## Refreshing the pictures
 
+For an initial visual check, serve the repository from its root:
+
+```console
+python3 -m http.server 8765 --bind 127.0.0.1
+```
+
+Open `http://127.0.0.1:8765/tests/fixtures/dashboard-preview.html` in the
+available browser or browser tool. The GitHub Copilot app also offers a manual
+repository script to start this server after its configuration is trusted.
+The preview loads the actual bundled card and synthetic registry data over
+HTTP, avoiding a need for Chrome's `--allow-file-access-from-files` option.
+Use a browser with its sandbox and web security enabled; do not add
+`--no-sandbox` or disable web security to avoid an approval prompt. If the
+session's browser cannot run securely, use a supported browser environment or
+ask for the required approval instead.
+
+The preview is a starting point, not the complete set of documented scenarios
+below. Extend the synthetic data as needed for a change; do not use connected
+vehicle data. Stop the local server when finished.
+
 Render the current bundled custom element in a browser with synthetic `hass`
 registries and states, using HAVRV device identifiers and entity translation
 keys rather than relying on entity names. Supply a dark Home Assistant-style

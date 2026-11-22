@@ -1,0 +1,8 @@
+scripts:
+  - name: Set up development environment
+    command: sh scripts/dev-setup.sh
+  - name: Run required checks
+    command: sh scripts/dev-check.sh
+  - name: Preview synthetic dashboard
+    command: python3 -u -m http.server 8765 --bind 127.0.0.1
+server_ready_pattern: '(http://127\.0\.0\.1:8765/)'

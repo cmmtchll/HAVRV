@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HAVRV synthetic dashboard preview</title>
+  <style>
+    body {
+      background: #111827;
+      color: #e5e7eb;
+      font: 16px system-ui, sans-serif;
+      margin: 24px auto;
+      max-width: 1200px;
+      padding: 0 16px;
+      --primary-text-color: #e5e7eb;
+      --secondary-text-color: #9ca3af;
+      --card-background-color: #1f2937;
+    }
+    ha-card { display: block; background: var(--card-background-color); }
+    havrv-rv-card { display: block; margin: 16px 0 48px; }
+  </style>
+</head>
+<body>
+  <h1>HAVRV synthetic dashboard preview</h1>
+  <p>Example data only. This preview is not connected to Home Assistant.</p>
+  <h2>Horizontal</h2>
+  <havrv-rv-card id="horizontal"></havrv-rv-card>
+  <h2>Vertical</h2>
+  <havrv-rv-card id="vertical"></havrv-rv-card>
+  <script type="module">
+    import "../../custom_components/havrv/frontend/havrv-dashboard.js";
+
+    const rv = {
+      id: "rv", name: "Example RV", identifiers: [["havrv", "example"]],
+      config_entries: ["example"],
+    };
+    const hass = { devices: { rv }, entities: {}, states: {} };
+
+    function device(key, name, readings) {
+      const id = `device_${key}`;
+      hass.devices[id] = {
+        id, name, identifiers: [["havrv", `example_${key}`]],
+      };
+      for (const [role, value, unit] of readings) {
+        const entity_id = `sensor.example_${key}_${role}`;
+        hass.entities[entity_id] = {
+          entity_id, platform: "havrv", device_id: id, translation_key: role,
+        };
+        hass.states[entity_id] = {
+          state: value, attributes: unit ? { unit_of_measurement: unit } : {},
+        };
+      }
+    }
+
+    for (const position of ["front_left", "front_right", "rear_axle_1_left", "rear_axle_1_right"]) {
+      device(`tire_${position}`, position.replaceAll("_", " "), [
+        ["tire_pressure", "100", "psi"], ["tire_temperature", "72", "°F"],
+      ]);
+    }
+    device("source_house_bank_1", "House battery", [
+      ["power_voltage", "12.8", "V"], ["power_current", "-2.5", "A"],
+      ["power_location", "left_rear"],
+    ]);
+
+    for (const layout of ["horizontal", "vertical"]) {
+      const card = document.getElementById(layout);
+      card.setConfig({ device_id: "rv", layout });
+      card.hass = hass;
+    }
+  </script>
+</body>
+</html>

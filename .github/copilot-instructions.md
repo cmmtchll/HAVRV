@@ -23,3 +23,11 @@ workflow if none was triggered. Check results and failure logs rather than
 assuming a push or PR creation passed validation. Report blocked checks and
 `action_required` as unverified, and never claim a medallion from audit success.
 Keep linked user guides and quality-scale evidence synchronized with changes.
+
+For Linux remote development, `CONTRIBUTING.md` documents a uv-based setup
+and a single command for the full check suite. Follow session permissions;
+these scripts do not grant approval to run commands.
+
+For dashboard previews, use the synthetic HTTP fixture described in
+`docs/images/README.md` and an available browser. Do not disable browser
+sandboxing or file-access security to avoid approval prompts.

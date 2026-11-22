@@ -23,6 +23,18 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[test]"
 ```
 
+For Linux cloud or remote sessions with [uv](https://docs.astral.sh/uv/)
+installed, `sh scripts/dev-setup.sh` creates a Python 3.14 environment if
+needed and installs the test dependencies. It reuses an existing `.venv` only
+when its Python version meets the project requirement. Node.js is still
+required separately.
+
+The GitHub Copilot app exposes this setup and the complete checks below as
+manual repository scripts. Review and accept `.github/github-app.yml` in the
+app before using them. These scripts do not change session permissions or
+guarantee that approval prompts will disappear; remote/cloud availability and
+approval behavior depend on the session host and policy.
+
 ## Checks
 
 Run these before pushing code or opening/updating a pull request:
@@ -36,6 +48,9 @@ node --test tests/test_power_dashboard.mjs tests/test_config_panel.mjs
 python -m coverage report --include=custom_components/havrv/config_flow.py,custom_components/havrv/configuration.py --fail-under=100
 python scripts/quality_scale_audit.py
 ```
+
+Alternatively, after the uv setup, run the same checks with
+`sh scripts/dev-check.sh`. It stops on the first failure.
 
 The pytest configuration enforces at least 96% coverage for the integration.
 The additional coverage report enforces full native-flow and shared
