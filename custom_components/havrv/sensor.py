@@ -99,6 +99,7 @@ from .power import (
     power_settings,
     power_sources,
 )
+from .powertrain import sensors as powertrain_sensors
 from .tank import (
     STATUS_OPTIONS,
     TANK_DEFINITIONS,
@@ -1377,6 +1378,7 @@ async def async_setup_entry(
     async_add_source_entities(entry, "sensor", HavrvSensor, async_add_entities)
     async_add_entities(list(_profile_sensors(entry)))
     async_add_entities(_tank_entities(entry))
+    async_add_entities(list(powertrain_sensors(hass, entry)))
     async_add_entities(
         [
             HavrvTravelSensor(entry, metric)

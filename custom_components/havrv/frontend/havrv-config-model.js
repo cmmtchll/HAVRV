@@ -9,9 +9,11 @@ const canonical = (value) => {
 };
 export const equalValues = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 
-export const SECTIONS = ["overview", "profile", "chassis", "operations", "power", "tanks", "tires", "systems"];
+export const SECTIONS = ["overview", "profile", "chassis", "engine", "transmission", "fuel", "operations", "power", "tanks", "tires", "systems"];
 
 export function fieldSection(group, name) {
+  const powertrain = /^powertrain_(engine|transmission|fuel)_/.exec(name);
+  if (powertrain) return powertrain[1];
   if (["chassis_distance", "chassis_fuel", "chassis_engine_hours"].includes(name)) return "chassis";
   if (name.startsWith("operations_")) return "operations";
   if (group === "power") return "power";

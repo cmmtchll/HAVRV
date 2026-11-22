@@ -52,6 +52,38 @@ Check the original entity in Home Assistant. A missing, `unknown`, or
 `unavailable` source makes its HAVRV mirror unavailable until the source
 returns a usable state.
 
+## Engine, Transmission or Fuel readings, limits or trends are missing
+
+Check that the intended source is selected on its management page and the
+profile-wide draft was applied. No mappings means no corresponding virtual
+object. Numeric sources require finite values and compatible declared units;
+gear strings require sensor sources. An implausible fuel percentage, such as
+118%, is invalid rather than silently clipped to 100%.
+
+Check the object's configured maximum age (default 60 seconds). Source
+observation timestamps, when provided, take precedence over HA report receipt:
+replayed or old readings are not automatically fresh. Correct the source
+integration's timestamp/reporting issue rather than substituting a current
+timestamp for a stale reading. An unavailable reading is not proof that the
+vehicle is stopped, nor a threshold violation.
+
+Engine running requires usable fresh RPM. Remaining fuel volume requires both
+a valid fuel percentage and a configured fuel capacity. Last-valid observation
+retention is runtime-only, not restored by HAVRV. Recorder retains recorded
+history independently.
+
+Blank limits mean disabled checks. Low/high comparisons use profile units,
+not a source's original units or an entity-specific display override. Check
+the ordering of warning and problem limits; equality is within the limit.
+Limits are advisory and need appropriate specifications, not minima/maxima
+copied from a captured run.
+
+For missing readout boxes, check **show_engine**, **show_transmission**, and
+**show_fuel** and ensure the HAVRV entities are not hidden. For absent trends,
+include those HAVRV sensors in Recorder and allow at least two connected samples
+within the last hour. Gaps, remapping and history request errors are not
+zero-valued readings. The last-observed age is independent of Recorder history.
+
 ## Chassis counters or fuel derivations are missing
 
 Check **Chassis** on the management page (or the native options recovery form).

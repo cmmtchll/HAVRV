@@ -53,6 +53,8 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .power import power_sources, shore_line_count
+from .powertrain import CONF_POWERTRAIN, LIMITS, METRICS, convert_value
+from .powertrain import normalize_options as normalize_powertrain
 from .tank import defined_tanks
 from .tire import tire_entity_key, tire_positions
 
@@ -118,6 +120,9 @@ def editable_values(
         options[f"operations_{metric}"] = source
     for metric, source in entry.options.get(CONF_CHASSIS_SOURCES, {}).items():
         options[f"chassis_{metric}"] = source
+    for obj, settings in entry.options.get(CONF_POWERTRAIN, {}).items():
+        for key, value in settings.items():
+            options[f"powertrain_{obj}_{key}"] = value
     for tank, limits in entry.options.get(CONF_TANK_THRESHOLDS, {}).items():
         for level, value in limits.items():
             options[f"{tank}_tank_{level}"] = value
@@ -228,6 +233,19 @@ def _convert_units(values: EditableValues) -> None:
             else VolumeConverter.convert(value, old_volume, new_volume)
         )
     for key, value in values["options"].items():
+        if key.startswith("powertrain_"):
+            for obj, metrics in METRICS.items():
+                for name, specification in metrics.items():
+                    if key in {f"powertrain_{obj}_{name}_{limit}" for limit in LIMITS}:
+                        source_unit = specification.unit(original)
+                        target_unit = specification.unit(target)
+                        if source_unit and target_unit:
+                            converted = convert_value(
+                                value, source_unit, target_unit, specification
+                            )
+                            values["options"][key] = (
+                                converted if converted is not None else float("inf")
+                            )
         if key.startswith("tire_") and "_pressure_" in key:
             values["options"][key] = PressureConverter.convert(
                 value, old_pressure, new_pressure
@@ -320,6 +338,11 @@ def validate_values(
         error("systems", "", "invalid_config")
     options, option_error = _normalize_options(options_input, clean)
     if option_error:
+        if "powertrain" in option_error:
+            _, failure = normalize_powertrain(options_input)
+            assert failure is not None
+            error(*failure)
+            return candidate, typed_values, errors, []
         section = (
             "tanks"
             if "tank" in option_error
@@ -344,6 +367,11 @@ def validate_values(
     clean = Candidate(profile, {})
     options, option_error = _normalize_options(typed_values["options"], clean)
     if option_error:
+        if "powertrain" in option_error:
+            _, failure = normalize_powertrain(typed_values["options"])
+            assert failure is not None
+            error(*failure)
+            return candidate, typed_values, errors, []
         error("tires", "", option_error)
         return candidate, typed_values, errors, []
 
@@ -361,6 +389,14 @@ def validate_values(
             candidate.data.pop(key, None)
     flat_before, flat_after = baseline["options"], typed_values["options"]
     for key, prefixes in (
+        (
+            CONF_POWERTRAIN,
+            tuple(
+                field
+                for field in flat_before.keys() | flat_after.keys()
+                if field.startswith("powertrain_")
+            ),
+        ),
         (CONF_CHASSIS_SOURCES, tuple(f"chassis_{m}" for m in CHASSIS_METRICS)),
         (CONF_OPERATIONS_SOURCES, tuple(f"operations_{m}" for m in OPERATIONS_METRICS)),
         (CONF_ENTITY_MAPPINGS, tuple(f"{c}_entities" for c in SYSTEM_CATEGORIES)),
