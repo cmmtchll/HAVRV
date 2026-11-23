@@ -104,6 +104,75 @@ The layout follows the RV profile:
 
 <img src="images/dashboard-vertical.png" alt="Vertical HAVRV card with a towed car and two-line shore power in a dark theme" width="420">
 
+## Compact powertrain readouts
+
+Select sources on the **Engine**, **Transmission**, and **Fuel** management
+pages. Configured objects appear above the vehicle diagram as compact,
+wrapping instrument clusters: **overview first, detail second**. Engine
+RPM has a tachometer flanked by vertical **Load** and **Pedal** percentage
+segments, with oil pressure alongside. A separate **Engine temperatures**
+cluster groups mapped coolant, oil, intake and ambient temperatures into
+compact segmented thermometers. It uses the same Engine mappings, limits and
+visibility toggle, not another virtual device.
+Transmission pairs current and selected gear once, alongside oil/retarder
+temperature dials; each gear retains its own observation age and detail link.
+Fuel pairs its level dial with current burn rate and **ECU average** economy
+from the selected reported-average source. No averaging across controllers or
+trip-economy calculation is implied. Only configured inputs appear.
+When none of an object's primary readings are mapped, up to three configured
+readings form its overview instead.
+
+Current values are prominent, with a thin one-hour sparkline and last-observed
+age for each numeric instrument. Frequently used readings are integrated into
+the clusters rather than repeated in **More readings**. That section expands
+the remaining secondary measurements without replacing the overview;
+expansion survives live updates.
+Warnings/problems from those secondary measurements stay visible above the
+instruments even while details are collapsed. Instruments open their own native
+HA details/history with click or Tab and Enter/Space.
+
+Dial scales are explicitly labeled display scales in their tooltips, not
+vehicle ratings or safety limits. RPM starts at a display-only 0–4,000 rpm;
+other dials use conventional unit-bearing display ranges and expand upward
+when necessary to display a higher reading. Configured warning/problem limits
+add amber/red bands; no normal/safe bands or manufacturer limits are invented.
+Missing readings have no needle or lit segments, not a reading at zero.
+Segment displays use the same presentation-only scales and configured limits;
+the printed number remains the exact current reading.
+
+The age describes the actual source observation used by HAVRV, not the time
+an unavailable state was written. Hover for the exact timestamp; **?** means
+unknown. Missing/stale readings show **No data**, never an old value presented
+as current. The last-observed age remains separately visible.
+
+Numeric sparklines preserve exact observed values without the tire-pressure
+deadband. Hover for each trace's observed range and unit. Each trace has its
+own vertical scale; compare the reported ranges, not heights across metrics.
+Real timestamps determine spacing, recorded unavailable states break the line,
+and the trace stops at its last sample rather than extending to now. History
+is restricted to the current mapped source, and compatible unit changes
+convert historical samples to the reading's current display unit.
+
+Numeric readings in shown powertrain objects and tire readings share one batched Recorder request
+per minute for the preceding hour. Recorder must include the HAVRV entities.
+Live observations supplement the trace while the card is open; fewer than two
+connected samples produce no line. History failures are shown explicitly without
+hiding live values. Removing/hiding objects clears their cached history and
+stops requesting it.
+
+Warning values/needles are amber, problem values/needles red, and missing values muted.
+Configured object status also participates in the overview counts; missing
+channels remain visible even alongside a known problem. No limits means
+**No limits**, not a claim that equipment is safe.
+
+The editor and both strategies share independent, default-on **show_engine**,
+**show_transmission**, and **show_fuel** options. Hiding a class removes its
+instruments, alerts and history requests without removing its entities.
+Both strategies use this same overview; they do not add duplicate powertrain
+tables or large graphs underneath it. Expand readings, then select an instrument
+for deeper native entity/history inspection. The existing compact Chassis and
+separate driven-profile widgets remain independent.
+
 ## Compact chassis driver panel
 
 Map cumulative counters under **Chassis** on the management page. The RV card

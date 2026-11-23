@@ -37,6 +37,13 @@ function snapshot() {
         { name: "operations_location", label: "RV GPS location source", selector: { entity: { domain: ["device_tracker"] } } },
         entity("operations_altitude"), entity("operations_speed"), entity("operations_direction"),
         entity("chassis_distance"), entity("chassis_fuel"), entity("chassis_engine_hours"),
+        ...["engine", "transmission", "fuel"].flatMap((object) => [
+          number(`powertrain_${object}_max_age`, { suggested_value: 60 }),
+          entity(`powertrain_${object}_${object === "engine" ? "oil_pressure" : object === "transmission" ? "oil_temperature" : "level"}`),
+          ...["warning_low", "warning_high", "problem_low", "problem_high"].map((limit) =>
+            number(`powertrain_${object}_${object === "engine" ? "oil_pressure" : object === "transmission" ? "oil_temperature" : "level"}_${limit}`)),
+        ]),
+        { name: "powertrain_transmission_current_gear", label: "Current gear source", selector: { entity: { domain: ["sensor"] } } },
         entity("power_entities", true), entity("water_entities", true),
         entity("fresh_water_tank_level"), number("fresh_water_tank_warning"),
         entity("tire_front_left_pressure"), number("tire_front_pressure_low"),
@@ -649,11 +656,11 @@ async function panelFixture(options = {}) {
   return { panel, api, root: panel.shadowRoot };
 }
 
-test("panel is a registered standard custom element with eight accessible tabs", async () => {
+test("panel is a registered standard custom element with accessible system tabs", async () => {
   const { panel, api, root } = await panelFixture();
   assert.equal(registrations.get("havrv-config-panel"), HavrvConfigPanel);
   const tabs = walk(root).filter((node) => node.getAttribute("role") === "tab");
-  assert.equal(tabs.length, 8);
+  assert.equal(tabs.length, 11);
   assert.equal(tabs[0].getAttribute("aria-selected"), "true");
   assert.equal(walk(root).some((node) => node.tagName === "A" &&
     node.getAttribute("href") === "/config/devices/dashboard?config_entry=entry"), true);
@@ -661,6 +668,46 @@ test("panel is a registered standard custom element with eight accessible tabs",
   assert.equal(panel.section, "systems");
   assert.equal(window.location.href, "http://ha.test/havrv-config?config_entry=entry");
   assert.equal(api.calls.length, 1);
+  panel.disconnectedCallback();
+});
+
+test("powertrain pages keep independent sources and optional limits in one draft", async () => {
+  const { panel, root, api } = await panelFixture();
+  for (const [object, metric, source] of [
+    ["engine", "oil_pressure", "input_number.oil"],
+    ["transmission", "oil_temperature", "number.transmission"],
+    ["fuel", "level", "sensor.fuel"],
+  ]) {
+    panel.navigate("overview");
+    root.getElementById(`configure-${object}`).fire("click");
+    assert.equal(panel.section, object);
+    const name = `powertrain_${object}_${metric}`;
+    assert.equal(fieldSection("options", `${name}_problem_high`), object);
+    const control = root.getElementById(`field-options--${name}`);
+    assert.ok(control);
+    control.value = source;
+    control.fire("change");
+    const limit = root.getElementById(`field-options--${name}_warning_low`);
+    assert.equal(limit.value, "");
+    limit.value = "0";
+    limit.valueAsNumber = 0;
+    limit.fire("change");
+    const details = walk(root).find((node) => node.tagName === "DETAILS");
+    assert.ok(details.hasAttribute("open"));
+    assert.equal(panel.model.payload().options[`${name}_warning_low`], 0);
+    const updated = root.getElementById(`field-options--${name}_warning_low`);
+    const clear = walk(updated.parentNode).find((node) =>
+      node.getAttribute("aria-label") === `Clear Label ${name}_warning_low`);
+    clear.fire("click");
+    assert.equal(`${name}_warning_low` in panel.model.payload().options, false);
+    assert.equal(panel.model.payload().options[name], source);
+    assert.equal(panel.model.payload().options[`powertrain_${object}_max_age`], undefined);
+  }
+  panel.navigate("transmission");
+  assert.ok(root.getElementById("field-options--powertrain_transmission_current_gear"));
+  assert.equal(panel.model.payload().options.powertrain_engine_oil_pressure, "input_number.oil");
+  assert.equal(panel.model.payload().options.powertrain_fuel_level, "sensor.fuel");
+  assert.equal(api.calls.some((message) => message.type.endsWith("/apply")), false);
   panel.disconnectedCallback();
 });
 

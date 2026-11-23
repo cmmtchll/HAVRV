@@ -22,6 +22,8 @@ const STYLE = `
     background:var(--card-background-color,#fff);border-radius:12px;padding:22px;margin:18px 0}
   .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.grid>.card{margin:0}
   .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+  .powertrain-config-card>.fields{grid-template-columns:1fr}
+  .powertrain-config-card details{margin-top:12px}.powertrain-config-card summary{cursor:pointer;padding:8px 0}
   .field{min-width:0;padding:12px;border:1px solid var(--divider-color,#bbb);border-radius:8px}
   .field.changed{border-color:var(--primary-color,#03a9f4)}.field label{display:block;font-size:13px;margin-bottom:9px}
   .field input:not([type=checkbox]),.field select,.field textarea{width:100%;padding:10px;
@@ -111,6 +113,7 @@ function button(text, action, attributes = {}) {
 }
 const SECTION_ICONS = {
   chassis: "mdi:engine",
+  engine: "mdi:engine-outline", transmission: "mdi:car-shift-pattern", fuel: "mdi:gas-station",
   operations: "mdi:map-marker-path",
   power: "mdi:lightning-bolt", tanks: "mdi:water-outline",
   tires: "mdi:circle-double", systems: "mdi:swap-horizontal", devices: "mdi:devices", entities: "mdi:shape-outline",
@@ -427,7 +430,7 @@ export class HavrvConfigPanel extends HTMLElement {
     }
     const systems = element("section", null, { class: "card" });
     systems.append(element("h3", t("configureSystems")));
-    for (const section of ["chassis", "operations", "power", "tanks", "tires", "systems"]) {
+    for (const section of ["chassis", "engine", "transmission", "fuel", "operations", "power", "tanks", "tires", "systems"]) {
       const row = button("", () => this.navigate(section), { class: "action-row", id: `configure-${section}` });
       const description = section === "power"
         ? t("powerSummary", { count: this.model.schema.power.filter((source) => source.battery).length })
@@ -471,6 +474,28 @@ export class HavrvConfigPanel extends HTMLElement {
       // Water capacities are the same profile fields in both editors, not
       // independently saved copies.
       (this.section === "profile" && field.group === "profile" && field.name.includes("water_tank_capacity")));
+    if (["engine", "transmission", "fuel"].includes(this.section)) {
+      parent.append(element("h3", t("powertrainFreshness")));
+      this.renderFields(parent, fields.filter((field) => field.name.endsWith("_max_age")));
+      parent.append(element("p", t("powertrainLimitsHint"), { class: "muted" }));
+      for (const source of fields.filter((field) => field.selector?.entity)) {
+        const group = element("section", null, { class: "card powertrain-config-card" });
+        this.renderFields(group, [source]);
+        const limits = fields.filter((field) => field.name.startsWith(`${source.name}_`) &&
+          /_(warning|problem)_(low|high)$/.test(field.name));
+        if (limits.length) {
+          const details = element("details");
+          if (limits.some((field) => this.model.value(field.group, field.name) !== undefined)) {
+            details.setAttribute("open", "");
+          }
+          details.append(element("summary", t("powertrainLimits")));
+          this.renderFields(details, limits);
+          group.append(details);
+        }
+        parent.append(group);
+      }
+      return;
+    }
     if (this.section === "power") {
       const sources = this.model.schema.power || [];
       if (!sources.some((source) => source.key === this.selectedPower)) this.selectedPower = sources[0]?.key;

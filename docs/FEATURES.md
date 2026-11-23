@@ -62,6 +62,67 @@ Home Assistant's global unit preference does not replace these profile defaults;
 explicit per-entity display-unit overrides still work. Original source states
 are never modified.
 
+## Powertrain readings and limits
+
+Optional **Engine**, **Transmission**, and **Fuel** devices organize explicitly
+mapped live readings. Their management pages share the profile-wide draft and
+native options recovery fields. No protocol, controller number, manufacturer,
+or physical connection is inferred from entity names.
+
+Engine sources cover RPM, load, accelerator position, oil/manifold/barometric
+pressure, coolant/oil/intake/ambient temperatures, coolant level and supply
+voltage. Transmission sources cover selected/current gear strings and
+transmission/retarder oil temperatures. Fuel sources cover instantaneous fuel
+rate, source-reported economy and level. Lifetime counters remain on Chassis;
+reported average economy does not become trip economy.
+
+Mapping RPM also creates an **Engine running** sensor: positive fresh RPM
+means running, zero means stopped, and missing or stale RPM remains unknown.
+Mapping a valid fuel percentage and entering the profile's fuel capacity
+creates **Fuel remaining volume** (percentage times capacity), in profile
+volume units. This is an estimate from the selected level source, not usable
+fuel or range. Remaining-volume advisories mirror the configured level limits;
+they have no independent threshold settings. Calculated live economy, run
+durations and range estimates are not implemented.
+
+Numeric mappings accept sensors, numbers, input-number helpers and template
+entities in those domains. They require finite values and compatible declared
+units. Readings and configurable limits use profile units; compatible explicit
+per-entity display overrides change presentation, not threshold evaluation.
+Fuel level must be in [0, 100]; an out-of-range value is unavailable, never
+clamped or averaged with another controller's reading.
+
+Each numeric mapping offers independent **warning low/high** and **problem
+low/high** limits. Omitted limits disable that check; there are no invented
+manufacturer defaults. Strictly crossing a configured bound triggers its
+severity, with problem taking precedence. A reading remains available when it
+violates an advisory limit. Gear strings pass through verbatim; selected/current
+differences do not automatically trigger a problem.
+
+Live-data maximum age defaults to 60 seconds per object and is configurable.
+Missing, invalid, unavailable or expired sources leave their readings
+unavailable and their advisory result unknown, never zero or healthy. Object
+status distinguishes a known problem/warning from missing channels, so one
+missing sensor does not hide a known violation on another. Last-observed
+metadata remains separately identifiable for dashboard ages.
+
+Virtual identities do not depend on source entity IDs. Remapping preserves
+the HAVRV entity identity but separates dashboard history from the old source.
+Clearing mappings removes only HAVRV readings and empty objects. Existing
+profiles without powertrain mappings gain no fabricated readings.
+
+The overview uses familiar instruments with large current values, thin trends
+and observation ages rather than a table or a tile per measurement. Load and
+pedal segments flank RPM, Engine temperatures form a separate compact cluster,
+Transmission shows each reported gear once, and Fuel includes reported average
+economy. Remaining readings expand on demand, but their warnings/problems stay
+visible in the overview. Dial scales are presentation only, not operating specifications;
+colored bands come only from configured limits. One-hour numeric traces use
+Recorder and show gaps, not interpolated missing readings; see
+[dashboard details](DASHBOARD.md#compact-powertrain-readouts).
+These readings and configured limits are advisory, not a diagnosis, notification
+system, or vehicle safety certification.
+
 ## Chassis counters
 
 The **Chassis** device exposes optional source-owned cumulative distance,
@@ -341,7 +402,8 @@ direction-aware for falling levels; gray- and black-water thresholds are
 direction-aware for rising levels. **Last filled** (fresh water) or **Last
 emptied** (gray/black water) records a crossing of fixed 95% / 5% boundaries.
 That timestamp is restored after restart, and the first reading after startup
-does not create an event. Fuel-level devices are not implemented.
+does not create an event. Fuel level is configured separately under **Fuel**;
+water-tank fill/empty tracking does not apply to it.
 
 Clearing both capacity and source removes that tank's HAVRV sensors and empty
 device on reload. Existing orphaned tanks are cleaned on setup too. Thresholds

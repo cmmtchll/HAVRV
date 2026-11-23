@@ -55,8 +55,8 @@ implemented integration behavior, not just repository configuration.
 - Explicit optional mappings for fresh-, gray-, and black-water tank levels
   create individual tank devices and expose configured capacities on those
   devices, plus percentage, optional direction-aware threshold status, and
-  last-filled/last-emptied history sensors. Fuel-level devices are not
-  implemented.
+  last-filled/last-emptied history sensors. Fuel-level monitoring uses the
+  separate Fuel device without water-tank fill/empty tracking.
 - Tank lifecycle reconciliation removes obsolete HAVRV tank sensors and empty
   devices when capacity and source are both cleared, including old leftovers
   on setup. Capacity-only/source-only tanks remain supported, and unavailable
@@ -73,6 +73,21 @@ implemented integration behavior, not just repository configuration.
   mappings share Operations, with stable identities, profile units, native
   options recovery, invalid-source handling and redacted travel configuration.
   Direction is source-provided degrees, never calculated motion.
+- Optional Engine, Transmission and Fuel virtual devices with independent
+  management sections, numeric/helper/template and textual gear sources,
+  profile-unit readings, configurable freshness and optional low/high
+  warning/problem limits. Overview-first instruments keep live values,
+  display-only dials, thin one-hour Recorder trends and last-observed ages
+  together; Load/Pedal segments flank RPM, engine temperatures form a separate
+  compact cluster, each transmission gear appears once, and Fuel includes its
+  mapped reported average. Secondary readings expand on demand without hiding
+  their warnings.
+  Missing readings stay
+  unavailable and separate from known violations; no manufacturer safety
+  limits, source identity or drive readiness is inferred.
+  Fresh RPM supplies an engine-running enum; valid fuel percentage and a
+  configured fuel capacity supply estimated remaining volume. Calculated live
+  economy, run durations and range estimates remain deferred.
 - Optional cumulative distance/fuel/engine-hour sources on Chassis, with
   stable profile-unit totals and Latest/5m/1h/8h/1d/7d/30d changes, fuel per
   engine hour and economy. Bounded private history survives sparse

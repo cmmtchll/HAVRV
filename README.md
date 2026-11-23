@@ -12,7 +12,12 @@ an RV overview dashboard, and a separate driven-profile analysis widget.
 Notifications, integration-specific triggers and conditions, and physical-device
 discovery are not implemented. No Home Assistant quality tier is claimed.
 
-**Current release: 0.6.1.** A separate driven-profile widget adds terrain/fuel
+**Current release: 0.7.0.** Optional Engine, Transmission and Fuel devices add
+live readings, configurable freshness and advisory limits, with dense dashboard
+instruments, trends and observation ages. See
+[powertrain readings and limits](docs/FEATURES.md#powertrain-readings-and-limits).
+
+A separate driven-profile widget adds terrain/fuel
 visualization, recorded-time markers, 1h/8h/1d ranges and saved trips using only
 HAVRV-exposed readings. See [driven-profile analysis](docs/DASHBOARD.md#driven-profile-widget).
 Dashboard registration recovers from Home Assistant's startup custom-element
@@ -48,7 +53,7 @@ choose existing entities, and configure optional tank and tire monitoring.
 ## What HAVRV does
 
 - Opens a dedicated management page from the integration entry's gear button,
-  with profile, chassis, operations, power, tank, tire and system-mapping
+  with profile, chassis, engine, transmission, fuel, operations, power, tank, tire and system-mapping
   editors. Changes across sections stay in one draft until **Apply changes**; no separate frontend
   installation or YAML is required. Initial setup asks only for a name and units.
 - Keeps coach details, dimensions, tank capacities, axle layout, and wheel
@@ -84,6 +89,15 @@ choose existing entities, and configure optional tank and tire monitoring.
   An optional non-driving inspection mode adds longer windows and engine hours
   per period for maintenance review.
   See [Chassis](docs/FEATURES.md#chassis-counters).
+- Maps optional live readings to **Engine**, **Transmission**, and **Fuel**
+  devices, with separate management pages and configurable low/high
+  warning/problem limits. No manufacturer safety limits are assumed.
+  Overview-first dashboard instruments combine familiar dials, prominent
+  current values, thin one-hour trends and last-observed ages. Warnings stay
+  visible above the instruments; Load/Pedal segments flank RPM, engine
+  temperatures have a compact cluster, and Fuel includes reported ECU average.
+  Remaining secondary readings expand on demand.
+  See [powertrain readings and limits](docs/FEATURES.md#powertrain-readings-and-limits).
 - Offers a separate **Driven profile** widget with 1h/8h/1d range buttons
   and manually started/stopped saved trips. It compares sampled GPS and
   odometer distance and plots elevation, fuel used, and interval economy
@@ -110,7 +124,7 @@ choose existing entities, and configure optional tank and tire monitoring.
   placement, not wiring or active supply. Selecting a specific reading opens
   that entity's details, including tire temperature and tank volume.
 - Shares default-on visibility options across the card and dashboard strategies,
-  including chassis, tow, tires, tanks, power, coach information, mapped systems,
+  including chassis, engine, transmission, fuel, tow, tires, tanks, power, coach information, mapped systems,
   header and legend. Hidden groups leave no alert counts or layout reservations.
   Crowded drawings scroll instead of shrinking without limit. See
   [dashboard configuration, colors, and layout presets](docs/DASHBOARD.md).

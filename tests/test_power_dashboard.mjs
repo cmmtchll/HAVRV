@@ -38,6 +38,8 @@ const {
   convertTireValue, tireReading, pressureSparkline, pressureHistory,
   renderChassis, chassisSparkline, convertChassisValue,
   HavrvDrivenProfileCard, drivenProfileChart, renderDrivenProfile, drivenFuelRibbon,
+  renderPowertrain, powertrainSparkline, powertrainSamples, convertPowertrainValue,
+  instrumentDial, instrumentSegments,
 } = await import(`data:text/javascript;base64,${Buffer.from(text).toString("base64")}`);
 
 const dashboardTags = [
@@ -891,13 +893,357 @@ test("all display classes declare shared true defaults, readable labels and edit
     assert.match(form.computeLabel(field), /^Show .+/);
   }
   assert.deepEqual(Object.keys(DISPLAY_CLASSES), [
-    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_tow", "show_chassis", "show_driven_profile", "show_coach", "show_systems",
+    "show_header", "show_legend", "show_tires", "show_tanks", "show_power", "show_tow", "show_chassis",
+    "show_engine", "show_transmission", "show_fuel", "show_driven_profile", "show_coach", "show_systems",
   ]);
   const card = new HavrvRvCard();
   card.setConfig({ show_tires: undefined, show_tanks: undefined });
   assert.equal(card._config.show_tires, true);
   assert.equal(card._config.show_tanks, true);
   assert.equal(HavrvRvCard.getStubConfig({ devices: {} }).show_tires, true);
+});
+
+function powertrainFixture(now = Date.now()) {
+  const { hass, rv } = fixture();
+  for (const [object, readings] of [
+    ["engine", [["rpm", "1011", "rpm"], ["oil_pressure", "41", "psi"]]],
+    ["transmission", [["current_gear", "NC", ""], ["oil_temperature", "179", "°F"]]],
+    ["fuel", [["rate", "2.13", "L/h"], ["level", "78.5", "%"]]],
+  ]) {
+    const device = `powertrain_${object}`;
+    hass.devices[device] = { id: device, name: object, identifiers: [["havrv", `entry_${device}`]] };
+    const details = {};
+    for (const [metric, value, unit] of readings) {
+      const id = `sensor.renamed_${object}_${metric}`;
+      hass.entities[id] = {
+        entity_id: id, platform: "havrv", device_id: device, translation_key: `powertrain_${object}_${metric}`,
+      };
+      const metadata = {
+        source_entity_id: `number.source_${object}_${metric}`,
+        last_observed: new Date(now - 12000).toISOString(), status: "not_configured", profile_unit: unit,
+      };
+      hass.states[id] = { state: value, attributes: { ...metadata, unit_of_measurement: unit } };
+      details[metric] = metadata;
+    }
+    const status = `sensor.renamed_${object}_status`;
+    hass.entities[status] = {
+      entity_id: status, platform: "havrv", device_id: device, translation_key: `powertrain_${object}_status`,
+    };
+    hass.states[status] = { state: "not_configured", attributes: { readings: details } };
+  }
+  return { hass, rv, model: buildModel(hass, rv) };
+}
+
+test("powertrain discovery and both strategies share overview-first visibility without duplicate sections", async () => {
+  const { hass, rv, model } = powertrainFixture();
+  assert.equal(model.engine.readings.rpm, "sensor.renamed_engine_rpm");
+  assert.equal(model.systems.some((system) => system.key.startsWith("powertrain_")), false);
+  assert.ok(model.watched.includes(model.transmission.readings.current_gear));
+  const oil = model.engine.readings.oil_pressure;
+  hass.states[oil].attributes.status = "problem";
+  hass.states[model.engine.status].state = "problem";
+  assert.equal(summarize(hass, model).alert, 1);
+  assert.equal(summarize(hass, model, { show_engine: false }).alert, 0);
+  const filtered = visibleModel(model, { show_engine: false, show_transmission: false, show_fuel: false });
+  assert.equal(filtered.engine, undefined);
+  assert.ok(!filtered.watched.includes(oil));
+  assert.ok(model.engine);
+  for (const view of [
+    rvView(hass, rv, { show_engine: false }),
+    await HavrvViewStrategy.generate({ device_id: rv.id, show_engine: false }, hass),
+    (await HavrvDashboardStrategy.generate({ show_engine: false }, hass)).views[0],
+  ]) {
+    const json = JSON.stringify(view);
+    assert.ok(!json.includes(oil));
+    assert.ok(json.includes('"show_fuel":true'));
+    assert.ok(!view.sections.some((section) => section.cards.some((card) =>
+      ["engine", "transmission", "fuel"].includes(card.heading))));
+  }
+});
+
+test("powertrain instruments retain values, observation ages and independent missing status", () => {
+  const now = Date.now();
+  const { hass, model } = powertrainFixture(now);
+  const oil = model.engine.readings.oil_pressure;
+  hass.states[oil].attributes.status = "problem";
+  hass.states[model.engine.status].state = "problem";
+  delete hass.states[model.engine.readings.rpm];
+  const html = renderPowertrain(hass, model.engine, now);
+  assert.match(html, /Problem · Missing data/);
+  assert.match(html, /powertrain-instrument alert/);
+  assert.match(html, /41\.0 psi/);
+  assert.match(html, /RPM:[^"]*No data/);
+  assert.match(html, /powertrain-age[^>]*>12s<\/span>/);
+  assert.match(html, /Last observed 20/);
+  assert.doesNotMatch(html, /Last 1011|>1011 rpm/);
+  assert.equal(summarize(hass, model).offline, 1);
+  hass.states[model.engine.status].attributes.readings.rpm.last_observed = "invalid";
+  assert.match(renderPowertrain(hass, model.engine, now), /Last observation unknown/);
+  assert.match(renderPowertrain(hass, model.transmission, now), />NC<\/strong>/);
+  model.engine.name = '<img onerror="bad">';
+  assert.ok(!renderPowertrain(hass, model.engine, now).includes('<img onerror="bad">'));
+});
+
+test("powertrain trends preserve exact values, compatible units, zeroes and outage breaks", () => {
+  const now = Date.now();
+  const sample = (minutes, value, unit = "psi") => ({ time: now - minutes * 60000, value, unit });
+  const samples = [sample(50, 40), sample(40, 40.1), sample(30, null), sample(20, 41), sample(10, 42)];
+  const graph = powertrainSparkline(samples, "oil_pressure", "kPa", now);
+  const path = graph.match(/<path d="([^"]+)"/)[1];
+  assert.equal((path.match(/M/g) || []).length, 2);
+  assert.equal((path.match(/L/g) || []).length, 2);
+  assert.match(graph, /275\.8 to 289\.6 kPa/);
+  assert.match(graph, /Gaps mean no data/);
+  assert.equal(powertrainSparkline([sample(20, 1), sample(10, null), sample(5, 2)], "rpm", "rpm", now), "");
+  assert.ok(powertrainSparkline([sample(20, 0, "%"), sample(10, 0, "%")], "load", "%", now));
+  assert.equal(convertPowertrainValue(212, "oil_temperature", "°F", "°C"), 100);
+  assert.equal(convertPowertrainValue(1, "rate", "gal/h", "L/h"), 3.785411784);
+  assert.equal(convertPowertrainValue(1, "remaining_volume", "gal", "L"), 3.785411784);
+  assert.equal(convertPowertrainValue(0, "reported_average_economy", "km/L", "L/100km"), undefined);
+  assert.equal(convertPowertrainValue(10, "oil_pressure", "invalid", "psi"), undefined);
+  const states = [
+    { s: "100", lu: (now - 30 * 60000) / 1000, a: { source_entity_id: "sensor.old", unit_of_measurement: "rpm" } },
+    { s: "1000", lu: (now - 20 * 60000) / 1000, a: { source_entity_id: "sensor.new", unit_of_measurement: "rpm" } },
+    { s: "unavailable", lu: (now - 15 * 60000) / 1000 },
+    { s: "1100", lu: (now - 10 * 60000) / 1000, a: { source_entity_id: "sensor.new", unit_of_measurement: "rpm" } },
+  ];
+  assert.deepEqual(powertrainSamples(states, "sensor.new", now).map((sample) => sample.value), [null, 1000, null, 1100]);
+});
+
+test("backend aggregate metadata keeps derived warnings visible when a source is unavailable", () => {
+  const observed = "2026-11-22T22:46:35.145552+00:00";
+  const now = Date.parse(observed) + 12000;
+  const { hass, model } = powertrainFixture(now);
+  const fuel = model.fuel;
+  const remaining = "sensor.derived_remaining_volume";
+  fuel.readings.remaining_volume = remaining;
+  const metadata = {
+    source_entity_id: "sensor.synthetic_level", status: "warning",
+    last_observed: observed, source_reported: observed, max_age: 60,
+  };
+  hass.states[fuel.status] = { state: "warning", attributes: {
+    status: "warning", missing_readings: ["rate"], readings: {
+      rate: {
+        source_entity_id: "sensor.synthetic_rate", status: "unknown",
+        last_observed: null, source_reported: null, max_age: 60, profile_unit: "L/h",
+      },
+      level: { ...metadata, profile_unit: "%", warning_low: 30 },
+      remaining_volume: { ...metadata, profile_unit: "L", warning_low: 60 },
+    },
+  } };
+  hass.states[fuel.readings.rate] = { state: "unavailable", attributes: {} };
+  hass.states[fuel.readings.level] = { state: "25", attributes: { unit_of_measurement: "%" } };
+  hass.states[remaining] = { state: "50", attributes: { unit_of_measurement: "L" } };
+
+  const html = renderPowertrain(hass, fuel, now);
+  assert.match(html, /Warning · Missing data/);
+  assert.match(html, /class="dial-band watch"/);
+  assert.match(html, /powertrain-age[^>]*>12s<\/span>/);
+  assert.ok(html.indexOf("50.0 L") < html.indexOf("<details"));
+  assert.doesNotMatch(html, /data-powertrain-detail="fuel" open/);
+});
+
+test("powertrain Recorder requests batch numeric readings, retain gaps and reject stale remappings", async () => {
+  const now = Date.now();
+  const { hass, model } = powertrainFixture(now);
+  const requests = [];
+  hass.callWS = async (message) => {
+    requests.push(message);
+    return Object.fromEntries(message.entity_ids.map((id) => [id, [30, 20, 10].map((minutes) => ({
+      s: minutes === 20 ? "unavailable" : minutes === 30 ? "900" : "1000",
+      lu: (now - minutes * 60000) / 1000,
+      a: { source_entity_id: hass.states[id].attributes.source_entity_id,
+        unit_of_measurement: hass.states[id].attributes.unit_of_measurement },
+    }))]));
+  };
+  const card = new HavrvRvCard();
+  card.isConnected = true;
+  card.setConfig({ show_tires: false });
+  card.hass = hass;
+  await card._historyRequest;
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].entity_ids.length, 5);
+  assert.ok(!requests[0].entity_ids.includes(model.transmission.readings.current_gear));
+  assert.match(card.shadowRoot.innerHTML, /class="powertrain-trend"/);
+  assert.match(card.shadowRoot.innerHTML, /powertrain-age[^>]*>12s<\/span>/);
+  hass.states[model.engine.readings.rpm].attributes.status = "warning";
+  card.hass = { ...hass };
+  assert.match(card.shadowRoot.innerHTML, /powertrain-instrument watch/);
+  hass.callWS = async () => { throw { message: "Recorder disabled" }; };
+  card._historyUpdated = 0;
+  card.hass = hass;
+  await card._historyRequest;
+  assert.match(card.shadowRoot.innerHTML, /Reading history unavailable: Recorder disabled/);
+  assert.match(card.shadowRoot.innerHTML, /1,011 rpm/);
+  card.setConfig({ show_tires: false, show_engine: false, show_transmission: false, show_fuel: false });
+  assert.equal(card._pressureHistory.size, 0);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="powertrain-panel|Reading history unavailable/);
+  card.disconnectedCallback();
+});
+
+test("instrument overview uses familiar dials, shows secondary problems first and keeps detail collapsed", () => {
+  const { hass, model } = powertrainFixture();
+  const id = "sensor.renamed_engine_load";
+  model.engine.readings.load = id;
+  hass.states[id] = { state: "90", attributes: { status: "problem", unit_of_measurement: "%" } };
+  const voltage = "sensor.renamed_engine_voltage";
+  model.engine.readings.voltage = voltage;
+  hass.states[voltage] = { state: "12", attributes: { status: "not_configured", unit_of_measurement: "V" } };
+  hass.states[model.engine.status].state = "problem";
+  const html = renderPowertrain(hass, model.engine);
+  assert.match(html, /class="instrument-dial"/);
+  assert.match(html, /class="dial-needle"/);
+  assert.match(html, /class="tachometer|tachometer/);
+  assert.match(html, /Load: Problem · 90\.0 %/);
+  assert.ok(html.indexOf("Load: Problem") < html.indexOf('class="primary-instruments"'));
+  assert.match(html, /<details class="instrument-details"[^>]*><summary>More readings/);
+  assert.doesNotMatch(html, /instrument-details" open|<table|powertrain-row/);
+  const rpm = instrumentDial("rpm", { value: 1000, unit: "rpm" });
+  assert.match(rpm, /RPM × 1000/);
+  assert.match(rpm, /display scale 0–4000 rpm, not a safety limit/);
+  assert.match(instrumentDial("oil_pressure", { value: 200, unit: "psi" }), /scale 0–200 psi/);
+  assert.doesNotMatch(instrumentDial("rpm", { unit: "rpm" }), /class="dial-needle"/);
+  assert.equal(instrumentDial("oil_pressure", { value: 100, unit: "invalid" }), "");
+  const metric = instrumentDial("coolant_temperature", { value: 100, unit: "°C" });
+  assert.match(metric, /scale 0–120 °C/);
+  assert.match(instrumentDial("oil_pressure", { value: 41, unit: "psi" }, {
+    profile_unit: "kPa", warning_low: 200, problem_low: 100,
+  }), /class="dial-band watch"/);
+  assert.doesNotMatch(instrumentDial("oil_pressure", { value: 41, unit: "psi" }), /class="dial-band/);
+});
+
+test("instrument detail expansion survives live updates but is scoped to its RV", () => {
+  const { hass, model } = powertrainFixture();
+  const id = "sensor.renamed_engine_voltage";
+  hass.entities = { ...hass.entities, [id]: {
+    entity_id: id, platform: "havrv", device_id: "powertrain_engine", translation_key: "powertrain_engine_voltage",
+  } };
+  hass.states[id] = { state: "12", attributes: { unit_of_measurement: "V", status: "not_configured" } };
+  const card = new HavrvRvCard();
+  card.setConfig({ show_tires: false });
+  card.hass = hass;
+  card.shadowRoot.listeners.get("toggle")({ target: { dataset: { powertrainDetail: "engine" }, open: true } });
+  hass.states[model.engine.readings.rpm].state = "1200";
+  card.hass = { ...hass };
+  assert.match(card.shadowRoot.innerHTML, /data-powertrain-detail="engine" open/);
+  card.shadowRoot.listeners.get("toggle")({ target: { dataset: { powertrainDetail: "engine" }, open: false } });
+  hass.states[model.engine.readings.rpm].state = "1250";
+  card.hass = { ...hass };
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /data-powertrain-detail="engine" open/);
+  card._instrumentDetails.add("engine");
+  hass.devices = { other: { id: "other", identifiers: [["havrv", "second"]], config_entries: ["second"] } };
+  card.hass = { ...hass };
+  assert.equal(card._instrumentDetails.size, 0);
+});
+
+test("clustered gear and reported average appear once without extra detail rows", () => {
+  const { hass, model } = powertrainFixture();
+  const selected = "sensor.selected_gear";
+  model.transmission.readings.selected_gear = selected;
+  hass.states[selected] = { state: "N", attributes: { status: "not_configured" } };
+  const gear = renderPowertrain(hass, model.transmission);
+  assert.equal(gear.split(`data-entity="${selected}"`).length - 1, 1);
+  assert.match(gear, /class="gear-assembly"/);
+  assert.doesNotMatch(gear, /class="selected-gear"|<details/);
+  delete model.transmission.readings.current_gear;
+  assert.match(renderPowertrain(hass, model.transmission), /Selected gear:[^"]*N/);
+  hass.states[selected].state = "unavailable";
+  assert.match(renderPowertrain(hass, model.transmission), /Selected gear:[^"]*No data/);
+
+  const average = "sensor.reported_average";
+  model.fuel.readings.reported_average_economy = average;
+  hass.states[average] = { state: "5.8", attributes: { unit_of_measurement: "mpg", status: "not_configured" } };
+  const fuel = renderPowertrain(hass, model.fuel);
+  assert.match(fuel, /class="fuel-performance"/);
+  assert.match(fuel, /ECU average:[^"]*5\.8 mpg/);
+  assert.equal(fuel.split(`data-entity="${average}"`).length - 1, 1);
+  assert.doesNotMatch(fuel, /<details/);
+});
+
+test("engine integrates percentage bars and separates temperatures without losing problem or missing status", () => {
+  const now = Date.now();
+  const { hass, model } = powertrainFixture(now);
+  for (const [metric, state, unit, status] of [
+    ["load", "50", "%", "not_configured"], ["accelerator", "0", "%", "not_configured"],
+    ["coolant_temperature", "220", "°F", "problem"], ["intake_temperature", "unavailable", "°F", "unknown"],
+  ]) {
+    const id = `sensor.cluster_${metric}`;
+    model.engine.readings[metric] = id;
+    hass.states[id] = { state, attributes: {
+      unit_of_measurement: unit, status, last_observed: new Date(now - 12000).toISOString(),
+    } };
+  }
+  const html = renderPowertrain(hass, model.engine, now);
+  assert.match(html, /class="rpm-assembly"/);
+  assert.equal(html.split('segment-instrument"').length - 1, 2);
+  assert.match(html, /Pedal:[^"]*0\.0 %/);
+  assert.doesNotMatch(html, /<details/);
+  const thermal = html.slice(html.indexOf('aria-label="Engine temperatures"'));
+  assert.match(thermal, /Problem · Missing data/);
+  assert.match(thermal, /Coolant:[^"]*220\.0 °F/);
+  assert.match(thermal, /Intake temp:[^"]*No data/);
+  assert.match(thermal, /segments-missing/);
+  assert.match(thermal, /powertrain-age[^>]*>12s<\/span>/);
+
+  delete model.engine.readings.rpm;
+  delete model.engine.readings.load;
+  delete model.engine.readings.accelerator;
+  delete model.engine.readings.oil_pressure;
+  const onlyTemperatures = renderPowertrain(hass, model.engine, now);
+  assert.match(onlyTemperatures, /Engine temperatures/);
+  assert.doesNotMatch(onlyTemperatures, /aria-label="engine"|aria-label="Engine"/);
+});
+
+test("segment displays distinguish zero from missing and use only configured advisory bands", () => {
+  const zero = instrumentSegments("accelerator", { value: 0, unit: "%" }, {}, true);
+  assert.doesNotMatch(zero, /segment lit|segments-missing/);
+  assert.match(zero, /vertical-segments/);
+  const halfway = instrumentSegments("load", { value: 50, unit: "%" });
+  assert.equal(halfway.split('segment lit"').length - 1, 5);
+  assert.doesNotMatch(halfway, /alert|watch/);
+  assert.match(instrumentSegments("load", { unit: "%" }), /segments-missing/);
+  assert.equal(instrumentSegments("oil_temperature", { value: 90, unit: "invalid" }), "");
+  const thermal = instrumentSegments("oil_temperature", { value: 212, unit: "°F" }, {
+    profile_unit: "°C", warning_high: 90, problem_high: 110,
+  });
+  assert.match(thermal, /segment[^"]*watch/);
+  assert.match(thermal, /segment[^"]*alert/);
+});
+
+test("powertrain source changes reject late history and incompatible old units without hiding live rows", async () => {
+  const now = Date.now();
+  const { hass, model } = powertrainFixture(now);
+  const id = model.engine.readings.oil_pressure;
+  const resolvers = [];
+  hass.callWS = () => new Promise((resolve) => resolvers.push(resolve));
+  const card = new HavrvRvCard();
+  card.isConnected = true;
+  card.setConfig({ show_tires: false });
+  card.hass = hass;
+  const first = card._historyRequest;
+  const oldSource = hass.states[id].attributes.source_entity_id;
+  hass.states[id].attributes.source_entity_id = "sensor.replacement";
+  card.hass = { ...hass };
+  const second = card._historyRequest;
+  const sample = (value, minutes, source, unit = "psi") => ({
+    s: String(value), lu: (now - minutes * 60000) / 1000,
+    a: { source_entity_id: source, unit_of_measurement: unit },
+  });
+  resolvers[0]({ [id]: [sample(999, 30, oldSource)] });
+  await first;
+  assert.ok(!card._pressureHistory.get(id).some((sample) => sample.value === 999));
+  resolvers[1]({ [id]: [
+    sample(999, 30, oldSource), sample(40, 20, "sensor.replacement"),
+    sample(41, 10, "sensor.replacement"),
+  ] });
+  await second;
+  assert.ok(card._pressureHistory.get(id).some((sample) => sample.value === null));
+  assert.ok(!card._pressureHistory.get(id).some((sample) => sample.value === 999));
+  hass.states[id].attributes.unit_of_measurement = "kPa";
+  hass.states[id].state = String(41 * 6.894757);
+  card.hass = { ...hass };
+  assert.match(card.shadowRoot.innerHTML, /282\.7 kPa/);
+  card.disconnectedCallback();
 });
 
 function drivenData() {

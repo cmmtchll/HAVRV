@@ -12,6 +12,7 @@ from custom_components.havrv.const import (
     DOMAIN,
 )
 from custom_components.havrv.diagnostics import async_get_config_entry_diagnostics
+from custom_components.havrv.powertrain import CONF_POWERTRAIN
 
 
 async def test_diagnostics_redact_profile_and_entity_mapping_values(
@@ -30,7 +31,11 @@ async def test_diagnostics_redact_profile_and_entity_mapping_values(
         options={
             CONF_TIRE_ENTITY_MAPPINGS: {
                 "front_left_pressure": "sensor.private_tire_pressure"
-            }
+            },
+            CONF_POWERTRAIN: {
+                "engine": {"rpm": "sensor.private_engine_rpm"},
+                "fuel": {"level": "sensor.private_fuel_level"},
+            },
         },
         version=3,
     )
@@ -45,7 +50,10 @@ async def test_diagnostics_redact_profile_and_entity_mapping_values(
     assert diagnostics["entry_data"][CONF_STORAGE_ZONE_ID] == REDACTED
     assert diagnostics["entry_data"][CONF_ENTITY_MAPPINGS] == REDACTED
     assert diagnostics["entry_options"][CONF_TIRE_ENTITY_MAPPINGS] == REDACTED
+    assert diagnostics["entry_options"][CONF_POWERTRAIN] == REDACTED
     assert set(diagnostics["platforms"]) == {"select", "number", "sensor", "switch"}
     assert "private_voltage" not in str(diagnostics)
     assert "private_tire_pressure" not in str(diagnostics)
+    assert "private_engine_rpm" not in str(diagnostics)
+    assert "private_fuel_level" not in str(diagnostics)
     assert await hass.config_entries.async_unload(entry.entry_id)

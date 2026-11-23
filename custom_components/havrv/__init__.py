@@ -50,6 +50,7 @@ from .driven_profile import DrivenProfile
 from .driven_profile import storage_key as driven_storage_key
 from .panel import async_register_management_panel
 from .power import POWER_BINARY_METRICS, power_numeric_metrics, power_sources
+from .powertrain import entity_keys as powertrain_entity_keys
 from .tank import TANK_DEFINITIONS, defined_tanks
 from .tire import tire_positions
 from .websocket_api import async_register_commands, async_reload_profile
@@ -283,6 +284,14 @@ def _remove_stale_entities_and_devices(
             entry.options.get(CONF_CHASSIS_SOURCES, {})
         )
     }
+    active_powertrain_keys = powertrain_entity_keys(
+        dict(entry.options), dict(entry.data)
+    )
+    active_powertrain_ids = {
+        f"{entry.entry_id}_powertrain_{obj}_{metric}"
+        for obj, metric in active_powertrain_keys
+    }
+    active_powertrain_objects = {obj for obj, _metric in active_powertrain_keys}
     active_tank_ids = {
         f"{entry.entry_id}_tank_{tank}_{metric}"
         for tank in active_tanks
@@ -400,6 +409,10 @@ def _remove_stale_entities_and_devices(
         )
         if (
             is_stale_mapping
+            or (
+                registry_entry.unique_id.startswith(f"{entry.entry_id}_powertrain_")
+                and registry_entry.unique_id not in active_powertrain_ids
+            )
             or is_stale_power
             or is_stale_tire
             or is_moved_capacity
@@ -415,7 +428,14 @@ def _remove_stale_entities_and_devices(
         for domain, identifier in device.identifiers:
             if domain != DOMAIN:
                 continue
-            if identifier.startswith(f"{entry.entry_id}_source_"):
+            if identifier.startswith(f"{entry.entry_id}_powertrain_"):
+                if (
+                    identifier.removeprefix(f"{entry.entry_id}_powertrain_")
+                    in active_powertrain_objects
+                    or device.config_entry_id != entry.entry_id
+                ):
+                    continue
+            elif identifier.startswith(f"{entry.entry_id}_source_"):
                 if (
                     identifier.removeprefix(f"{entry.entry_id}_source_")
                     in active_power_sources

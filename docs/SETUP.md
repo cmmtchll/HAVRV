@@ -54,7 +54,8 @@ control RV hardware directly.
    individual batteries in series or parallel.
 7. Use **Power** to select any bank, Inverter, Generator, or Shore Power directly.
    Unknown sources and capacities may remain blank. Use **Chassis** for
-   cumulative counters, **Operations** for travel sources, and **Tanks**,
+   cumulative counters, **Engine**, **Transmission**, and **Fuel** for live
+   powertrain readings, **Operations** for travel sources, and **Tanks**,
    **Tires** and **System mappings** for other configuration.
 8. Review the profile-wide draft with **Apply changes**, then confirm to save.
    Switching tabs does not save anything. **Discard** abandons the whole draft.
@@ -78,8 +79,8 @@ Drafts are kept only in the browser's memory. Confirm before leaving with
 unsaved changes. External changes made through a number entity, native flow or
 another browser invalidate an older draft rather than being overwritten.
 Reload saved configuration explicitly before editing again after a conflict.
-Changing measurement systems converts configured dimensions, capacities and
-tire limits to preserve their physical meaning.
+Changing measurement systems converts configured dimensions, capacities,
+tire limits and powertrain limits to preserve their physical meaning.
 
 The native **Reconfigure** action and options flow remain recovery alternatives.
 The detailed native-flow descriptions below also explain those fallback forms;
@@ -117,6 +118,44 @@ chassis sources deletes their private history. Profile-unit edits preserve
 history in canonical units. Ordinary reloads and restarts retain it.
 See [counter history and limitations](FEATURES.md#chassis-counters) and
 the [compact driver panel](DASHBOARD.md#compact-chassis-driver-panel).
+
+### Engine, Transmission and Fuel configuration
+
+Each page offers independent, optional source mappings. Selecting a source
+creates its reading on the corresponding virtual device; no BlueFire controller
+or manufacturer is assumed. Numeric sources accept `sensor`, `number`, and
+`input_number`, including templates in those domains, with declared compatible
+units. Gear strings use sensor sources and pass through unchanged.
+
+Use **Engine** for RPM, load, pedal position, pressures, voltage and
+temperatures; **Transmission** for reported gears and oil/retarder
+temperatures; **Fuel** for instantaneous consumed-fuel rate, reported economy,
+and tank percentage. Keep cumulative distance/fuel/hours under **Chassis**,
+and detected speed under **Operations**. Do not map tank level as consumed fuel.
+
+RPM enables the derived **Engine running** reading. Fuel percentage plus a
+known fuel capacity entered on the profile enables **Fuel remaining volume**.
+Neither derivation needs a second source mapping.
+
+Live-data freshness is configurable per object. It defaults to **60 seconds**,
+including older entries without that setting. Actual source observation
+metadata is preferred to Home Assistant's report time; a source's
+`last_changed` is not evidence of its reporting cadence.
+
+Expand a source's **Warning / problem limits** to enter any low/high bounds.
+All four limits default to blank (disabled). Limits use the profile's units;
+changing profile units converts saved limits. A value strictly below a low
+bound or above a high bound triggers its severity; equality is within the
+limit. Where configured, order the bounds as
+**problem low <= warning low <= warning high <= problem high**.
+Problem takes priority over warning. These are user-selected advisory limits,
+not detected specifications or permission to operate the vehicle.
+
+Apply the shared draft to save all three pages together. Clearing a mapping
+removes the HAVRV reading, not its original source; an object with no remaining
+sources disappears. The same fields are available in the native options
+recovery form. See [readings and limits](FEATURES.md#powertrain-readings-and-limits)
+and [dashboard instruments](DASHBOARD.md#compact-powertrain-readouts).
 
 ### Power-source configuration
 
@@ -233,8 +272,8 @@ must be set together. Without an override, advisory defaults are **50% warning /
 black water. Fresh water warns as the level falls; gray and black water warn as
 the level rises. A configured tank gets a **Status** sensor with `ok`, `warning`,
 or `problem`; without a usable percentage it remains unavailable. These defaults
-are not vehicle-specific safety limits. Fuel-level monitoring is not
-implemented, even though a fuel capacity can be stored on the profile.
+are not vehicle-specific safety limits. Fuel-level monitoring is configured
+separately on the **Fuel** page, not as a water tank.
 
 ## 5. Optionally configure tire monitoring
 

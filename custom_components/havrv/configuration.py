@@ -83,6 +83,8 @@ from .power import (
     power_numeric_metrics,
     shore_line_count,
 )
+from .powertrain import CONF_POWERTRAIN, option_fields
+from .powertrain import normalize_options as normalize_powertrain
 from .tank import thresholds_valid
 from .tire import TIRE_BATTERY_BOOLEAN_DOMAINS, tire_entity_key, tire_positions
 
@@ -367,6 +369,12 @@ def _options_schema(
     """Build source mapping and alert threshold options."""
     existing_options = entry.options
     fields = _entity_mapping_fields(_entry_entity_mappings(entry))
+    fields.update(
+        option_fields(
+            existing_options.get(CONF_POWERTRAIN, {}),
+            entry.data.get(CONF_MEASUREMENT_SYSTEM, default_measurement_system),
+        )
+    )
     for metric in CHASSIS_METRICS:
         saved = existing_options.get(CONF_CHASSIS_SOURCES, {}).get(metric)
         fields[
@@ -508,6 +516,10 @@ def _normalize_options(
     mappings, error = _normalize_entity_mappings(user_input)
     if error:
         return {}, error
+
+    powertrain, powertrain_error = normalize_powertrain(user_input)
+    if powertrain_error:
+        return {}, powertrain_error[2]
 
     chassis: dict[str, str] = {}
     for metric in CHASSIS_METRICS:
@@ -670,6 +682,8 @@ def _normalize_options(
     }
     if operations or CONF_OPERATIONS_SOURCES in entry.options:
         options[CONF_OPERATIONS_SOURCES] = operations
+    if powertrain or CONF_POWERTRAIN in entry.options:
+        options[CONF_POWERTRAIN] = powertrain
     if chassis or CONF_CHASSIS_SOURCES in entry.options:
         options[CONF_CHASSIS_SOURCES] = chassis
     if CONF_POWER_SOURCES in entry.options:

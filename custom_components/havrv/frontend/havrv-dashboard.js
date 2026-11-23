@@ -62,6 +62,28 @@ const POWER_LOCATION_LABELS = {
   left: "L (outside)",
   right: "R (outside)",
 };
+const POWERTRAIN = {
+  engine: { name: "Engine", icon: "mdi:engine-outline", labels: {
+    rpm: "RPM", running: "Running", load: "Load", accelerator: "Pedal",
+    oil_pressure: "Oil pressure", coolant_temperature: "Coolant", oil_temperature: "Oil temp",
+    coolant_level: "Coolant level", intake_temperature: "Intake temp", ambient_temperature: "Ambient",
+    manifold_pressure: "Manifold", extended_manifold_pressure: "Manifold (ext.)",
+    barometric_pressure: "Barometric", voltage: "Voltage", torque_factor: "Torque factor",
+  } },
+  transmission: { name: "Transmission", icon: "mdi:car-shift-pattern", labels: {
+    selected_gear: "Selected gear", current_gear: "Current gear",
+    oil_temperature: "Oil temp", retarder_temperature: "Retarder temp",
+  } },
+  fuel: { name: "Fuel", icon: "mdi:gas-station", labels: {
+    rate: "Fuel rate", level: "Level", remaining_volume: "Remaining",
+    reported_instantaneous_economy: "ECU economy", reported_average_economy: "ECU average",
+    calculated_economy: "Calculated economy",
+  } },
+};
+const POWERTRAIN_TEXT = new Set(["selected_gear", "current_gear", "running"]);
+const powertrainObjects = (model) => Object.keys(POWERTRAIN).map((key) => model[key]).filter(Boolean);
+const powertrainNumeric = (object) => Object.entries(object.readings)
+  .filter(([metric]) => !POWERTRAIN_TEXT.has(metric));
 const TANK_ORDER = ["fresh_water", "gray_water", "black_water"];
 const MODE_ICONS = {
   storage: "mdi:garage-variant",
@@ -135,6 +157,9 @@ export const DISPLAY_CLASSES = {
   show_power: { default: true, label: "Show placed power sources", fields: { powerSources: [] } },
   show_tow: { default: true, label: "Show tow vehicle", fields: { tow: undefined } },
   show_chassis: { default: true, label: "Show compact chassis driver panel", fields: { chassis: undefined } },
+  show_engine: { default: true, label: "Show engine readings and trends", fields: { engine: undefined } },
+  show_transmission: { default: true, label: "Show transmission readings and trends", fields: { transmission: undefined } },
+  show_fuel: { default: true, label: "Show fuel readings and trends", fields: { fuel: undefined } },
   show_driven_profile: { default: true, label: "Show separate driven profile widget", fields: { drivenProfile: undefined } },
   show_coach: { default: true, label: "Show coach information and operation mode", fields: { profile: {}, profileEntities: [], operationMode: undefined } },
   show_systems: { default: true, label: "Show mapped system sections", fields: { systems: [] } },
@@ -177,6 +202,7 @@ function watchedEntities(model) {
     model.operationMode,
     ...Object.values(model.tow || {}),
     ...(model.chassis?.watched || []),
+    ...powertrainObjects(model).flatMap((object) => [object.status, ...Object.values(object.readings)]),
     ...model.axles.flatMap((axle) =>
       [...axle.left, ...axle.right].flatMap((tire) =>
         Object.values(TIRE_ROLES).map((role) => tire[role]),
@@ -278,6 +304,9 @@ export function buildModel(hass, rv) {
     tow: undefined,
     chassis: undefined,
     drivenProfile: undefined,
+    engine: undefined,
+    transmission: undefined,
+    fuel: undefined,
   };
   const axles = new Map();
   for (const device of Object.values(hass.devices || {})) {
@@ -326,6 +355,20 @@ export function buildModel(hass, rv) {
         entities: visible(device.id),
         ...entityRoles(entries, POWER_ROLES),
       });
+    } else if (part.startsWith("powertrain_") && POWERTRAIN[part.slice(11)]) {
+      const key = part.slice(11);
+      const prefix = `powertrain_${key}_`;
+      const readings = {};
+      let status;
+      for (const entry of entries || []) {
+        if (entry.hidden || !entry.translation_key?.startsWith(prefix)) continue;
+        const metric = entry.translation_key.slice(prefix.length);
+        if (metric === "status") status = entry.entity_id;
+        else readings[metric] = entry.entity_id;
+      }
+      if (Object.keys(readings).length) {
+        model[key] = { key, name: deviceName(device) || POWERTRAIN[key].name, readings, status };
+      }
     } else if (part === "operations") {
       model.operationMode = entityRoles(entries, { operation_mode: "mode" }).mode;
       if ((entries || []).some((entry) => !entry.hidden && entry.translation_key === "rv_location")) {
@@ -557,6 +600,7 @@ function formatState(hass, entityId) {
 
 const readingHistory = new WeakMap();
 const tireHistory = new WeakMap();
+const powertrainHistory = new WeakMap();
 const HOUR = 3600000;
 const PRESSURE_TREND_DEADBAND_PSI = 1.25;
 const PRESSURE_TREND_SCALE_STEP_PSI = 3;
@@ -582,6 +626,236 @@ function shortAge(timestamp, now = Date.now()) {
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
   return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m`
     : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86400)}d`;
+}
+
+function powertrainMetadata(hass, object, metric) {
+  return {
+    ...stateOf(hass, object.status)?.attributes.readings?.[metric],
+    ...stateOf(hass, object.readings[metric])?.attributes,
+  };
+}
+
+/** Convert history to today's entity display units, not yesterday's units. */
+export function convertPowertrainValue(value, metric, from, to) {
+  if (!Number.isFinite(value)) return undefined;
+  if (from === to) return value;
+  if (metric.endsWith("_temperature")) return convertTireValue(value, from, to, "temperature");
+  if (metric.endsWith("_pressure")) return convertTireValue(value, from, to, "pressure");
+  if (metric === "rate") return convertChassisValue(value, "fuel_rate", from, to);
+  if (metric === "remaining_volume") return convertChassisValue(value, "fuel", from, to);
+  if (metric.includes("economy")) {
+    const kmPerLitre = from === "km/L" ? value : from === "mpg" ? value / 2.352145833333333
+      : from === "L/100km" && value > 0 ? 100 / value : undefined;
+    return kmPerLitre === undefined ? undefined : to === "km/L" ? kmPerLitre
+      : to === "mpg" ? kmPerLitre * 2.352145833333333
+      : to === "L/100km" && kmPerLitre > 0 ? 100 / kmPerLitre : undefined;
+  }
+  return undefined;
+}
+
+export function powertrainSamples(states, source, now = Date.now()) {
+  return (states || []).flatMap((state) => {
+    const numericState = !UNAVAILABLE.has(state.s) && String(state.s ?? "").trim()
+      ? Number(state.s) : NaN;
+    const valid = Number.isFinite(numericState) && state.a?.source_entity_id === source;
+    const time = validTimestamp(valid ? state.a?.last_observed || state.lu : state.lu, now);
+    if (time === undefined || time < now - HOUR) return [];
+    return [{ time, value: valid ? numericState : null, unit: state.a?.unit_of_measurement || "" }];
+  });
+}
+
+/** Exact observed values, real times and explicit gaps; no tire-specific smoothing. */
+export function powertrainSparkline(samples, metric, unit, now = Date.now()) {
+  const cutoff = now - HOUR;
+  const points = (samples || []).filter((sample) => sample.time >= cutoff && sample.time <= now)
+    .map((sample) => ({ time: sample.time, value: sample.value === null ? undefined
+      : convertPowertrainValue(sample.value, metric, sample.unit, unit) }));
+  const values = points.map((point) => point.value).filter(Number.isFinite);
+  if (values.length < 2) return "";
+  const low = Math.min(...values), high = Math.max(...values);
+  let path = "", connected = false, lines = 0;
+  for (const point of points) {
+    if (!Number.isFinite(point.value)) { connected = false; continue; }
+    const x = 1 + (point.time - cutoff) / HOUR * 54;
+    const y = high === low ? 9 : 16 - (point.value - low) / (high - low) * 14;
+    path += `${connected ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)} `;
+    if (connected) lines++;
+    connected = true;
+  }
+  const label = `Past hour: ${formatNumber({}, low, 1)} to ${formatNumber({}, high, 1)} ${unit}. Gaps mean no data.`;
+  return lines ? `<svg class="powertrain-trend" viewBox="0 0 56 18" role="img" aria-label="${escapeHtml(label)}"><title>${escapeHtml(label)}</title><path d="${path.trim()}"/></svg>` : "";
+}
+
+export function powertrainState(hass, object) {
+  const status = stateOf(hass, object.status)?.state;
+  const missing = Object.entries(object.readings).some(([metric, id]) =>
+    !stateOf(hass, id) || UNAVAILABLE.has(stateOf(hass, id).state)
+    || powertrainMetadata(hass, object, metric).status === "unknown");
+  return {
+    level: status === "problem" ? "alert" : status === "warning" ? "watch"
+      : status === "unknown" || missing ? "offline" : status === "ok" ? "ok" : "neutral",
+    missing,
+  };
+}
+
+const DIAL_RANGES = {
+  rpm: [0, 4000, "rpm"],
+  oil_pressure: [0, 100, "psi"],
+  coolant_temperature: [0, 150, "°C"],
+  oil_temperature: [0, 150, "°C"],
+  retarder_temperature: [0, 150, "°C"],
+  level: [0, 100, "%"],
+};
+const PRIMARY_INSTRUMENTS = {
+  engine: ["rpm", "load", "accelerator", "oil_pressure"],
+  transmission: ["current_gear", "selected_gear", "oil_temperature", "retarder_temperature"],
+  fuel: ["level", "rate", "reported_average_economy"],
+};
+
+function instrumentScale(metric, reading) {
+  const range = DIAL_RANGES[metric] || (metric.endsWith("_temperature") ? [0, 150, "°C"]
+    : ["load", "accelerator"].includes(metric) ? [0, 100, "%"] : undefined);
+  if (!range) return undefined;
+  const unit = reading?.unit || range[2];
+  let minimum = convertPowertrainValue(range[0], metric, range[2], unit);
+  let maximum = convertPowertrainValue(range[1], metric, range[2], unit);
+  if (metric.endsWith("_temperature") && unit === "°F") [minimum, maximum] = [50, 250];
+  if (metric.endsWith("_temperature") && unit === "°C") [minimum, maximum] = [0, 120];
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || maximum <= minimum) return undefined;
+  if (reading?.value > maximum) maximum = minimum + Math.ceil((reading.value - minimum) / (maximum - minimum)) * (maximum - minimum);
+  return { minimum, maximum, unit };
+}
+
+/** Dial bounds are presentation scales, never operating specifications. */
+export function instrumentDial(metric, reading, metadata = {}) {
+  const scale = instrumentScale(metric, reading);
+  if (!scale) return "";
+  const { minimum, maximum, unit } = scale;
+  const position = (angle, radius) => {
+    const radians = angle * Math.PI / 180;
+    return [60 + radius * Math.sin(radians), 52 - radius * Math.cos(radians)];
+  };
+  const start = position(-130, 42), end = position(130, 42);
+  const bands = [];
+  for (const [limit, severity, low] of [
+    ["warning_low", "watch", true], ["warning_high", "watch", false],
+    ["problem_low", "alert", true], ["problem_high", "alert", false],
+  ]) {
+    const value = convertPowertrainValue(metadata[limit], metric, metadata.profile_unit || unit, unit);
+    if (!Number.isFinite(value)) continue;
+    const fraction = Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum)));
+    const a = low ? 0 : fraction, b = low ? fraction : 1;
+    if (b <= a) continue;
+    const from = position(-130 + a * 260, 42), to = position(-130 + b * 260, 42);
+    bands.push(`<path class="dial-band ${severity}" d="M${from.join(",")}A42,42 0 ${b - a > 180 / 260 ? 1 : 0} 1 ${to.join(",")}"/>`);
+  }
+  const marks = Array.from({ length: 9 }, (_, index) => {
+    const angle = -130 + index / 8 * 260;
+    const outer = position(angle, 42), inner = position(angle, index % 2 ? 39 : 37);
+    const label = position(angle, 50);
+    const value = minimum + index / 8 * (maximum - minimum);
+    const text = metric === "rpm" ? `${Number((value / 1000).toFixed(1))}` : `${Math.round(value)}`;
+    return `<path class="dial-tick" d="M${inner.join(",")}L${outer.join(",")}"/>${index % 2 ? "" : `<text x="${label[0]}" y="${label[1] + 2}">${escapeHtml(text)}</text>`}`;
+  }).join("");
+  const fraction = Number.isFinite(reading?.value)
+    ? Math.max(0, Math.min(1, (reading.value - minimum) / (maximum - minimum))) : undefined;
+  const needle = fraction === undefined ? "" : (() => {
+    const point = position(-130 + fraction * 260, 32);
+    return `<path class="dial-needle" d="M60,52L${point.join(",")}"/><circle class="dial-hub" cx="60" cy="52" r="2.5"/>`;
+  })();
+  const label = `${metric === "rpm" ? "RPM × 1000" : unit}; display scale ${minimum.toFixed(0)}–${maximum.toFixed(0)} ${unit}, not a safety limit`;
+  return `<svg class="instrument-dial${fraction === undefined ? " dial-missing" : ""}" viewBox="0 0 120 98" role="img" aria-label="${escapeHtml(label)}"><title>${escapeHtml(label)}</title><path class="dial-track" d="M${start.join(",")}A42,42 0 1 1 ${end.join(",")}"/>${bands.join("")}${marks}${needle}<text class="dial-unit" x="60" y="70">${escapeHtml(metric === "rpm" ? "×1000" : unit)}</text></svg>`;
+}
+
+export function instrumentSegments(metric, reading, metadata = {}, vertical = false) {
+  const scale = instrumentScale(metric, reading);
+  if (!scale) return "";
+  const { minimum, maximum, unit } = scale;
+  const fraction = Number.isFinite(reading?.value)
+    ? Math.max(0, Math.min(1, (reading.value - minimum) / (maximum - minimum))) : undefined;
+  const limits = Object.fromEntries(["warning_low", "warning_high", "problem_low", "problem_high"]
+    .map((key) => [key, convertPowertrainValue(metadata[key], metric, metadata.profile_unit || unit, unit)]));
+  const crossed = (value, severity) => value < limits[`${severity}_low`] || value > limits[`${severity}_high`];
+  const segments = Array.from({ length: 10 }, (_, index) => {
+    const value = minimum + (index + .5) / 10 * (maximum - minimum);
+    const severity = crossed(value, "problem") ? " alert" : crossed(value, "warning") ? " watch" : "";
+    const lit = fraction !== undefined && index < Math.ceil(fraction * 10) ? " lit" : "";
+    return `<rect class="segment${lit}${severity}" ${vertical
+      ? `x="2" y="${(9 - index) * 8 + 1}" width="8" height="6"`
+      : `x="${index * 10 + 1}" y="1" width="8" height="6"`} rx="1"/>`;
+  }).join("");
+  const label = `${reading?.text ?? reading?.value ?? "No data"} ${unit}; display scale ${minimum}–${maximum} ${unit}, not a safety limit`;
+  return `<svg class="instrument-segments${vertical ? " vertical-segments" : ""}${fraction === undefined ? " segments-missing" : ""}" viewBox="${vertical ? "0 0 12 80" : "0 0 100 8"}" role="img" aria-label="${escapeHtml(label)}"><title>${escapeHtml(label)}</title>${segments}</svg>`;
+}
+
+export function renderPowertrain(hass, object, now = Date.now(), detailsOpen = false) {
+  if (!object) return "";
+  const labels = POWERTRAIN[object.key].labels;
+  const state = powertrainState(hass, object);
+  const configuredPrimary = PRIMARY_INSTRUMENTS[object.key].filter((metric) => object.readings[metric]);
+  const temperatureMetrics = object.key === "engine"
+    ? Object.keys(object.readings).filter((metric) => metric.endsWith("_temperature")) : [];
+  const primaryMetrics = configuredPrimary.length ? configuredPrimary
+    : Object.keys(object.readings).filter((metric) => !temperatureMetrics.includes(metric)).slice(0, 3);
+  const instruments = Object.entries(object.readings).sort(([a], [b]) =>
+    Object.keys(labels).indexOf(a) - Object.keys(labels).indexOf(b)).map(([metric, id]) => {
+    const current = stateOf(hass, id);
+    const metadata = powertrainMetadata(hass, object, metric);
+    const available = current && !UNAVAILABLE.has(current.state);
+    const reading = numeric(hass, id, metric === "rpm" ? 0 : 1);
+    const text = reading ? `${reading.text} ${reading.unit}` : available ? formatState(hass, id) : "No data";
+    const observed = validTimestamp(metadata.last_observed, now);
+    const age = observed === undefined ? "?" : shortAge(observed, now);
+    const ageLabel = observed === undefined ? "Last observation unknown"
+      : `Last observed ${new Date(observed).toISOString()} (${age} ago)`;
+    const rowStatus = !available || metadata.status === "unknown" ? "offline"
+      : metadata.status === "problem" ? "alert" : metadata.status === "warning" ? "watch" : "neutral";
+    const unit = reading?.unit || metadata.unit_of_measurement || metadata.profile_unit || "";
+    const spark = !POWERTRAIN_TEXT.has(metric)
+      ? powertrainSparkline(powertrainHistory.get(hass)?.get(id), metric, unit, now) : "";
+    const primary = primaryMetrics.includes(metric);
+    const temperature = temperatureMetrics.includes(metric);
+    const segment = object.key === "engine" && ["load", "accelerator"].includes(metric);
+    const display = reading || (unit ? { unit } : undefined);
+    const graphic = segment || temperature ? instrumentSegments(metric, display, metadata, segment)
+      : primary ? instrumentDial(metric, display, metadata) : "";
+    return { primary, temperature, metric, id, status: rowStatus, text, html: `<div class="powertrain-instrument ${rowStatus}${primary ? " primary-instrument" : ""}${metric === "rpm" ? " tachometer" : ""}${segment ? " segment-instrument" : ""}${temperature ? " thermal-instrument" : ""}${metric === "selected_gear" ? " selected-gear-instrument" : ""}${POWERTRAIN_TEXT.has(metric) ? " text-instrument" : ""}" data-entity="${escapeHtml(id)}" tabindex="0" role="button" aria-label="${escapeHtml(`${labels[metric] || metric}: ${text}. ${ageLabel}`)}"><span class="instrument-label">${escapeHtml(labels[metric] || metric.replaceAll("_", " "))}</span>${temperature ? "" : graphic}<strong class="instrument-value">${escapeHtml(text)}</strong><span class="instrument-footer">${temperature ? graphic : ""}<span class="powertrain-spark">${spark}</span><span class="powertrain-age" title="${escapeHtml(ageLabel)}">${escapeHtml(age)}</span></span></div>` };
+  });
+  const statusText = state.level === "alert" ? "Problem" : state.level === "watch" ? "Warning"
+    : state.level === "offline" ? "No data" : state.level === "ok" ? "Within limits" : "No limits";
+  const issues = instruments.filter((item) => item.status === "alert" || item.status === "watch");
+  const issueHtml = issues.map((item) =>
+    `<span class="instrument-issue ${item.status}" data-entity="${escapeHtml(item.id)}" tabindex="0" role="button">${escapeHtml(labels[item.metric] || item.metric)}: ${item.status === "alert" ? "Problem" : "Warning"} · ${escapeHtml(item.text)}</span>`).join("");
+  const byMetric = (metric) => instruments.find((item) => item.metric === metric)?.html || "";
+  const grouped = new Set();
+  let overview = "";
+  if (object.key === "engine" && object.readings.rpm) {
+    ["load", "rpm", "accelerator"].forEach((metric) => grouped.add(metric));
+    overview = `<div class="rpm-assembly">${["load", "rpm", "accelerator"].map(byMetric).join("")}</div>`;
+  }
+  if (object.key === "transmission" && (object.readings.current_gear || object.readings.selected_gear)) {
+    ["current_gear", "selected_gear"].forEach((metric) => grouped.add(metric));
+    overview = `<div class="gear-assembly">${["current_gear", "selected_gear"].map(byMetric).join("")}</div>`;
+  }
+  if (object.key === "fuel") {
+    ["rate", "reported_average_economy"].forEach((metric) => grouped.add(metric));
+    overview = byMetric("level");
+    grouped.add("level");
+    const performance = ["rate", "reported_average_economy"].map(byMetric).join("");
+    if (performance) overview += `<div class="fuel-performance">${performance}</div>`;
+  }
+  overview += instruments.filter((item) => item.primary && !grouped.has(item.metric)).map((item) => item.html).join("");
+  const secondary = instruments.filter((item) => !item.primary && !item.temperature);
+  const main = overview || secondary.length ? `<section class="powertrain-panel ${state.level}" aria-label="${escapeHtml(object.name)}"><header><strong>${escapeHtml(object.name)}</strong><small>${statusText}${state.missing && state.level !== "offline" ? " · Missing data" : ""}</small></header>${issues.length ? `<div class="instrument-issues">${issueHtml}</div>` : ""}<div class="primary-instruments">${overview}</div>${secondary.length ? `<details class="instrument-details" data-powertrain-detail="${object.key}"${detailsOpen ? " open" : ""}><summary>More readings <small>${secondary.length}</small></summary><div class="support-instruments">${secondary.map((item) => item.html).join("")}</div></details>` : ""}</section>` : "";
+  const temperatures = instruments.filter((item) => item.temperature);
+  if (!temperatures.length) return main;
+  const thermalLevel = temperatures.some((item) => item.status === "alert") ? "alert"
+    : temperatures.some((item) => item.status === "watch") ? "watch"
+    : temperatures.some((item) => item.status === "offline") ? "offline" : "neutral";
+  const thermalStatus = thermalLevel === "alert" ? "Problem" : thermalLevel === "watch" ? "Warning"
+    : thermalLevel === "offline" ? "Missing data" : "Live data";
+  const thermalMissing = temperatures.some((item) => item.status === "offline");
+  return `${main}<section class="powertrain-panel engine-temperatures ${thermalLevel}" aria-label="Engine temperatures"><header><strong>Engine temperatures</strong><small>${thermalStatus}${thermalMissing && thermalLevel !== "offline" ? " · Missing data" : ""}</small></header><div class="temperature-instruments">${temperatures.map((item) => item.html).join("")}</div></section>`;
 }
 
 /** Convert retained native readings to the entity's current display unit. */
@@ -833,6 +1107,10 @@ export function summarize(hass, model, showPower = true) {
       if (state.level === "warning") return ["watch"];
       return state.level === "unknown" && (source.enabled || source.warning || source.problem)
         ? ["offline"] : [];
+    }),
+    ...powertrainObjects(model).flatMap((object) => {
+      const state = powertrainState(hass, object);
+      return [state.level, ...(state.missing && state.level !== "offline" ? ["offline"] : [])];
     }),
   ];
   const count = (level) => levels.filter((value) => value === level).length;
@@ -1728,6 +2006,81 @@ const STYLES = `
   .chassis-inspection .chassis-scroll { overflow-x:auto; }
   .chassis-inspection table { min-width:744px; }
   .chassis-inspection th:first-child { width:150px; }
+  .powertrain-panels { display:flex; flex-wrap:wrap; align-items:flex-start; gap:12px; margin:8px 0; }
+  .powertrain-panel { flex:1 1 310px; max-width:440px; min-width:0; box-sizing:border-box;
+    border:1px solid var(--hv-line); border-radius:12px; padding:12px; background:var(--hv-card);
+    container-type:inline-size; }
+  .powertrain-panel header { display:flex; align-items:baseline; gap:8px; margin:0 0 12px; padding:0; }
+  .powertrain-panel header strong { font-size:14px; font-weight:600; }
+  .powertrain-panel header small { font-size:10px; margin-left:auto; color:var(--hv-muted); }
+  .primary-instruments { display:flex; align-items:stretch; justify-content:center; gap:4px; }
+  .rpm-assembly { display:flex; align-items:flex-end; flex:2.3; min-width:0; gap:3px; }
+  .gear-assembly,.fuel-performance { display:flex; flex-direction:column; justify-content:center; flex:1; min-width:0; gap:6px; }
+  .fuel-performance .primary-instrument { flex:0; }
+  .temperature-instruments { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; }
+  .thermal-instrument .instrument-value,.thermal-instrument .instrument-label { text-align:left; }
+  .thermal-instrument .instrument-footer { justify-content:space-between; }
+  .instrument-segments { height:8px; width:100%; margin:3px 0; }
+  .vertical-segments { height:64px; width:12px; }
+  .segment { fill:var(--primary-color,#03a9f4); opacity:.15; }
+  .segment.lit { opacity:1; }
+  .segment.watch { fill:var(--hv-watch); }
+  .segment.alert { fill:var(--hv-alert); }
+  .segments-missing .segment { fill:var(--hv-muted); opacity:.15; }
+  .support-instruments { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 8px; margin-top:12px; }
+  .support-instruments:empty,.primary-instruments:empty { display:none; }
+  .powertrain-instrument { min-width:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; padding:4px 2px; border-radius:8px; cursor:pointer; position:relative; }
+  .primary-instrument { flex:1; justify-content:flex-end; }
+  .tachometer { flex:1.35; }
+  .instrument-label { font-size:10px; color:var(--hv-muted); letter-spacing:.025em; text-align:center; line-height:14px; }
+  .instrument-value { font-size:16px; font-weight:600; line-height:22px; white-space:nowrap; }
+  .primary-instrument .instrument-value { font-size:18px; }
+  .tachometer .instrument-value,.primary-instrument.text-instrument .instrument-value { font-size:25px; line-height:28px; }
+  .gear-assembly .selected-gear-instrument .instrument-value { font-size:16px; line-height:20px; }
+  .thermal-instrument { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 4px; padding:2px 0; align-items:center; }
+  .thermal-instrument .instrument-footer { grid-column:1 / -1; }
+  .thermal-instrument .instrument-segments { flex:1; width:0; min-width:20px; }
+  .segment-instrument { flex:0 0 36px; }
+  .segment-instrument .instrument-value { font-size:12px; line-height:18px; }
+  .segment-instrument .instrument-footer { flex-direction:column; gap:0; height:28px; }
+  .segment-instrument .powertrain-spark,.segment-instrument .powertrain-trend { width:36px; height:14px; }
+  .instrument-footer { display:flex; align-items:center; justify-content:center; gap:5px; margin-top:2px; height:18px; }
+  .instrument-details { margin-top:10px; border-top:1px solid var(--hv-line); }
+  .instrument-details summary { cursor:pointer; font-size:11px; color:var(--hv-muted); padding:8px 0 0; }
+  .instrument-details summary small { margin-left:5px; }
+  .instrument-issues { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 8px; }
+  .instrument-issue { font-size:10px; border-radius:4px; padding:3px 5px; cursor:pointer;
+    background:color-mix(in srgb,var(--lvl) 8%,transparent); color:var(--lvl); }
+  .powertrain-spark { height:18px; width:56px; }
+  .powertrain-spark:empty { display:none; }
+  .powertrain-trend { width:56px; height:18px; }
+  .powertrain-trend path { fill:none; stroke:var(--primary-color,#03a9f4); stroke-width:1; }
+  .powertrain-age { color:var(--hv-muted); font-size:9px; white-space:nowrap; }
+  .instrument-dial { width:100%; max-width:130px; overflow:visible; }
+  .instrument-dial text { fill:var(--hv-muted); font-size:6.5px; text-anchor:middle; font-family:inherit; }
+  .instrument-dial .dial-unit { font-size:8px; }
+  .dial-track { stroke:var(--hv-line); fill:none; stroke-width:3; }
+  .dial-band { stroke:var(--lvl); fill:none; stroke-width:3; }
+  .dial-tick { stroke:var(--hv-muted); fill:none; stroke-width:.65; }
+  .dial-needle { stroke:var(--primary-color,#03a9f4); stroke-width:1.8; stroke-linecap:round; fill:none; }
+  .dial-hub { fill:var(--primary-color,#03a9f4); }
+  .dial-missing .dial-tick,.dial-missing .dial-track { opacity:.4; }
+  .powertrain-instrument.alert .instrument-value { color:var(--hv-alert); }
+  .powertrain-instrument.watch .instrument-value { color:var(--hv-watch); }
+  .powertrain-instrument.alert .dial-needle { stroke:var(--hv-alert); }
+  .powertrain-instrument.watch .dial-needle { stroke:var(--hv-watch); }
+  .powertrain-instrument.offline .instrument-value { color:var(--hv-muted); font-size:14px; }
+  .powertrain-instrument:focus-visible { outline:2px solid var(--primary-color); outline-offset:1px; }
+  @container (max-width:300px) {
+    .tachometer .instrument-value,.primary-instrument.text-instrument .instrument-value { font-size:21px; }
+    .primary-instrument .instrument-value { font-size:16px; }
+    .instrument-dial text { font-size:8px; }
+    .support-instruments { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .segment-instrument .instrument-value { font-size:12px; }
+    .rpm-assembly { flex:2.6; }
+    .gear-assembly .selected-gear-instrument .instrument-value { font-size:16px; }
+  }
 `;
 
 let instanceCounter = 0;
@@ -1750,6 +2103,8 @@ export class HavrvRvCard extends HTMLElement {
     this._readingHistory = new Map();
     this._tireSources = new Map();
     this._pressureHistory = new Map();
+    this._historySources = new Map();
+    this._instrumentDetails = new Set();
     this._historyGeneration = 0;
     this._historyRevision = 0;
     this.attachShadow({ mode: "open" });
@@ -1766,6 +2121,12 @@ export class HavrvRvCard extends HTMLElement {
     this.shadowRoot.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") activate(event);
     });
+    this.shadowRoot.addEventListener("toggle", (event) => {
+      const key = event.target?.dataset?.powertrainDetail;
+      if (!key) return;
+      if (event.target.open) this._instrumentDetails.add(key);
+      else this._instrumentDetails.delete(key);
+    }, true);
   }
 
   static getConfigForm() {
@@ -1875,6 +2236,10 @@ export class HavrvRvCard extends HTMLElement {
     const hass = this._hass;
     const rv = resolveRvDevice(hass, this._config.device_id);
     const model = rv ? visibleModel(buildModel(hass, rv), this._config) : undefined;
+    if (rv?.id !== this._detailsRv) {
+      this._instrumentDetails.clear();
+      this._detailsRv = rv?.id;
+    }
     if (model) {
       const tireReadings = model.axles.flatMap((axle) => [...axle.left, ...axle.right]
         .flatMap((tire) => [tire.pressure, tire.temperature, tire.battery])).filter(Boolean);
@@ -1913,6 +2278,9 @@ export class HavrvRvCard extends HTMLElement {
         tow: model.tow,
         mode: model.operationMode,
         chassis: model.chassis,
+        engine: model.engine,
+        transmission: model.transmission,
+        fuel: model.fuel,
       },
       model?.watched.map((id) => {
         const state = hass.states[id];
@@ -1920,6 +2288,7 @@ export class HavrvRvCard extends HTMLElement {
           state.attributes.last_valid_value, state.attributes.last_valid_unit,
           state.attributes.last_valid_time, state.attributes.last_valid_source,
           state.attributes.source_entity_id,
+          state.attributes.status, state.attributes.readings, state.attributes.last_observed,
           state.attributes.interval_start, state.attributes.interval_end,
           state.attributes.covered_seconds, state.attributes.trend,
           state.attributes.trend_unit,
@@ -1938,9 +2307,18 @@ export class HavrvRvCard extends HTMLElement {
   _updateTireHistory(model) {
     const now = Date.now();
     const hass = this._hass;
-    const ids = [...new Set(model.axles.flatMap((axle) =>
-      [...axle.left, ...axle.right].map((tire) => tire.pressure)).filter(Boolean))].sort();
-    const key = JSON.stringify(ids.map((id) => [id, tireSource(hass, id)]));
+    const tireIds = model.axles.flatMap((axle) =>
+      [...axle.left, ...axle.right].map((tire) => tire.pressure)).filter(Boolean);
+    const sources = new Map(tireIds.map((id) => [id, tireSource(hass, id)]));
+    const powertrainIds = [];
+    for (const object of powertrainObjects(model)) {
+      for (const [metric, id] of powertrainNumeric(object)) {
+        powertrainIds.push(id);
+        sources.set(id, powertrainMetadata(hass, object, metric).source_entity_id);
+      }
+    }
+    const ids = [...new Set([...tireIds, ...powertrainIds])].sort();
+    const key = JSON.stringify(ids.map((id) => [id, sources.get(id)]));
     if (key !== this._historyKey || hass.connection !== this._historyConnection) {
       this._pressureHistory.clear();
       this._historyGeneration++;
@@ -1950,11 +2328,13 @@ export class HavrvRvCard extends HTMLElement {
       this._historyUpdated = undefined;
       this._historyError = "";
     }
+    this._historySources = sources;
     for (const id of ids) {
       const state = stateOf(hass, id);
-      const reading = tireReading(hass, id, "pressure", now);
-      const time = validTimestamp(state?.attributes.last_valid_time
-        || state?.last_reported || state?.last_updated, now);
+      const isPowertrain = powertrainIds.includes(id);
+      const reading = isPowertrain ? numeric(hass, id) : tireReading(hass, id, "pressure", now);
+      const time = validTimestamp(isPowertrain ? state?.attributes.last_observed
+        : state?.attributes.last_valid_time || state?.last_reported || state?.last_updated, now);
       const samples = (this._pressureHistory.get(id) || []).filter((sample) => sample.time >= now - HOUR);
       if (reading && time !== undefined && time >= now - HOUR) {
         samples.push({ time, value: reading.value, unit: reading.unit });
@@ -1967,13 +2347,14 @@ export class HavrvRvCard extends HTMLElement {
         .sort((a, b) => a.time - b.time));
     }
     tireHistory.set(hass, this._pressureHistory);
+    powertrainHistory.set(hass, this._pressureHistory);
     if (!ids.length || !this.isConnected || typeof hass.callWS !== "function" || this._historyRequest
       || (this._historyUpdated !== undefined && now - this._historyUpdated < 60000)) return;
     this._historyUpdated = now;
-    this._historyRequest = this._loadPressureHistory(hass, ids, now, this._historyGeneration);
+    this._historyRequest = this._loadPressureHistory(hass, ids, now, this._historyGeneration, new Set(powertrainIds));
   }
 
-  async _loadPressureHistory(hass, ids, now, generation) {
+  async _loadPressureHistory(hass, ids, now, generation, powertrainIds) {
     try {
       const result = await hass.callWS({
         type: "history/history_during_period",
@@ -1987,9 +2368,11 @@ export class HavrvRvCard extends HTMLElement {
       });
       if (generation !== this._historyGeneration) return;
       for (const id of ids) {
-        const source = tireSource(this._hass, id);
-        const samples = pressureHistory((result[id] || []).filter((state) =>
-          state.a?.last_valid_source === source), now);
+        const source = this._historySources.get(id);
+        const samples = powertrainIds.has(id)
+          ? powertrainSamples(result[id], source, now)
+          : pressureHistory((result[id] || []).filter((state) =>
+            state.a?.last_valid_source === source), now);
         const combined = [...samples, ...(this._pressureHistory.get(id) || [])];
         this._pressureHistory.set(id, [...new Map(combined.map((sample) => [sample.time, sample])).values()]
           .sort((a, b) => a.time - b.time));
@@ -1997,7 +2380,8 @@ export class HavrvRvCard extends HTMLElement {
       this._historyError = "";
     } catch (error) {
       if (generation !== this._historyGeneration) return;
-      this._historyError = STR.historyUnavailable(error?.message || error?.code || "request failed");
+      const reason = error?.message || error?.code || "request failed";
+      this._historyError = powertrainIds.size ? `Reading history unavailable: ${reason}` : STR.historyUnavailable(reason);
     } finally {
       if (generation === this._historyGeneration) {
         this._historyRequest = undefined;
@@ -2082,6 +2466,7 @@ export class HavrvRvCard extends HTMLElement {
     return `<div class="wrap">
       ${this._config.show_header ? this._renderHeader(model) : ""}
       ${model.chassis ? `<div class="driver-panels">${renderChassis(this._hass, model.chassis)}</div>` : ""}
+      ${powertrainObjects(model).length ? `<div class="powertrain-panels">${powertrainObjects(model).map((object) => renderPowertrain(this._hass, object, Date.now(), this._instrumentDetails.has(object.key))).join("")}</div>` : ""}
       <div class="drawing" tabindex="0" role="region" aria-label="RV diagram">${svg}</div>
       ${this._historyError ? `<div class="message" role="status">${escapeHtml(this._historyError)}</div>` : ""}
       ${!this._config.show_tires || model.axles.length ? "" : `<div class="message">${escapeHtml(STR.noTires)}</div>`}
